@@ -1,7 +1,7 @@
 // Package testkit is fake, a feature module as small as the tests of what
-// serves modules need: a table, a route and a write tool that add to it, a
-// search of it, and a job that fails on every tick so a test sees each run
-// in the log.
+// serves modules need: a table, a route and a write tool that add to it and
+// tell of what they add, a search of it, and a job that fails on every tick
+// so a test sees each run in the log.
 package testkit
 
 import (
@@ -70,7 +70,7 @@ func (f fake) serveAdd(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// add stores the item as the caller's.
+// add stores the item as the caller's and tells the caller's open pages of it.
 func (f fake) add(ctx context.Context, in item) (added, error) {
 	c, _ := module.CallerFrom(ctx)
 
@@ -86,6 +86,8 @@ func (f fake) add(ctx context.Context, in item) (added, error) {
 	if err != nil {
 		return added{}, fmt.Errorf("fake: add: %w", err)
 	}
+
+	f.Changed(ctx, module.Change{Module: "fake", Kind: "item", ID: id, Area: a.ID})
 
 	return added{module.NewRef("fake", id)}, nil
 }

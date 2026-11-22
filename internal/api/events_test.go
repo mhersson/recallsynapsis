@@ -150,7 +150,7 @@ func areaEvent(t *testing.T, area map[string]any) string {
 	return fmt.Sprintf(`{"module":"core","kind":"area","id":%[1]d,"area":%[1]d}`, int64(id))
 }
 
-// personal is ada's personal area as GET /api/areas gives it.
+// personal is the personal area of the caller the headers sign in, as GET /api/areas gives it.
 func (f *fixture) personal(t *testing.T, headers ...string) map[string]any {
 	t.Helper()
 
@@ -441,4 +441,47 @@ func TestAStreamWhoseClientStopsReadingEndsByItself(t *testing.T) {
 	case <-time.After(within):
 		require.FailNow(t, "the stream waited on its client past its write deadline")
 	}
+}
+
+// itemEvent is the event of the fake's item ref, added to the area an answer gives.
+func itemEvent(t *testing.T, ref any, area map[string]any) string {
+	t.Helper()
+
+	s, ok := ref.(string)
+	require.True(t, ok, ref)
+
+	_, id, ok := module.Ref(s).Split()
+	require.True(t, ok, s)
+
+	return fmt.Sprintf(`{"module":"fake","kind":"item","id":%d,"area":%v}`, id, area["id"])
+}
+
+func TestAChangeMadeThroughAModuleRouteOrToolReachesTheOpenStreamsOfItsUserAlone(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, "https://recall.example.org")
+	f.load(t, map[string]any{"enabled": true})
+	srv := httptest.NewServer(f.h)
+	t.Cleanup(srv.Close)
+
+	cookie, grace := f.signIn(t), f.grace(t)
+	mine, theirs := openStream(t, srv.URL, cookie), openStream(t, srv.URL, grace)
+	personal := f.personal(t, cookie)
+
+	mine.expect(t, itemEvent(t, f.add(t, "Raised beds", "personal", cookie, csrf), personal))
+
+	cs := f.client(t, f.token(t, "laptop", "write"))
+	mine.expect(t, itemEvent(t, call(t, cs, "add_item", map[string]any{"title": "Seeds", "area": "personal"})["ref"], personal))
+
+	refused(t, f.client(t, f.token(t, "phone", "read")), "add_item", map[string]any{"title": "Lost", "area": "personal"})
+	refused(t, cs, "add_item", map[string]any{"title": "Lost", "area": "nowhere"})
+
+	code, got := f.json(t, http.MethodPost, "/api/fake/items", `{"title":"Lost","area":"nowhere"}`, cookie, csrf)
+	assert.Equal(t, http.StatusNotFound, code)
+	refusal(t, got)
+
+	theirs.expect(t, itemEvent(t, call(t, f.client(t, grace), "add_item", map[string]any{"title": "Orchard", "area": "personal"})["ref"],
+		f.personal(t, grace)))
+
+	mine.expect(t, itemEvent(t, f.add(t, "Compost", "personal", cookie, csrf), personal))
 }
