@@ -191,3 +191,7 @@ Every package states its one responsibility in its package comment, and
 - `Dockerfile`: Node builds the web app, Go builds the binary with it
   embedded, and a distroless static image runs it as user 65532. Every base
   image is pinned by digest. `--build-arg VERSION=x.y.z` stamps the version.
+- `README.md` and `docs/`: the documents for whoever runs it.
+  `configuration.md` holds the data directory and every key; `running.md`
+  building, the verbs, the password, the API tokens, the image, what stands
+  in front, backups and restoring, and upgrading.
