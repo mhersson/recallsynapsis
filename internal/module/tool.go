@@ -6,7 +6,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Tool is one MCP tool of a module. NewTool makes one.
+// Tool is one MCP tool of a module. NewTool makes one. Only an API token
+// reaches a tool, so a module tool asks for read or write, and one that asks
+// for neither stops the start.
 type Tool struct {
 	Name        string
 	Description string

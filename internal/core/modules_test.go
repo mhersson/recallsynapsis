@@ -184,6 +184,34 @@ func TestLoadModulesRefusesAnOpenModuleRoute(t *testing.T) {
 	}
 }
 
+func TestLoadModulesRefusesAModuleToolNoTokenFits(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+
+	for _, access := range []module.Access{module.Open, module.Owner} {
+		careless := func(module.Deps) module.Module {
+			return module.Module{Name: "careless", Tools: []module.Tool{module.NewTool("wipe", "Wipe it all.", access,
+				func(context.Context, struct{}) (struct{}, error) { return struct{}{}, nil })}}
+		}
+
+		for _, tables := range []map[string]table{{"careless": {"enabled": true}}, nil} {
+			_, err := f.svc.LoadModules(t.Context(), []func(module.Deps) module.Module{careless}, &config.Config{Modules: tables}, module.Deps{})
+			require.Error(t, err, "on or off")
+			assert.Contains(t, err.Error(), "wipe")
+		}
+	}
+
+	for _, access := range []module.Access{module.Read, module.Write} {
+		fine := func(module.Deps) module.Module {
+			return module.Module{Name: "fine", Tools: []module.Tool{module.NewTool("look", "Look.", access,
+				func(context.Context, struct{}) (struct{}, error) { return struct{}{}, nil })}}
+		}
+
+		f.load(t, []func(module.Deps) module.Module{fine}, map[string]table{"fine": {"enabled": true}})
+	}
+}
+
 func TestSearchGroupsTheHitsOfTheModulesOn(t *testing.T) {
 	t.Parallel()
 
