@@ -199,27 +199,32 @@ Every package states its one responsibility in its package comment, and
   source. Any revision can be read, and restoring one writes a new one with its
   title, body, tags and links, leaving the area, the kind and the inbox flag as
   they are. A note read in full gives its links and the items that link to it,
-  each as the core resolves it, and a link to a note in the trash or deleted for
-  good leads nowhere. It searches its notes for every word of a query, in title,
-  body and tags and in any case, through an FTS5 index with the trigram
-  tokenizer, and looks for a word under three characters, which the index cannot
-  find, in the text of the notes themselves. Every write keeps the index level,
-  it keeps no copy of the text, and deleting a note for good rewrites it, so
-  nothing of the note is left there. A note in the trash is in no list but the
-  trash's, is found by no search, counts for no tag and cannot be changed.
-  Trashing and restoring it write no revision, and only the session cookie
-  deletes it for good, alone or by emptying the trash. A note's files, at most
-  `file_max_mib` each, are attached, read and removed with the session cookie
-  alone, and attaching and removing one write no revision. An upload is
-  written under `tmp/`, hashed as it arrives, and renamed into `files/` under
-  its SHA-256, so `files/` holds only whole contents, each once, shared by
-  every user; the contents go once the last attachment that names them is
-  removed or deleted with its note for good. A file keeps the type it was
+  each as the core resolves it, and the `said` of its first revision. A link to
+  a note in the trash or deleted for good leads nowhere. It searches its notes
+  for every word of a query, in title, body and tags and in any case, through an
+  FTS5 index with the trigram tokenizer, and looks for a word under three
+  characters, which the index cannot find, in the text of the notes themselves.
+  Every write keeps the index level, it keeps no copy of the text, and deleting
+  a note for good rewrites it, so nothing of the note is left there. A note in
+  the trash is in no list but the trash's, is found by no search, counts for no
+  tag and cannot be changed. Trashing and restoring it write no revision, and
+  only the session cookie deletes it for good, alone or by emptying the trash. A
+  note's files, at most `file_max_mib` each, are attached, read and removed with
+  the session cookie alone, and attaching and removing one write no revision. An
+  upload is written under `tmp/`, hashed as it arrives, and renamed into
+  `files/` under its SHA-256, so `files/` holds only whole contents, each once,
+  shared by every user; the contents go once the last attachment that names them
+  is removed or deleted with its note for good. A file keeps the type it was
   declared as, and is served with `nosniff`, a `sandbox` content policy and to
   its own origin alone: inline as its type only when it is a PNG, JPEG, GIF or
-  WebP image, else as a download of `application/octet-stream`, so no page
-  loads one as a script or a style. It owns the tables `notes`, `note_tags`,
-  `note_revisions`, `note_links`, `notes_fts` and `note_files`.
+  WebP image, else as a download of `application/octet-stream`, so no page loads
+  one as a script or a style. Its MCP tools, `create_note`, `list_notes`,
+  `get_note`, `update_note` and `trash_note`, each call what a REST route calls,
+  find no note in the trash, and refuse a text over `capture_max_chars`
+  characters, which REST does not cap. `create_note` files a capture in the area
+  it names, an idea that names none in the personal area and any other in the
+  inbox, and keeps its `said` on the first revision. It owns the tables `notes`,
+  `note_tags`, `note_revisions`, `note_links`, `notes_fts` and `note_files`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.

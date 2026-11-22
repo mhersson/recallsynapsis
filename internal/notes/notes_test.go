@@ -393,6 +393,21 @@ func TestAModuleSwitchedOffKeepsItsNotes(t *testing.T) {
 	}
 }
 
+func TestACapUnderOneStopsTheStart(t *testing.T) {
+	t.Parallel()
+
+	f := newDatabase(t)
+
+	for _, key := range []string{"capture_max_chars", "file_max_mib"} {
+		for _, table := range []object{{"enabled": true, key: int64(0)}, {key: int64(0)}} {
+			_, err := f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{notes.New},
+				&config.Config{Modules: map[string]map[string]any{"notes": table}}, module.Deps{Dir: f.tempDir})
+			require.Error(t, err, "on or off")
+			assert.Contains(t, err.Error(), "modules.notes."+key)
+		}
+	}
+}
+
 func TestAChangeIsMadeFromTheNotesRevision(t *testing.T) {
 	t.Parallel()
 
@@ -1019,6 +1034,34 @@ func TestEveryChangeIsKeptInTheHistory(t *testing.T) {
 	assert.Equal(t, history, f.history(t, made, f.phone), "restored from the trash, it keeps its history")
 }
 
+func TestANoteInFullGivesWhatItsFirstRevisionSaid(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	made := f.create(t, `{"body":"Sow the beans"}`, f.laptop)
+	assert.Contains(t, made, "said")
+	assert.Empty(t, made["said"])
+
+	_, err := f.store.ExecContext(t.Context(), `UPDATE note_revisions SET said = 'Husk å så bønnene' WHERE note_id = ?`, made["id"])
+	require.NoError(t, err)
+
+	assert.Empty(t, f.create(t, `{"body":"Water the peas"}`, f.laptop)["said"], "each note gives its own")
+
+	changed := f.change(t, made, `{"revision":1,"title":"Beans"}`, f.desk)
+	assert.Equal(t, "Husk å så bønnene", changed["said"], "a later revision keeps the first one's")
+	assert.Equal(t, changed, f.read(t, made, f.phone))
+
+	code, got := f.do(t, http.MethodGet, path(made)+"/revisions", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	revisions := got["revisions"].([]any)
+	assert.Empty(t, revisions[0].(object)["said"])
+	assert.Equal(t, "Husk å så bønnene", revisions[1].(object)["said"], "the history gives it on the first revision alone")
+
+	code, got = f.do(t, http.MethodGet, "/api/notes", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	assert.NotContains(t, got["notes"].([]any)[0], "said", "a list gives no said")
+}
+
 func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	t.Parallel()
 
@@ -1117,4 +1160,6 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	code, got = f.do(t, http.MethodDelete, "/api/notes/trash", "", session)
 	require.Equal(t, http.StatusNoContent, code, got)
 	assert.JSONEq(t, `{"module":"notes","kind":"trash","id":0,"area":0}`, strings.TrimPrefix(next(), "data: "), "emptying tells once")
+
+	expect(use(t, f.client(t, f.laptop), "create_note", object{"text": "Sow in March"}), "personal")
 }

@@ -97,6 +97,30 @@ was last used. Revoking one refuses it from its next request. No token can list,
 make or revoke tokens, delete a note for good, or attach, read or remove a
 note's file: only a signed-in session can.
 
+### The MCP tools
+
+At `/mcp` a client with a token calls the core's tools, `list_areas` and
+`search`, which only read, and those of each module switched on. These are the
+tools of notes, with the mark suggested for each in an MCP gateway such as
+Portal, which keeps the marks in its own configuration: a free tool runs at
+once, and one that needs a tap waits for the owner to allow it.
+
+| Tool | Access | What it does | Mark |
+| --- | --- | --- | --- |
+| `create_note` | `write` | saves a note or an idea: in the area it names, an idea that names none in the personal area, and any other in the inbox | free |
+| `list_notes` | `read` | lists notes and ideas by area, kind, inbox flag and tag, the most recently changed first | free |
+| `get_note` | `read` | reads one note in full, with its links, what links to it, and the id, name, type and size of each file | free |
+| `update_note` | `write` | changes a note's title, body, kind, area, tags, links or inbox flag, or adds text to its body | free |
+| `trash_note` | `write` | moves a note to the trash | needs a tap |
+
+No tool finds a note in the trash, restores one, deletes one for good, or
+reads, attaches or removes a file. A text through `create_note` or
+`update_note` longer than `capture_max_chars`
+([configuration.md](configuration.md#recallsynapsistoml)) is refused, and
+nothing is saved. A write through a tool records the token's name as its
+source. Each tool's description tells a client what it does and when to use
+it, since Portal relays neither annotations nor instructions to the client.
+
 ## From the image
 
 ```sh

@@ -20,10 +20,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/mhersson/recallsynapsis/internal/config"
-	"github.com/mhersson/recallsynapsis/internal/module"
-	"github.com/mhersson/recallsynapsis/internal/notes"
 )
 
 // attach sends contents to note as the file name of the type kind, and
@@ -198,19 +194,6 @@ func TestOnlyASessionReachesAFile(t *testing.T) {
 
 	assert.Equal(t, []any{kept}, f.read(t, seeds, f.phone)["files"], "no token attached or removed a file")
 	assert.Equal(t, []string{sum([]byte("Tomatoes"))}, f.kept(t))
-}
-
-func TestAFileCapUnderOneMiBStopsTheStart(t *testing.T) {
-	t.Parallel()
-
-	f := newDatabase(t)
-
-	for _, table := range []object{{"enabled": true, "file_max_mib": int64(0)}, {"file_max_mib": int64(0)}} {
-		_, err := f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{notes.New},
-			&config.Config{Modules: map[string]map[string]any{"notes": table}}, module.Deps{Dir: f.tempDir})
-		require.Error(t, err, "on or off")
-		assert.Contains(t, err.Error(), "modules.notes.file_max_mib")
-	}
 }
 
 // cut is a body that sends part of a file and then drops, ending the

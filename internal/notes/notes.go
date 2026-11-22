@@ -29,11 +29,10 @@ import (
 
 // migrations make the module's schema. A note's id is AUTOINCREMENT, so a
 // note deleted for good never gives its id to another, and a link to it never
-// leads to another note. Nothing writes said: it waits empty. The index keeps
-// no copy of the text, which a hit reads from the note, and its trigrams let
-// a word find part of a compound. An attachment's id is AUTOINCREMENT too:
-// the browser keeps a file by its address for good, so an id never comes to
-// name another file.
+// leads to another note. The index keeps no copy of the text, which a hit
+// reads from the note, and its trigrams let a word find part of a compound. An
+// attachment's id is AUTOINCREMENT too: the browser keeps a file by its
+// address for good, so an id never comes to name another file.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE notes (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,6 +123,24 @@ var (
 	errTrashed = fmt.Errorf("the note is in the trash, and is restored before it is changed: %w", store.ErrConflict)
 )
 
+// settings are the module's keys of [modules.notes] beside enabled.
+type settings struct {
+	CaptureMaxChars int   `toml:"capture_max_chars"`
+	FileMaxMiB      int64 `toml:"file_max_mib"`
+}
+
+// Check refuses a cap on a tool's text under 1 character, and one on a file under 1 MiB.
+func (s *settings) Check() error {
+	switch {
+	case s.CaptureMaxChars < 1:
+		return fmt.Errorf("capture_max_chars: %d is not at least 1", s.CaptureMaxChars)
+	case s.FileMaxMiB < 1:
+		return fmt.Errorf("file_max_mib: %d is not at least 1", s.FileMaxMiB)
+	}
+
+	return nil
+}
+
 type notes struct {
 	module.Deps
 	settings *settings
@@ -135,7 +152,7 @@ type notes struct {
 
 // New builds the notes module.
 func New(d module.Deps) module.Module {
-	n := notes{Deps: d, settings: &settings{FileMaxMiB: 15}, files: new(sync.Mutex)}
+	n := notes{Deps: d, settings: &settings{CaptureMaxChars: 4000, FileMaxMiB: 15}, files: new(sync.Mutex)}
 
 	return module.Module{
 		Name:       name,
@@ -144,6 +161,7 @@ func New(d module.Deps) module.Module {
 		Search:     n.search,
 		Resolve:    n.resolve,
 		LinksTo:    n.linksTo,
+		Tools:      n.tools(),
 		Routes: []module.Route{
 			{Pattern: "GET /api/notes", Access: module.Read, Serve: n.serveList},
 			{Pattern: "POST /api/notes", Access: module.Write, Serve: n.serveCreate},
@@ -187,6 +205,7 @@ type row struct {
 type note struct {
 	row
 	Body       string        `json:"body"`
+	Said       string        `json:"said"` // what its first revision carries
 	Links      []module.Item `json:"links"`
 	LinkedFrom []module.Item `json:"linked_from"`
 	Files      []file        `json:"files"` // in the order they were attached
@@ -214,7 +233,8 @@ type version struct {
 }
 
 // draft is a new note: of kind note unless it says, in the personal area
-// unless it names another, as a slug or a name.
+// unless it names another, as a slug or a name. Said comes through a tool
+// alone, so REST refuses it.
 type draft struct {
 	Title string   `json:"title"`
 	Body  string   `json:"body"`
@@ -222,20 +242,22 @@ type draft struct {
 	Area  string   `json:"area"`
 	Tags  []string `json:"tags"`
 	Inbox bool     `json:"inbox"`
+	Said  string   `json:"-"` // the owner's own words, kept on the first revision
 }
 
 // change is what a change sets; a nil field stays as it is. Revision is the
 // one the change was made from, which one that only appends need not name.
+// It is only decoded: omitempty makes each field optional in update_note's schema.
 type change struct {
-	Revision *int64        `json:"revision"`
-	Title    *string       `json:"title"`
-	Body     *string       `json:"body"`
-	Append   *string       `json:"append"` // added to the end of the body, as a paragraph of its own
-	Kind     *string       `json:"kind"`
-	Area     *string       `json:"area"`
-	Tags     *[]string     `json:"tags"`
-	Links    *[]module.Ref `json:"links"`
-	Inbox    *bool         `json:"inbox"`
+	Revision *int64        `json:"revision,omitempty"`
+	Title    *string       `json:"title,omitempty"`
+	Body     *string       `json:"body,omitempty"`
+	Append   *string       `json:"append,omitempty"` // added to the end of the body, as a paragraph of its own
+	Kind     *string       `json:"kind,omitempty"`
+	Area     *string       `json:"area,omitempty"`
+	Tags     *[]string     `json:"tags,omitempty"`
+	Links    *[]module.Ref `json:"links,omitempty"`
+	Inbox    *bool         `json:"inbox,omitempty"`
 }
 
 // filter is what a list asks for; a zero field asks for nothing.
@@ -286,9 +308,9 @@ const columns = `id, area_id, kind, title, substr(body, 1, 200), inbox, revision
 	(SELECT count(*) FROM note_files WHERE note_id = notes.id)`
 
 // snapshot writes the revision of the note ?1 as it now stands, restored from
-// the revision ?2 or from none when it is null.
-const snapshot = `INSERT INTO note_revisions (note_id, revision, at, source, restored_from, title, body, kind, area_id, inbox, tags, links)
-	SELECT id, revision, changed_at, source, ?2, title, body, kind, area_id, inbox,
+// the revision ?2 or from none when it is null, with ?3 as its said.
+const snapshot = `INSERT INTO note_revisions (note_id, revision, at, source, said, restored_from, title, body, kind, area_id, inbox, tags, links)
+	SELECT id, revision, changed_at, source, ?3, ?2, title, body, kind, area_id, inbox,
 		(SELECT json_group_array(tag ORDER BY tag) FROM note_tags WHERE note_id = ?1), ` + linkList + `
 	FROM notes WHERE id = ?1`
 
@@ -408,8 +430,9 @@ func (n notes) read(ctx context.Context, slugs map[int64]string, userID, id int6
 		err          error
 	)
 
-	out.row, err = scanRow(n.Store.QueryRowContext(ctx, `SELECT `+columns+`, body, `+linkList+`, `+fileList+` FROM notes WHERE user_id = ? AND id = ?`,
-		userID, id), slugs, &out.Body, &links, &files)
+	out.row, err = scanRow(n.Store.QueryRowContext(ctx, `SELECT `+columns+`, body,
+		(SELECT said FROM note_revisions WHERE note_id = notes.id AND revision = 1), `+linkList+`, `+fileList+`
+		FROM notes WHERE user_id = ? AND id = ?`, userID, id), slugs, &out.Body, &out.Said, &links, &files)
 	if errors.Is(err, sql.ErrNoRows) {
 		return note{}, fmt.Errorf("note %d: %w", id, store.ErrNotFound)
 	}
@@ -663,7 +686,7 @@ func (n notes) create(ctx context.Context, d draft) (note, error) {
 			return fmt.Errorf("notes: create: %w", err)
 		}
 
-		return keep(ctx, tx, id, &tags, nil, nil)
+		return keep(ctx, tx, id, &tags, nil, nil, d.Said)
 	})
 	if err != nil {
 		return note{}, err
@@ -767,7 +790,7 @@ func (n notes) change(ctx context.Context, id int64, ch change) (note, error) {
 			return fmt.Errorf("notes: change: %w", err)
 		}
 
-		return keep(ctx, tx, id, ch.Tags, ch.Links, nil)
+		return keep(ctx, tx, id, ch.Tags, ch.Links, nil, "")
 	})
 	if err != nil {
 		return note{}, err
@@ -905,7 +928,7 @@ func (n notes) restoreRevision(ctx context.Context, id, rev int64) (note, error)
 			return fmt.Errorf("notes: restore: %w", err)
 		}
 
-		return keep(ctx, tx, id, &restored, &linked, &rev)
+		return keep(ctx, tx, id, &restored, &linked, &rev, "")
 	})
 	if err != nil {
 		return note{}, err
@@ -1058,8 +1081,9 @@ func (f *fields) apply(ch change, area, personal int64) {
 
 // keep replaces the note's tags with tags and its links with links, each
 // unless it is nil, and writes the note into the search index and its
-// revision as it now stands, restored from the revision from unless it is nil.
-func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, links *[]module.Ref, from *int64) error {
+// revision as it now stands, restored from the revision from unless it is
+// nil, with said as its said.
+func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, links *[]module.Ref, from *int64, said string) error {
 	if tags != nil {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM note_tags WHERE note_id = ?`, id); err != nil {
 			return fmt.Errorf("notes: tags: %w", err)
@@ -1088,7 +1112,7 @@ func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, links *[]mo
 		return fmt.Errorf("notes: index: %w", err)
 	}
 
-	if _, err := tx.ExecContext(ctx, snapshot, id, from); err != nil {
+	if _, err := tx.ExecContext(ctx, snapshot, id, from, said); err != nil {
 		return fmt.Errorf("notes: revision: %w", err)
 	}
 
