@@ -198,6 +198,10 @@ func TestARestoredSnapshotServes(t *testing.T) {
 	require.Len(t, got.Areas, 2)
 	assert.Equal(t, "Garden", got.Areas[1].Name)
 
+	// The nightly backup waits until three at night, and stops with the server.
+	signalled := time.Now()
+
 	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
 	assert.Equal(t, 0, within(t, done, "serve did not stop on the signal"), logged.String())
+	assert.Less(t, time.Since(signalled), shutdownGrace)
 }

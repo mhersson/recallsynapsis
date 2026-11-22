@@ -1,6 +1,6 @@
-// Package backup backs up the data directory: a snapshot of the database named
-// by its day, the files under files/ that the backup lacks, and no more
-// snapshots than it keeps.
+// Package backup backs up the data directory, once or every night: a snapshot
+// of the database named by its day, the files under files/ that the backup
+// lacks, and no more snapshots than it keeps.
 package backup
 
 import (
@@ -31,9 +31,13 @@ const (
 type Backup struct {
 	db      *sql.DB
 	dataDir string
+	dir     string
 	keep    int
 	zone    *time.Location
-	now     func() time.Time // time.Now, or a test's clock
+	at      time.Time // the time of day of the nightly backup
+	// The clock: time.Now and a timer, or a test's own.
+	now   func() time.Time
+	sleep func(context.Context, time.Duration) error
 }
 
 // New returns the backups of db, the database of dataDir, as cfg sets them.
@@ -43,7 +47,15 @@ func New(db *sql.DB, dataDir string, cfg *config.Config) (*Backup, error) {
 		return nil, fmt.Errorf("backup: %w", err)
 	}
 
-	return &Backup{db: db, dataDir: dataDir, keep: cfg.Backup.Keep, zone: zone, now: time.Now}, nil
+	at, err := time.Parse("15:04", cfg.Backup.At)
+	if err != nil {
+		return nil, fmt.Errorf("backup: %w", err)
+	}
+
+	return &Backup{
+		db: db, dataDir: dataDir, dir: cfg.Backup.Dir, keep: cfg.Backup.Keep, zone: zone, at: at,
+		now: time.Now, sleep: sleep,
+	}, nil
 }
 
 // Run makes one backup into dir and returns the path of its snapshot. A backup
