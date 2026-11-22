@@ -53,24 +53,7 @@ export default function Filing({ note, areas, narrow, onDone }: Props) {
           {refused}
         </p>
       )}
-      <div className="field">
-        <span className="label">Area</span>
-        {narrow ? (
-          <select aria-label="Area" value={area} onChange={(e) => choose({ area: e.target.value })}>
-            {areas.map((a) => (
-              <option key={a.id} value={a.slug}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <Seg label="Area" value={area} onChange={(v) => choose({ area: v })} options={areas.map((a) => [a.slug, a.kind === 'project' ? <span className="mono">{a.name}</span> : a.name])} />
-        )}
-      </div>
-      <div className="field">
-        <span className="label">Kind</span>
-        <Seg label="Kind" value={kind} onChange={(v) => choose({ kind: v })} options={kinds} />
-      </div>
+      <Place areas={areas} narrow={narrow} area={area} kind={kind} onChange={choose} />
       <div className="field">
         <span className="label">Tags</span>
         <TagField tags={tags} onChange={(v) => choose({ tags: v })} />
@@ -92,5 +75,32 @@ export default function Filing({ note, areas, narrow, onDone }: Props) {
         </button>
       </div>
     </div>
+  )
+}
+
+type PlaceProps = { areas: Area[]; narrow: boolean; area: string; kind: Kind; onChange: (c: { area?: string; kind?: Kind }) => void }
+
+export function Place({ areas, narrow, area, kind, onChange }: PlaceProps) {
+  return (
+    <>
+      <div className="field">
+        <span className="label">Area</span>
+        {narrow ? (
+          <select aria-label="Area" value={area} onChange={(e) => onChange({ area: e.target.value })}>
+            {areas.map((a) => (
+              <option key={a.id} value={a.slug}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <Seg label="Area" value={area} onChange={(v) => onChange({ area: v })} options={areas.map((a) => [a.slug, a.kind === 'project' ? <span className="mono">{a.name}</span> : a.name])} />
+        )}
+      </div>
+      <div className="field">
+        <span className="label">Kind</span>
+        <Seg label="Kind" value={kind} onChange={(v) => onChange({ kind: v })} options={kinds} />
+      </div>
+    </>
   )
 }

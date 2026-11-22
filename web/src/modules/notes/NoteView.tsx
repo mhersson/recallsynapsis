@@ -7,20 +7,23 @@ import Field from '../../components/Field.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import { ago } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { from, mark, nameOf, useNotes, type Note } from './api.ts'
+import { from, mark, nameOf, useNotes, type Kind, type Note } from './api.ts'
+import { Place } from './Filing.tsx'
 import TagField from './TagField.tsx'
 
 type Props = { id: number; areas: Area[]; onGone: () => void; onChanged?: () => void }
 
 // What is typed, and the note as the editing began; moved once a save was refused because the note moved on, and shown
 // while the note as it now is shows above the text typed.
-type Draft = { from: Note; title: string; body: string; tags: string[]; moved?: boolean; shown?: boolean }
+type Draft = { from: Note; title: string; body: string; area: string; kind: Kind; tags: string[]; moved?: boolean; shown?: boolean }
 
 // What differs from the note as the editing began: only that is saved, so a change made elsewhere meanwhile stands,
-// and a capture is filed only by a change of its tags.
+// and a capture is filed only by a change of its area, its kind or its tags.
 const changeOf = (d: Draft) => ({
   ...(d.title !== d.from.title && { title: d.title }),
   ...(d.body !== d.from.body && { body: d.body }),
+  ...(d.area !== d.from.area && { area: d.area }),
+  ...(d.kind !== d.from.kind && { kind: d.kind }),
   ...(d.tags.join(' ') !== d.from.tags.join(' ') && { tags: d.tags }),
 })
 
@@ -159,6 +162,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
         >
           <textarea className="ta" autoFocus value={draft.body} onChange={(e) => set({ body: e.target.value })} />
         </Field>
+        <Place areas={areas.filter((a) => !a.archived || a.slug === draft.from.area)} narrow={narrow} area={draft.area} kind={draft.kind} onChange={set} />
         <div className="field">
           <span className="label">Tags</span>
           <TagField tags={draft.tags} onChange={(tags) => set({ tags })} />
@@ -210,7 +214,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
   const trashed = !!note.trashed_at
   const acts = !trashed && (
     <>
-      <button className="btn" disabled={sending} onClick={() => setDraft({ from: note, title: note.title, body: note.body, tags: note.tags })}>
+      <button className="btn" disabled={sending} onClick={() => setDraft({ from: note, title: note.title, body: note.body, area: note.area, kind: note.kind, tags: note.tags })}>
         Edit
       </button>
       <button className="btn danger" disabled={sending} onClick={() => void send('POST', `/notes/${id}/trash`).then((ok) => ok && onGone())}>
