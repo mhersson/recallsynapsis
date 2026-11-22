@@ -59,9 +59,17 @@ The owner's words, which bind every change:
 - `make size`: count the non-test Go lines. `make help` lists the targets.
 - CI (`.github/workflows/ci.yaml`) runs the gates of `make check`,
   `govulncheck`, `make web-check` and `npm audit`, and on a pull request
-  `make scan-commits` against its base. Dependabot bumps the Go modules, the
-  web app's npm packages, the pinned actions and the image's base images
-  every week.
+  `make scan-commits` against its base. On a push to `main` or a manual run,
+  once those pass, it builds the image on the self-hosted runner labelled
+  `recallsynapsis-image` and pushes it to the registry the `REGISTRY`
+  variable names, tagged with the short commit and `latest`, or for a manual
+  run with its branch and the short commit. A self-hosted runner is safe on
+  this public repository only while a pull request from anyone outside it
+  waits for approval before its workflows run, so the Actions setting that
+  requires approval for all external contributors must stay, and no
+  `pull_request_target` workflow, which that setting never holds back, may
+  run on it. Dependabot bumps the Go modules, the web app's npm packages,
+  the pinned actions and the image's base images every week.
 
 ## Looking at the web app
 
