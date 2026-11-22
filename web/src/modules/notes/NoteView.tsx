@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, type DragEvent } from 'react'
 import { useBlocker } from 'react-router'
 import { ApiError, api, message } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
@@ -9,8 +9,11 @@ import { ago } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { from, mark, nameOf, useNotes, type Kind, type Note } from './api.ts'
 import { Place } from './Filing.tsx'
+import Files from './Files.tsx'
+import { AttachIcon } from './icons.tsx'
 import Links from './Links.tsx'
 import TagField from './TagField.tsx'
+import { size, useUploads } from './uploads.ts'
 
 type Props = { id: number; areas: Area[]; onGone: () => void; onChanged?: () => void }
 
@@ -37,17 +40,55 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
   const [draft, setDraft] = useState<Draft>()
   const [sending, setSending] = useState(false)
   const [refused, setRefused] = useState('')
-  // A note read, or a change's answer, that left the server before the note shown would show the note as it was.
+  // A note read, or a change's answer, that left the server before the note shown would show the note as it was. A file
+  // changes no revision, so of the reads only the last one asked is shown.
   const show = (n: Note) => setNote((x) => (x && x.revision > n.revision ? x : n))
-  const read = () =>
-    api<Note>('GET', `/notes/${id}`).then(
-      (n) => {
-        show(n)
-        return n
+  const asked = useRef(0)
+  const read = () => {
+    const n = ++asked.current
+    return api<Note>('GET', `/notes/${id}`).then(
+      (got) => {
+        if (n === asked.current) show(got)
+        return got
       },
       (e: unknown) => void setFailed(message(e)),
     )
+  }
   useNotes(() => void read())
+  // At the note's level, so an upload goes on while the note is edited.
+  const up = useUploads(id, read)
+  // On desktop a file dropped on the note, or an image pasted anywhere, is attached to the note being read.
+  const attachable = !narrow && !draft && !!note && !note.trashed_at
+  const [over, setOver] = useState(false)
+  const pasted = useEffectEvent((e: ClipboardEvent) => {
+    // A paste in a dialog, such as Capture, is the dialog's. Cells copied from a spreadsheet come as text and as a picture
+    // of them, and in a field the text is what was meant.
+    const at = e.target instanceof Element ? e.target : null
+    if (at?.closest('dialog') || (at?.closest('input, textarea, [contenteditable]') && e.clipboardData?.types.includes('text/plain'))) return
+    const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'))
+    if (files.length === 0) return
+    e.preventDefault()
+    up.send(files)
+  })
+  useEffect(() => {
+    if (!attachable) return
+    document.addEventListener('paste', pasted)
+    return () => document.removeEventListener('paste', pasted)
+  }, [attachable])
+  // A file dropped beside the note would have the browser leave the app to show it.
+  useEffect(() => {
+    const keep = (e: globalThis.DragEvent) => {
+      if (e.defaultPrevented || !e.dataTransfer?.types.includes('Files')) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'none'
+    }
+    document.addEventListener('dragover', keep)
+    document.addEventListener('drop', keep)
+    return () => {
+      document.removeEventListener('dragover', keep)
+      document.removeEventListener('drop', keep)
+    }
+  }, [])
   // Leaving the note with what is typed unsaved asks first. A change of the filters keeps the note open, and asks nothing.
   const typed = !!draft && Object.keys(changeOf(draft)).length > 0
   const leaving = useBlocker(({ currentLocation, nextLocation }) => typed && currentLocation.pathname !== nextLocation.pathname)
@@ -225,8 +266,32 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
       </button>
     </>
   )
+  const files = (e: DragEvent) => e.dataTransfer.types.includes('Files')
+  const drop = attachable && {
+    onDragOver: (e: DragEvent) => {
+      if (!files(e)) return
+      e.preventDefault()
+      setOver(true)
+    },
+    onDragLeave: (e: DragEvent) => !e.currentTarget.contains(e.relatedTarget as Node) && setOver(false),
+    onDrop: (e: DragEvent) => {
+      if (!files(e)) return
+      e.preventDefault()
+      setOver(false)
+      up.send([...e.dataTransfer.files])
+    },
+  }
   return (
-    <div className="note-read">
+    <div className={over ? 'note-read dropping' : 'note-read'} {...drop}>
+      {over && (
+        <div className="drop">
+          <div>
+            <AttachIcon />
+            Drop to attach it to this note
+            <span>Any type{up.cap > 0 && `, at most ${size(up.cap)}`}.</span>
+          </div>
+        </div>
+      )}
       <div className="page-head">
         {note.title && <h1>{note.title}</h1>}
         {!narrow && acts && (
@@ -267,6 +332,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
       </div>
       <div className="sects">
         <Links note={note} areas={areas} trashed={trashed} sending={sending} onLinks={(links) => send('PATCH', `/notes/${id}`, { revision: note.revision, links })} />
+        <Files note={note} trashed={trashed} up={up} onRemoved={() => void read()} />
       </div>
       {narrow && acts && <div className="acts stack note-foot">{acts}</div>}
     </div>

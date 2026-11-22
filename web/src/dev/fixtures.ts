@@ -46,7 +46,7 @@ export const note = (id: number, minutes: number, n: Partial<Note>): Note => ({
   title: '',
   inbox: false,
   tags: [],
-  file_count: 0,
+  file_count: n.files?.length ?? 0,
   revision: 1,
   source: 'web',
   created_at: before(minutes),
@@ -56,11 +56,12 @@ export const note = (id: number, minutes: number, n: Partial<Note>): Note => ({
   said: '',
   links: [],
   linked_from: [],
+  files: [],
   ...n,
 })
 
 // A note as a list gives it.
-export const row = ({ body: _, said: __, links: ___, linked_from: ____, ...r }: Note): Row => r
+export const row = ({ body: _, said: __, links: ___, linked_from: ____, files: _____, ...r }: Note): Row => r
 
 // Links as a note keeps them, by reference alone; full resolves them.
 export const refs = (...to: string[]): Linked[] => to.map((ref) => ({ ref, kind: '', state: '', title: '', available: false }))
@@ -111,6 +112,11 @@ export const NOTES: Note[] = [
     title: 'Approval belongs to the client',
     // notes:37 was deleted for good, so its link leads nowhere.
     links: refs('notes:18', 'notes:44', 'notes:37'),
+    files: [
+      { id: 1, name: 'allow-card.png', type: 'image/png', size: 186_000 },
+      { id: 2, name: 'whiteboard.jpg', type: 'image/jpeg', size: 2_516_582 },
+      { id: 3, name: 'portal-marks.pdf', type: 'application/pdf', size: 86_016 },
+    ],
     body: `Portal marks each tool as free or as needing a tap. Recall Synapsis only has to split its tools by risk.
 
 ## What follows

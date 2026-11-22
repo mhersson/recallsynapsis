@@ -32,7 +32,7 @@ const session = {
 }
 
 // login=wrong refuses every sign-in, and login=wait makes it wait 28 seconds.
-function answer(method: string, url: URL, body: Record<string, unknown>): Response {
+function answer(method: string, url: URL, body: Record<string, unknown>, file?: Blob): Response | Promise<Response> {
   const path = url.pathname
   if (method === 'POST' && path === '/api/auth/login') {
     if (query.get('login') === 'wrong') return json({ error: 'wrong name or password' }, 401)
@@ -59,7 +59,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>): Respon
   }
   const area = areas.find((a) => path === `/api/areas/${a.id}`)
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
-  if (path.startsWith('/api/notes')) return answerNotes(method, url, body)
+  if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
   if (method !== 'GET') return json({ error: 'not found' }, 404)
   if (path === '/api/health') return json(HEALTH)
   if (path === '/api/session') return json(session)
@@ -76,7 +76,8 @@ function answer(method: string, url: URL, body: Record<string, unknown>): Respon
 const moved = new Set<number>()
 
 // The notes routes, as the server answers them, telling the stream of every write.
-function answerNotes(method: string, url: URL, body: Record<string, unknown>): Response {
+// upload=wait holds every upload, so it stays under way.
+function answerNotes(method: string, url: URL, body: Record<string, unknown>, file?: Blob): Response | Promise<Response> {
   const told = (n: Note) => {
     tell({ module: 'notes', kind: 'note', id: n.id, area: areas.find((a) => a.slug === n.area)?.id ?? 0 })
     return full(notes, n)
@@ -84,6 +85,7 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>): R
   const changed = (n: Note) => told(Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() }))
   if (url.pathname === '/api/notes' && method === 'GET') return json(listNotes(notes, url.searchParams))
   if (url.pathname === '/api/notes/tags' && method === 'GET') return json(tagsOf(notes))
+  if (url.pathname === '/api/notes/limits' && method === 'GET') return json({ file_max_bytes: 15 << 20 })
   if (url.pathname === '/api/notes' && method === 'POST') {
     const n = note(Math.max(0, ...notes.map((x) => x.id)) + 1, 0, {
       revision: 0,
@@ -95,11 +97,28 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>): R
     notes.push(n)
     return json(changed(n), 201)
   }
-  const [, id, trash] = /^\/api\/notes\/(\d+)(\/trash)?$/.exec(url.pathname) ?? []
+  const [, id, part, fileID] = /^\/api\/notes\/(\d+)(?:\/(trash|files)(?:\/(\d+))?)?$/.exec(url.pathname) ?? []
   const n = notes.find((x) => x.id === Number(id))
   if (!n) return json({ error: 'not found' }, 404)
+  if (part === 'files' && method === 'POST' && file) {
+    if (query.get('upload') === 'wait') return new Promise(() => {})
+    const f = { id: Math.max(0, ...notes.flatMap((x) => x.files.map((y) => y.id))) + 1, name: url.searchParams.get('name')!, type: file.type || 'application/octet-stream', size: file.size }
+    n.files.push(f)
+    n.file_count++
+    told(n)
+    return json(f, 201)
+  }
+  if (part === 'files' && method === 'DELETE') {
+    n.files = n.files.filter((f) => f.id !== Number(fileID))
+    n.file_count = n.files.length
+    told(n)
+    return new Response(null, { status: 204 })
+  }
+  if (part) {
+    if (method === 'POST' && part === 'trash') return json(told(Object.assign(n, { trashed_at: new Date().toISOString() })))
+    return json({ error: 'not found' }, 404)
+  }
   if (method === 'GET') return json(full(notes, n))
-  if (method === 'POST' && trash) return json(told(Object.assign(n, { trashed_at: new Date().toISOString() })))
   if (method !== 'PATCH') return json({ error: 'not found' }, 404)
   if (n.trashed_at) return json({ error: 'the note is in the trash, and is restored before it is changed: conflict' }, 409)
   if (query.get('save') === 'moved' && 'body' in body && !moved.has(n.id)) {
@@ -127,7 +146,8 @@ if (query.get('lapsed') === '1') {
 window.fetch = (input, init) => {
   if (lapsed) return Promise.resolve(Object.defineProperties(new Response(null), { type: { value: 'opaqueredirect' }, status: { value: 0 } }))
   const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {}
-  return Promise.resolve(answer(init?.method ?? 'GET', new URL(String(input), window.location.origin), body))
+  const file = init?.body instanceof Blob ? init.body : undefined
+  return Promise.resolve(answer(init?.method ?? 'GET', new URL(String(input), window.location.origin), body, file))
 }
 
 // A stream that opens and stays live, and tells of each change the harness makes.
@@ -162,10 +182,20 @@ export function Apply() {
   return null
 }
 
-// click=TEXT clicks the first button, link or summary whose text starts with TEXT, and type=TEXT types TEXT into the
-// field that has the focus. Each waits until the page shows what it needs, and given more than once they run in order.
-// end=1 then scrolls the page to its end.
+// click=TEXT clicks the first button, link or summary whose text, or label, starts with TEXT, type=TEXT types TEXT into
+// the field that has the focus, and choose=N chooses an image of N bytes in the file picker of the note being read.
+// Each waits until the page shows what it needs, and given more than once they run in order. end=1 then scrolls the
+// page, and the note open beside a list, to their end.
 function step(kind: string, text: string): boolean {
+  if (kind === 'choose') {
+    const picker = document.querySelector<HTMLInputElement>('.note-read input[type=file]')
+    if (!picker) return false
+    const chosen = new DataTransfer()
+    chosen.items.add(new File([new Uint8Array(Number(text))], 'image.png', { type: 'image/png' }))
+    picker.files = chosen.files
+    picker.dispatchEvent(new Event('change', { bubbles: true }))
+    return true
+  }
   if (kind === 'type') {
     const field = document.activeElement
     if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return false
@@ -174,13 +204,13 @@ function step(kind: string, text: string): boolean {
     field.dispatchEvent(new Event('input', { bubbles: true }))
     return true
   }
-  const target = [...document.querySelectorAll<HTMLElement>('button:enabled, a, summary')].find((e) => e.textContent?.startsWith(text))
+  const target = [...document.querySelectorAll<HTMLElement>('button:enabled, a, summary')].find((e) => (e.textContent || e.getAttribute('aria-label'))?.startsWith(text))
   target?.click()
   target?.scrollIntoView()
   return !!target
 }
 void (async () => {
-  for (const [kind, text] of [...query].filter(([k]) => k === 'click' || k === 'type')) {
+  for (const [kind, text] of [...query].filter(([k]) => ['click', 'type', 'choose'].includes(k))) {
     for (let tries = 0; tries < 20; tries++) {
       await new Promise((r) => setTimeout(r, 100))
       if (step(kind, text)) break
@@ -188,8 +218,7 @@ void (async () => {
   }
   if (query.get('end') !== '1') return
   await new Promise((r) => setTimeout(r, 300))
-  const main = document.querySelector('main')
-  main?.scrollTo(0, main.scrollHeight)
+  for (const scrolled of document.querySelectorAll('main, .panes > .box')) scrolled.scrollTo(0, scrolled.scrollHeight)
 })()
 
 createRoot(document.getElementById('root')!).render(

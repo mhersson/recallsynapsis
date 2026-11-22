@@ -42,7 +42,8 @@ export const json = (body: unknown, status = 200, headers: Record<string, string
 export const redirected = () =>
   Object.defineProperties(new Response(null), { type: { value: 'opaqueredirect' }, status: { value: 0 } })
 
-export type Call = { method: string; path: string; body: unknown; headers: Headers }
+// A body is what was sent: JSON parsed, a file as it is.
+export type Call = { method: string; path: string; body: unknown; headers: Headers; signal?: AbortSignal }
 
 // answer maps a request to its response, or to a promise of one that answers late; every request is recorded.
 export function fakeServer(answer: (c: Call) => Response | Promise<Response> | undefined) {
@@ -55,8 +56,9 @@ export function fakeServer(answer: (c: Call) => Response | Promise<Response> | u
       const call: Call = {
         method: init.method ?? 'GET',
         path,
-        body: init.body === undefined ? undefined : JSON.parse(init.body as string),
+        body: typeof init.body === 'string' ? JSON.parse(init.body) : init.body,
         headers: new Headers(init.headers),
+        signal: init.signal ?? undefined,
       }
       calls.push(call)
       return Promise.resolve(answer(call) ?? json({ error: 'not found' }, 404))

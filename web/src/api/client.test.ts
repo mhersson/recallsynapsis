@@ -106,3 +106,18 @@ test('a refusal carries the wait the server asks for', async () => {
   fakeServer(429, {})
   await expect(api('POST', '/auth/login', {})).rejects.toMatchObject({ status: 429, retryAfter: 0 })
 })
+
+test('a file is sent as it is, as its own type, with the header a change needs, and a signal ends the request', async () => {
+  const fetchMock = fakeServer(201, { id: 1 })
+  const file = new File(['<svg/>'], 'a.svg', { type: 'image/svg+xml' })
+  const ends = new AbortController()
+  await api('POST', '/notes/1/files?name=a.svg', file, ends.signal)
+  expect(fetchMock.mock.calls[0][1]?.body).toBe(file)
+  expect(fetchMock.mock.calls[0][1]?.signal).toBe(ends.signal)
+  expect(headersOf(fetchMock).get('Content-Type')).toBe('image/svg+xml')
+  expect(headersOf(fetchMock).get('X-Recallsynapsis-CSRF')).toBe('1')
+
+  const untyped = fakeServer(201, { id: 2 })
+  await api('POST', '/notes/1/files?name=a', new Blob(['x']))
+  expect(headersOf(untyped).get('Content-Type')).toBe('application/octet-stream')
+})

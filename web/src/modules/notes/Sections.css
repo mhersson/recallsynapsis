@@ -182,3 +182,285 @@ details.sect[open] {
 .finder .acts .err {
   margin: 0;
 }
+
+/* Attachments */
+.tiles {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tile {
+  position: relative;
+  width: 132px;
+  border: 1px solid var(--bg2);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg0);
+}
+
+.tile-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.tile-open:hover {
+  text-decoration: none;
+}
+
+.tile img,
+.tile .doc {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 78px;
+  object-fit: cover;
+  background: var(--bg1);
+}
+
+.tile .doc,
+.tile .nm {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey1);
+  letter-spacing: 0;
+}
+
+.tile .nm {
+  display: block;
+  padding: 5px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile .x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--bg0) 85%, transparent);
+  color: var(--grey2);
+}
+
+.tile .x .ic {
+  width: 13px;
+  height: 13px;
+}
+
+/* A file under way: what it is, and a bar that moves while it goes. */
+.tile.up {
+  border-style: dashed;
+  border-color: var(--bg4);
+}
+
+.tile.up .doc {
+  background: var(--bg0);
+}
+
+.tile .bar {
+  display: block;
+  height: 3px;
+  margin: 0 8px 2px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--bg2);
+}
+
+.tile .bar::after {
+  content: '';
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--aqua);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tile .bar::after {
+    animation: going 1.4s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes going {
+  from {
+    transform: translateX(-20%);
+  }
+
+  to {
+    transform: translateX(170%);
+  }
+}
+
+.fline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--grey2);
+}
+
+.sect .tiles ~ .err {
+  margin-top: 10px;
+}
+
+.sect .tiles ~ .note {
+  margin-top: 10px;
+}
+
+.acts.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 14px;
+}
+
+.acts.two .btn,
+.sect-head .btn,
+.viewer .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.acts.two .btn {
+  padding: 9px 12px;
+}
+
+/* A file dragged over the note: the note fades behind where it goes, and the box says so. */
+.box:has(> .dropping) {
+  outline: 2px dashed var(--aqua);
+  outline-offset: -1px;
+}
+
+.dropping > :not(.drop) {
+  opacity: 0.2;
+}
+
+.drop {
+  position: sticky;
+  top: 30%;
+  z-index: 2;
+  height: 0;
+}
+
+.drop > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 300px;
+  margin: 0 auto;
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--bg0);
+  border: 1px solid var(--bg3);
+  font-weight: 500;
+}
+
+.drop .ic {
+  width: 28px;
+  height: 28px;
+  color: var(--aqua);
+}
+
+.drop span {
+  color: var(--grey2);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* An image opened: it fills the view, under a bar with its name, what it is, and what can be done. */
+.dialog.viewer {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-dim);
+}
+
+.dialog.viewer[open] {
+  display: grid;
+  grid-template-columns: minmax(0, auto) 1fr;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.viewer h2,
+.vbar {
+  margin: 0;
+  background: var(--bg0);
+  border-bottom: 1px solid var(--bg2);
+}
+
+.viewer h2 {
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0 10px 0 18px;
+  align-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 0;
+}
+
+.vbar .spacer {
+  flex: 1;
+}
+
+.viewer img {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  padding: 28px;
+}
+
+.vfoot {
+  grid-column: 1 / -1;
+  display: grid;
+  padding: 10px 14px 30px;
+}
+
+.vfoot .btn {
+  padding: 9px 12px;
+}
+
+@media (max-width: 720px) {
+  .tile {
+    width: calc((100% - 16px) / 3);
+  }
+
+  .viewer h2 {
+    padding-left: 14px;
+  }
+
+  .vbar {
+    padding-right: 14px;
+  }
+
+  .viewer img {
+    padding: 16px 10px;
+  }
+}

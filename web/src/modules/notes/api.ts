@@ -32,9 +32,12 @@ export type Row = {
 // What a link names, as the core resolves it: an item of a module switched on, unavailable once it is gone.
 export type Linked = { ref: string; kind: string; state: string; title: string; available: boolean }
 
+// A file attached to a note, of the type it was declared as.
+export type Attached = { id: number; name: string; type: string; size: number }
+
 // A note as GET /api/notes/{id} gives it: in full, with the owner's own words on its first revision when a client gave
-// them, its links and the items that link to it.
-export type Note = Row & { body: string; said: string; links: Linked[]; linked_from: Linked[] }
+// them, its links, the items that link to it and its files in the order they were attached.
+export type Note = Row & { body: string; said: string; links: Linked[]; linked_from: Linked[]; files: Attached[] }
 
 export type List = { notes: Row[]; total: number }
 
