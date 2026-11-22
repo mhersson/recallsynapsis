@@ -140,6 +140,10 @@ Every package states its one responsibility in its package comment, and
   with the user, the source of the request and whether it may write; the
   access levels a route or a tool declares; and the refusal, the JSON reply
   and the strict decoding of a body that every route uses.
+  Depguard rules in `.golangci.yaml` let a module package's code import
+  `module` and `store` and no other package of this binary, let nothing but
+  `api` and `cmd` import a module, and let only tests import the fake; tests
+  are otherwise exempt.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
