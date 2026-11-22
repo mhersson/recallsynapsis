@@ -1,7 +1,7 @@
 import { useEffect, useId, type ReactNode } from 'react'
 import './Dialog.css'
 
-type Props = { title: string; onClose: () => void; children: ReactNode }
+type Props = { title: ReactNode; onClose: () => void; children: ReactNode }
 
 // The scrim ignores clicks: a stray one must not lose what was typed.
 export default function Dialog({ title, onClose, children }: Props) {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Link, NavLink } from 'react-router'
+import { Link, NavLink, useLocation } from 'react-router'
 import { api } from '../api/client.ts'
-import { useStream } from '../api/stream.ts'
+import { touchesAreas, useStream } from '../api/stream.ts'
 import type { Area } from '../api/types.ts'
 import type { Module } from '../modules/registry.ts'
 import { AddIcon, ProjectsIcon, SearchIcon, SettingsIcon } from './icons.tsx'
@@ -12,9 +12,12 @@ type Props = { modules: Module[]; live: boolean }
 const item = ({ isActive }: { isActive: boolean }) => 'side-item' + (isActive ? ' on' : '')
 
 export default function SideBar({ modules, live }: Props) {
+  // The dialog that makes a project opens over the Projects list, which stays current.
+  const { pathname } = useLocation()
+  const projects = pathname === '/projects' || pathname === '/areas/new'
   const [areas, setAreas] = useState<Area[]>([])
   useStream((changes) => {
-    if (changes && !changes.some((c) => c.module === 'core' && c.kind === 'area')) return
+    if (!touchesAreas(changes)) return
     api<{ areas: Area[] }>('GET', '/areas').then((r) => setAreas(r.areas), () => {})
   })
 
@@ -32,9 +35,9 @@ export default function SideBar({ modules, live }: Props) {
         Search
       </NavLink>
       <div className="side-head">
-        <NavLink to="/" end className={({ isActive }) => (isActive ? 'on' : '')}>
+        <Link to="/projects" className={projects ? 'on' : undefined} aria-current={projects ? 'page' : undefined}>
           Areas
-        </NavLink>
+        </Link>
         <Link to="/areas/new" className="side-add" aria-label="New project" title="New project">
           <AddIcon />
         </Link>

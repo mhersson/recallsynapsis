@@ -1,21 +1,21 @@
-import { useEffect } from 'react'
-import { act, render, screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation } from 'react-router'
 import type { Session } from './api/types.ts'
-import App from './App.tsx'
+import { open } from './test-app.tsx'
 import { FakeEventSource, fakeServer, json, narrow, redirected } from './test-server.ts'
 
-// A stand-in module, on while the session names it. Its page shows the signed-in user's name.
-// The factory is hoisted above the imports, so it makes its elements without JSX.
+// Stand-in modules, each on while the session names it: plain adds nothing, and things has a home and a page that shows
+// the signed-in user's name. The factory is hoisted above the imports, so it makes its elements without JSX.
 vi.mock('./modules/registry.ts', async () => {
   const { createElement } = await import('react')
   const { useSession } = await import('./session.ts')
   const Things = () => createElement('h1', null, useSession().user.name)
   return {
     modules: [
+      { name: 'plain', nav: [], tabs: [], more: [], routes: [] },
       {
         name: 'things',
+        home: '/things',
         nav: [{ to: '/things', label: 'Things', icon: null }],
         tabs: [{ to: '/things', label: 'Things', icon: null }],
         more: [{ to: '/odds', label: 'Odds', note: 'Odd things', icon: null }],
@@ -30,23 +30,10 @@ vi.mock('./modules/registry.ts', async () => {
 
 afterEach(() => vi.unstubAllGlobals())
 
-let here = ''
-function Here() {
-  const { pathname, search } = useLocation()
-  useEffect(() => {
-    here = pathname + search
-  })
-  return null
-}
-
+let where = () => ''
 async function show(path = '/') {
-  const view = render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-      <Here />
-    </MemoryRouter>,
-  )
-  await act(async () => {})
+  const view = await open(path)
+  where = view.where
   return view
 }
 
@@ -77,13 +64,13 @@ function server() {
 test('signing in lands on the page that was asked for', async () => {
   const { calls } = server()
   await show('/search?q=garden')
-  expect(here).toBe('/login')
+  expect(where()).toBe('/login')
   expect(password()).not.toBeNull()
   expect(screen.queryByRole('main')).toBeNull()
 
   await signIn()
   expect(await screen.findByRole('main')).toBeInTheDocument()
-  expect(here).toBe('/search?q=garden')
+  expect(where()).toBe('/search?q=garden')
   expect(password()).toBeNull()
   expect(calls.filter(isSession)).toHaveLength(2)
 })
@@ -99,12 +86,12 @@ test('a session that ends leads back to sign-in once the stream drops, and signi
   // The server refuses the ended session's stream, and the browser closes it.
   state.signedIn = false
   await act(async () => es.fail(true))
-  expect(here).toBe('/login')
+  expect(where()).toBe('/login')
   expect(password()).not.toBeNull()
 
   await signIn()
   expect(await screen.findByRole('main')).toBeInTheDocument()
-  expect(here).toBe('/settings')
+  expect(where()).toBe('/settings')
 })
 
 test('a session that could not be read is read again when the stream opens', async () => {
@@ -113,7 +100,7 @@ test('a session that could not be read is read again when the stream opens', asy
   state.down = true
   await show('/settings')
   expect(screen.queryByRole('main')).toBeNull()
-  expect(here).toBe('/settings')
+  expect(where()).toBe('/settings')
 
   state.down = false
   await act(async () => FakeEventSource.all[0].open())
@@ -124,7 +111,7 @@ test('a path that is no page goes to the Projects list', async () => {
   server().state.signedIn = true
   await show('/no/such/page')
   expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
-  expect(here).toBe('/')
+  expect(where()).toBe('/projects')
 })
 
 test('a redirect to another origin asks for a reload', async () => {
@@ -142,7 +129,7 @@ test('a network failure shows no notice and opens no sign-in', async () => {
   await show('/search')
   expect(failing).toHaveBeenCalled()
   expect(screen.queryByRole('alert')).toBeNull()
-  expect(here).toBe('/search')
+  expect(where()).toBe('/search')
 })
 
 const areas = [
@@ -150,8 +137,10 @@ const areas = [
   { id: 2, kind: 'project', name: 'garden', slug: 'garden', description: '', archived: false },
 ]
 const isAreas = (c: { path: string }) => c.path === '/api/areas'
-const links = () => screen.getAllByRole('link').map((a) => a.getAttribute('href'))
-const current = () => screen.getAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.getAttribute('href'))
+// The links of the side bar, or of the tabs on a phone.
+const nav = () => within(screen.getByRole('navigation')).getAllByRole('link')
+const links = () => nav().map((a) => a.getAttribute('href'))
+const current = () => nav().filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.getAttribute('href'))
 
 // A signed-in server with the given modules on.
 function signedIn(modules: string[]) {
@@ -167,16 +156,16 @@ test('with no module on, the side bar holds Search, the areas and Settings, and 
   narrow(false)
   signedIn([])
   await show('/things')
-  expect(links()).toEqual(['/search', '/', '/areas/new', '/areas/1', '/areas/2', '/settings'])
-  expect(here).toBe('/')
-  expect(current()).toEqual(['/'])
+  expect(links()).toEqual(['/search', '/projects', '/areas/new', '/areas/1', '/areas/2', '/settings'])
+  expect(where()).toBe('/projects')
+  expect(current()).toEqual(['/projects'])
 })
 
 test('with a module on, the shell shows its entries and its pages, which read the session', async () => {
   narrow(false)
   signedIn(['things'])
   await show('/things')
-  expect(links()).toEqual(['/things', '/search', '/', '/areas/new', '/areas/1', '/areas/2', '/settings'])
+  expect(links()).toEqual(['/things', '/search', '/projects', '/areas/new', '/areas/1', '/areas/2', '/settings'])
   expect(current()).toEqual(['/things'])
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(session.user.name)
 })
@@ -185,17 +174,17 @@ test('a phone has the tabs of the modules that are on, then Projects and More', 
   narrow(true)
   signedIn([])
   const none = await show()
-  expect(links()).toEqual(['/', '/more'])
+  expect(links()).toEqual(['/projects', '/more'])
   none.unmount()
 
   signedIn(['things'])
   await show()
-  expect(links()).toEqual(['/things', '/', '/more'])
+  expect(links()).toEqual(['/things', '/projects', '/more'])
 })
 
 test.each([
-  ['/', '/'],
-  ['/areas/2', '/'],
+  ['/projects', '/projects'],
+  ['/areas/2', '/projects'],
   ['/more', '/more'],
   ['/search', '/more'],
   ['/settings', '/more'],
@@ -246,7 +235,24 @@ test('a module switched off while the page is open leaves the shell once the str
   s.modules = []
   await act(async () => es.fail())
   expect(links()).not.toContain('/things')
-  expect(here).toBe('/')
+  expect(where()).toBe('/projects')
+})
+
+test.each([
+  [[], '/projects'],
+  [['plain'], '/projects'],
+  [['plain', 'things'], '/things'],
+])('with the modules %j on, a person lands on %s', async (on, landing) => {
+  signedIn(on)
+  await show('/')
+  expect(where()).toBe(landing)
+})
+
+test('the Areas heading of the side bar stays current while a project is made', async () => {
+  narrow(false)
+  signedIn([])
+  await show('/areas/new')
+  expect(current()).toEqual(['/projects'])
 })
 
 test('the side bar says whether the stream is live', async () => {

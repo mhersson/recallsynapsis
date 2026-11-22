@@ -7,10 +7,13 @@ import AccessEnded from './components/AccessEnded.tsx'
 import PhoneTabs from './components/PhoneTabs.tsx'
 import SideBar from './components/SideBar.tsx'
 import { useNarrow } from './components/useNarrow.ts'
-import { modules } from './modules/registry.ts'
 import Login from './pages/Login/Login.tsx'
-import Placeholder from './pages/Placeholder.tsx'
-import { SessionContext } from './session.ts'
+import More from './pages/More/More.tsx'
+import AreaPage from './pages/Projects/AreaPage.tsx'
+import Projects from './pages/Projects/Projects.tsx'
+import Search from './pages/Search/Search.tsx'
+import Settings from './pages/Settings/Settings.tsx'
+import { SessionContext, enabled } from './session.ts'
 import './App.css'
 
 function Frame() {
@@ -23,7 +26,8 @@ function Frame() {
   }, [live])
 
   if (!session) return null
-  const on = modules.filter((m) => session.modules.includes(m.name))
+  const on = enabled(session.modules)
+  const home = on.find((m) => m.home)?.home ?? '/projects'
 
   return (
     <SessionContext value={session}>
@@ -31,16 +35,16 @@ function Frame() {
         {!narrow && <SideBar modules={on} live={live} />}
         <main className="main">
           <Routes>
-            <Route path="/" element={<Placeholder title="Projects" />} />
-            <Route path="/areas/new" element={<Placeholder title="New project" />} />
-            <Route path="/areas/:id" element={<Placeholder title="Project" />} />
-            <Route path="/search" element={<Placeholder title="Search" />} />
-            <Route path="/settings" element={<Placeholder title="Settings" />} />
-            <Route path="/more" element={<Placeholder title="More" />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/areas/new" element={<Projects making />} />
+            <Route path="/areas/:id" element={<AreaPage />} />
+            <Route path="/search" element={<Search />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/more" element={<More />} />
             {on.flatMap((m) => m.routes).map((r) => (
               <Route key={r.path} path={r.path} element={r.element} />
             ))}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to={home} replace />} />
           </Routes>
         </main>
         {narrow && <PhoneTabs modules={on} />}

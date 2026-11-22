@@ -44,8 +44,8 @@ export const redirected = () =>
 
 export type Call = { method: string; path: string; body: unknown; headers: Headers }
 
-// answer maps a request to its response; every request is recorded.
-export function fakeServer(answer: (c: Call) => Response | undefined) {
+// answer maps a request to its response, or to a promise of one that answers late; every request is recorded.
+export function fakeServer(answer: (c: Call) => Response | Promise<Response> | undefined) {
   const calls: Call[] = []
   vi.stubGlobal('EventSource', FakeEventSource)
   FakeEventSource.all = []
@@ -65,11 +65,19 @@ export function fakeServer(answer: (c: Call) => Response | undefined) {
   return calls
 }
 
+// A phone's width while matches is true; the function it returns changes the width, as turning a phone does.
 export function narrow(matches: boolean) {
+  const listeners = new Set<() => void>()
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches,
+    get matches() {
+      return matches
+    },
     media: query,
-    addEventListener: () => {},
-    removeEventListener: () => {},
+    addEventListener: (_: string, l: () => void) => listeners.add(l),
+    removeEventListener: (_: string, l: () => void) => listeners.delete(l),
   }))
+  return (next: boolean) => {
+    matches = next
+    listeners.forEach((l) => l())
+  }
 }

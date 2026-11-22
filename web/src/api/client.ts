@@ -10,6 +10,9 @@ export class ApiError extends Error {
   }
 }
 
+// The one line a page shows for a refusal or a failure.
+export const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
 let unauthorized: () => void = () => {}
 let redirected: () => void = () => {}
 
