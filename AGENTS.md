@@ -118,7 +118,9 @@ Every package states its one responsibility in its package comment, and
   by its id, its slug or its name. It owns the table `areas`.
 - `internal/module`: what the core and its feature modules share: the
   `Caller` an authorised request carries in its context, with the user, the
-  source of the request and whether it may write.
+  source of the request and whether it may write; the access levels a route
+  declares; and the refusal, the JSON reply and the strict decoding of a body
+  that every route uses.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.

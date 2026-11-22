@@ -258,24 +258,24 @@ func TestTheAccessOfEachRoute(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		level   access
+		level   module.Access
 		method  string
 		headers []string
 		status  int // 0 when admitted
 		caller  module.Caller
 	}{
-		{"nothing on an open route", open, http.MethodPost, nil, 0, module.Caller{}},
-		{"nothing", read, http.MethodGet, nil, http.StatusUnauthorized, module.Caller{}},
-		{"a read token reading", read, http.MethodGet, []string{readToken}, 0, module.Caller{UserID: f.user, Source: "phone"}},
-		{"a scheme in any case", read, http.MethodGet, []string{strings.Replace(readToken, "Bearer", "bEARER", 1)}, 0, module.Caller{UserID: f.user, Source: "phone"}},
-		{"a read token writing", write, http.MethodPost, []string{readToken}, http.StatusForbidden, module.Caller{}},
-		{"a write token writing", write, http.MethodPost, []string{writeToken}, 0, module.Caller{UserID: f.user, Source: "laptop", Write: true}},
-		{"a write token on an owner route", owner, http.MethodGet, []string{writeToken}, http.StatusForbidden, module.Caller{}},
-		{"a read token on an owner route", owner, http.MethodGet, []string{readToken}, http.StatusForbidden, module.Caller{}},
-		{"a token before the cookie", owner, http.MethodGet, []string{readToken, cookie}, http.StatusForbidden, module.Caller{}},
-		{"the cookie on an owner route", owner, http.MethodPost, []string{cookie, csrf}, 0, module.Caller{UserID: f.user, Source: "web", Write: true}},
-		{"the cookie reading without the header", read, http.MethodGet, []string{cookie}, 0, module.Caller{UserID: f.user, Source: "web", Write: true}},
-		{"the cookie writing without the header", write, http.MethodPost, []string{cookie}, http.StatusForbidden, module.Caller{}},
+		{"nothing on an open route", module.Open, http.MethodPost, nil, 0, module.Caller{}},
+		{"nothing", module.Read, http.MethodGet, nil, http.StatusUnauthorized, module.Caller{}},
+		{"a read token reading", module.Read, http.MethodGet, []string{readToken}, 0, module.Caller{UserID: f.user, Source: "phone"}},
+		{"a scheme in any case", module.Read, http.MethodGet, []string{strings.Replace(readToken, "Bearer", "bEARER", 1)}, 0, module.Caller{UserID: f.user, Source: "phone"}},
+		{"a read token writing", module.Write, http.MethodPost, []string{readToken}, http.StatusForbidden, module.Caller{}},
+		{"a write token writing", module.Write, http.MethodPost, []string{writeToken}, 0, module.Caller{UserID: f.user, Source: "laptop", Write: true}},
+		{"a write token on an owner route", module.Owner, http.MethodGet, []string{writeToken}, http.StatusForbidden, module.Caller{}},
+		{"a read token on an owner route", module.Owner, http.MethodGet, []string{readToken}, http.StatusForbidden, module.Caller{}},
+		{"a token before the cookie", module.Owner, http.MethodGet, []string{readToken, cookie}, http.StatusForbidden, module.Caller{}},
+		{"the cookie on an owner route", module.Owner, http.MethodPost, []string{cookie, csrf}, 0, module.Caller{UserID: f.user, Source: "web", Write: true}},
+		{"the cookie reading without the header", module.Read, http.MethodGet, []string{cookie}, 0, module.Caller{UserID: f.user, Source: "web", Write: true}},
+		{"the cookie writing without the header", module.Write, http.MethodPost, []string{cookie}, http.StatusForbidden, module.Caller{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -305,7 +305,7 @@ func TestTheAccessOfEachRoute(t *testing.T) {
 			require.NoError(t, err)
 
 			c, ok := module.CallerFrom(r.Context())
-			assert.Equal(t, tt.level != open, ok)
+			assert.Equal(t, tt.level != module.Open, ok)
 			assert.Equal(t, tt.caller, c)
 		})
 	}

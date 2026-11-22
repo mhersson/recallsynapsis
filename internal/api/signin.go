@@ -17,12 +17,12 @@ const (
 	csrfHeader = "X-Recallsynapsis-CSRF"
 )
 
-var errNoAuthority = &apiError{http.StatusUnauthorized, "sign in, or send an API token as Authorization: Bearer TOKEN"}
+var errNoAuthority = &module.Refusal{Status: http.StatusUnauthorized, Text: "sign in, or send an API token as Authorization: Bearer TOKEN"}
 
 // authorize admits r to a route that asks for level, and returns r carrying
 // its caller: a bearer token when the request sends one, else the session cookie.
-func (s *server) authorize(w http.ResponseWriter, r *http.Request, level access) (*http.Request, error) {
-	if level == open {
+func (s *server) authorize(w http.ResponseWriter, r *http.Request, level module.Access) (*http.Request, error) {
+	if level == module.Open {
 		return r, nil
 	}
 
@@ -34,7 +34,7 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request, level access)
 	return r.WithContext(module.WithCaller(r.Context(), c)), nil
 }
 
-func (s *server) identify(w http.ResponseWriter, r *http.Request, level access) (module.Caller, error) {
+func (s *server) identify(w http.ResponseWriter, r *http.Request, level module.Access) (module.Caller, error) {
 	if scheme, text, _ := strings.Cut(r.Header.Get("Authorization"), " "); strings.EqualFold(scheme, "Bearer") {
 		c, found, err := s.Auth.Bearer(r.Context(), text)
 
@@ -42,11 +42,11 @@ func (s *server) identify(w http.ResponseWriter, r *http.Request, level access) 
 		case err != nil:
 			return c, err
 		case !found:
-			return c, &apiError{http.StatusUnauthorized, "the API token is unknown or revoked"}
-		case level == owner:
-			return c, &apiError{http.StatusForbidden, "no API token can reach this route; sign in to the web app"}
-		case level == write && !c.Write:
-			return c, &apiError{http.StatusForbidden, "this route changes something, and the API token may only read"}
+			return c, &module.Refusal{Status: http.StatusUnauthorized, Text: "the API token is unknown or revoked"}
+		case level == module.Owner:
+			return c, &module.Refusal{Status: http.StatusForbidden, Text: "no API token can reach this route; sign in to the web app"}
+		case level == module.Write && !c.Write:
+			return c, &module.Refusal{Status: http.StatusForbidden, Text: "this route changes something, and the API token may only read"}
 		}
 
 		return c, nil
@@ -60,7 +60,7 @@ func (s *server) identify(w http.ResponseWriter, r *http.Request, level access) 
 	// SameSite does not tell ports apart, so a page on another port of this host
 	// sends the cookie too; it cannot add a header without CORS, which is never granted.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get(csrfHeader) == "" {
-		return module.Caller{}, &apiError{http.StatusForbidden, "a request with the session cookie that changes something needs the " + csrfHeader + " header"}
+		return module.Caller{}, &module.Refusal{Status: http.StatusForbidden, Text: "a request with the session cookie that changes something needs the " + csrfHeader + " header"}
 	}
 
 	c, renewed, ok, err := s.Auth.Session(r.Context(), cookie.Value)
@@ -104,7 +104,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) error {
 		Password string `json:"password"`
 	}
 
-	if err := decode(w, r, &in); err != nil {
+	if err := module.Decode(w, r, &in); err != nil {
 		return err
 	}
 
@@ -116,11 +116,11 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) error {
 	if limited, ok := errors.AsType[*auth.LimitedError](err); ok {
 		w.Header().Set("Retry-After", strconv.FormatInt(int64((limited.RetryAfter+time.Second-1)/time.Second), 10))
 
-		return &apiError{http.StatusTooManyRequests, "too many failed sign-ins; try again after Retry-After seconds"}
+		return &module.Refusal{Status: http.StatusTooManyRequests, Text: "too many failed sign-ins; try again after Retry-After seconds"}
 	}
 
 	if errors.Is(err, auth.ErrBadLogin) {
-		return &apiError{http.StatusUnauthorized, "wrong name or password"}
+		return &module.Refusal{Status: http.StatusUnauthorized, Text: "wrong name or password"}
 	}
 
 	if err != nil {
@@ -159,7 +159,7 @@ func (s *server) session(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	reply(w, http.StatusOK, map[string]any{
+	module.Reply(w, http.StatusOK, map[string]any{
 		"user":        map[string]string{"name": name},
 		"modules":     []string{},
 		"version":     s.Version,

@@ -1,5 +1,6 @@
 // Package module is what the core and its feature modules share: the caller
-// of the request a module serves.
+// of a request, the access a route asks of it, and the refusal, the reply and
+// the strict decoding of a body that every route uses.
 package module
 
 import "context"

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/mhersson/recallsynapsis/internal/core"
+	"github.com/mhersson/recallsynapsis/internal/module"
 )
 
 func (s *server) areas(w http.ResponseWriter, r *http.Request) error {
@@ -14,7 +15,7 @@ func (s *server) areas(w http.ResponseWriter, r *http.Request) error {
 	case "true":
 		archived = true
 	default:
-		return &apiError{http.StatusBadRequest, `archived is "true" or "false"`}
+		return &module.Refusal{Status: http.StatusBadRequest, Text: `archived is "true" or "false"`}
 	}
 
 	list, err := s.Core.Areas(r.Context(), caller(r).UserID, archived)
@@ -22,7 +23,7 @@ func (s *server) areas(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	reply(w, http.StatusOK, map[string][]core.Area{"areas": list})
+	module.Reply(w, http.StatusOK, map[string][]core.Area{"areas": list})
 
 	return nil
 }
@@ -33,7 +34,7 @@ func (s *server) createArea(w http.ResponseWriter, r *http.Request) error {
 		Description string `json:"description"`
 	}
 
-	if err := decode(w, r, &in); err != nil {
+	if err := module.Decode(w, r, &in); err != nil {
 		return err
 	}
 
@@ -42,7 +43,7 @@ func (s *server) createArea(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	reply(w, http.StatusCreated, a)
+	module.Reply(w, http.StatusCreated, a)
 
 	return nil
 }
@@ -54,7 +55,7 @@ func (s *server) changeArea(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	var in core.Change
-	if err := decode(w, r, &in); err != nil {
+	if err := module.Decode(w, r, &in); err != nil {
 		return err
 	}
 
@@ -63,7 +64,7 @@ func (s *server) changeArea(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	reply(w, http.StatusOK, a)
+	module.Reply(w, http.StatusOK, a)
 
 	return nil
 }
