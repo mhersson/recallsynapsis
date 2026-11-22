@@ -111,12 +111,12 @@ Every package states its one responsibility in its package comment, and
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
   verb registers itself from an `init` in its own file. `datadir.go` holds
-  `modules`, the list of the binary's feature modules, empty but for the fake
-  the tests add, and every verb that opens the database builds them all, so
-  every module's migrations run whether it is on or not. `serve` gives the
-  modules the hub of the event streams, whose streams end as a signal begins
-  the shutdown, runs the jobs of the modules switched on and the nightly
-  backup, and stops them before the store closes.
+  `modules`, the list of the binary's feature modules, which is notes, with
+  the fake after it in the tests, and every verb that opens the database
+  builds them all, so every module's migrations run whether it is on or not.
+  `serve` gives the modules the hub of the event streams, whose streams end
+  as a signal begins the shutdown, runs the jobs of the modules switched on
+  and the nightly backup, and stops them before the store closes.
 - `internal/api`: the REST API under `/api/`, served from one route table,
   with the routes of the modules switched on beside the core's. Every refusal
   of a route and every path no route matches is answered as
@@ -180,6 +180,15 @@ Every package states its one responsibility in its package comment, and
   `module` and `store` and no other package of this binary, let nothing but
   `api` and `cmd` import a module, and let only tests import the fake; tests
   are otherwise exempt.
+- `internal/notes`: the notes module. It keeps each user's notes and ideas,
+  each in one of the user's areas, named by the area's slug, with its tags,
+  lower-cased without any `#` they start with, and the inbox flag of a
+  capture that waits to be filed. A change of area, kind or tags files a note
+  unless the same change puts it in the inbox, and a note in the inbox is in
+  the personal area. A change names the revision it was made from and is
+  refused once the note has moved on, unless it only appends, and every
+  change writes a revision with its source. It owns the tables `notes`,
+  `note_tags` and `note_revisions`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.

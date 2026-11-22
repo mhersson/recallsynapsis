@@ -135,6 +135,17 @@ func TestLoadModules(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "personal", personal.Slug)
 
+	shed, err := f.svc.CreateProject(t.Context(), ada, "Shed", "")
+	require.NoError(t, err)
+
+	archived := true
+	shed, err = f.svc.ChangeArea(t.Context(), ada, shed.ID, Change{Archived: &archived})
+	require.NoError(t, err)
+
+	areas, err := got.Areas(t.Context(), ada)
+	require.NoError(t, err)
+	assert.Equal(t, []module.Area{personal, shed}, areas, "every area of the user, the archived ones too")
+
 	it, err := got.Resolve(t.Context(), module.NewRef("plain", 1))
 	require.NoError(t, err)
 	assert.Equal(t, module.Item{Ref: "plain:1", Title: "Beds", Available: true}, it, "Resolve reaches the modules built after the one given it")

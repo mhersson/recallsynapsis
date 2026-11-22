@@ -33,8 +33,8 @@ func TestMain(m *testing.M) {
 
 const fakeOn = "[modules.fake]\nenabled = true\n"
 
-// hasFakeTable reports whether the data directory's database has the fake module's table.
-func hasFakeTable(t *testing.T, dir string) bool {
+// hasTable reports whether the data directory's database has the table.
+func hasTable(t *testing.T, dir, table string) bool {
 	t.Helper()
 
 	st, err := store.Open(t.Context(), filepath.Join(dir, "recallsynapsis.db"), nil)
@@ -43,7 +43,7 @@ func hasFakeTable(t *testing.T, dir string) bool {
 	defer st.Close()
 
 	var n int
-	require.NoError(t, st.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_schema WHERE name = 'fake_items'`).Scan(&n))
+	require.NoError(t, st.QueryRowContext(t.Context(), `SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND name = ?`, table).Scan(&n))
 
 	return n == 1
 }
@@ -62,7 +62,8 @@ func TestEveryVerbAppliesTheMigrationsOfAModuleThatIsOff(t *testing.T) {
 				require.Equal(t, 0, code, stderr)
 			}
 
-			assert.True(t, hasFakeTable(t, dir))
+			assert.True(t, hasTable(t, dir, "fake_items"))
+			assert.True(t, hasTable(t, dir, "notes"), "the binary's own modules are built too")
 		})
 	}
 }
@@ -73,6 +74,7 @@ func TestAModuleTableTheBinaryCannotUseStopsTheStart(t *testing.T) {
 	tests := []struct{ name, table, key string }{
 		{"a module the binary lacks", fakeOn + "[modules.ghost]\nenabled = true\n", "modules.ghost"},
 		{"an unknown key", fakeOn + "colour = \"red\"\n", "modules.fake.colour"},
+		{"an unknown key of notes", "[modules.notes]\ncolour = \"red\"\n", "modules.notes.colour"},
 	}
 	for _, tt := range tests {
 		for _, verb := range []string{"serve", "password"} {

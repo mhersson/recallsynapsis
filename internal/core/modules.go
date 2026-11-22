@@ -26,13 +26,14 @@ type Group struct {
 }
 
 // LoadModules builds each module of list with d, which it completes with the
-// store, the area lookup, Resolve, LinksTo and Notify, decodes the module's
+// store, the area lookups, Resolve, LinksTo and Notify, decodes the module's
 // table of cfg, and applies every module's migrations, on or off, after
 // auth's and core's. A table no module of list has is refused, and so are an
 // open module route and a module tool that asks for neither read nor write.
 func (c *Service) LoadModules(ctx context.Context, list []func(module.Deps) module.Module, cfg *config.Config, d module.Deps) (*Modules, error) {
 	ms := &Modules{areas: c}
 	d.Store, d.FindArea = c.store, c.Find
+	d.Areas = func(ctx context.Context, userID int64) ([]module.Area, error) { return c.Areas(ctx, userID, true) }
 	d.Resolve, d.LinksTo = ms.Resolve, ms.LinksTo
 	d.Notify = func(context.Context, module.Ref, string) {}
 
