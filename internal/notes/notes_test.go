@@ -912,6 +912,7 @@ func TestEveryChangeIsKeptInTheHistory(t *testing.T) {
 	assert.Equal(t, object{
 		"revision": float64(1), "at": made["created_at"], "source": "laptop", "said": "", "restored_from": nil,
 		"title": "Seeds", "body": "Tomatoes", "kind": "note", "area": "garden", "inbox": false, "tags": []any{"beds", "spring"},
+		"links": []any{},
 	}, got)
 
 	code, got = f.do(t, http.MethodGet, path(made)+"/revisions/4", "", f.phone)

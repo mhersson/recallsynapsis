@@ -183,23 +183,26 @@ Every package states its one responsibility in its package comment, and
   are otherwise exempt.
 - `internal/notes`: the notes module. It keeps each user's notes and ideas, each
   in one of the user's areas, named by the area's slug, with its tags,
-  lower-cased without any `#` they start with, and the inbox flag of a capture
-  that waits to be filed. A change of area, kind or tags files a note unless the
-  same change puts it in the inbox, and a note in the inbox is in the personal
-  area. A change names the revision it was made from and is refused once the
-  note has moved on, unless it only appends, and every change writes a revision
-  with its source. Any revision can be read, and restoring one writes a new one
-  with its title, body and tags, leaving the area, the kind and the inbox flag
-  as they are. It searches its notes for every word of a query, in title, body
-  and tags and in any case, through an FTS5 index with the trigram tokenizer,
-  and looks for a word under three characters, which the index cannot find, in
-  the text of the notes themselves. Every write keeps the index level, it keeps
-  no copy of the text, and deleting a note for good rewrites it, so nothing of
-  the note is left there. A note in the trash is in no list but the trash's, is
-  found by no search, counts for no tag and cannot be changed. Trashing and
-  restoring it write no revision, and only the session cookie deletes it for
-  good, alone or by emptying the trash. It owns the tables `notes`, `note_tags`,
-  `note_revisions` and `notes_fts`.
+  lower-cased without any `#` they start with, its links, at most 100, each a
+  reference to an item of any module, and the inbox flag of a capture that waits
+  to be filed. A change of area, kind or tags files a note unless the same
+  change puts it in the inbox, and a note in the inbox is in the personal area.
+  A change names the revision it was made from and is refused once the note has
+  moved on, unless it only appends, and every change writes a revision with its
+  source. Any revision can be read, and restoring one writes a new one with its
+  title, body, tags and links, leaving the area, the kind and the inbox flag as
+  they are. A note read in full gives its links and the items that link to it,
+  each as the core resolves it, and a link to a note in the trash or deleted for
+  good leads nowhere. It searches its notes for every word of a query, in title,
+  body and tags and in any case, through an FTS5 index with the trigram
+  tokenizer, and looks for a word under three characters, which the index cannot
+  find, in the text of the notes themselves. Every write keeps the index level,
+  it keeps no copy of the text, and deleting a note for good rewrites it, so
+  nothing of the note is left there. A note in the trash is in no list but the
+  trash's, is found by no search, counts for no tag and cannot be changed.
+  Trashing and restoring it write no revision, and only the session cookie
+  deletes it for good, alone or by emptying the trash. It owns the tables
+  `notes`, `note_tags`, `note_revisions`, `note_links` and `notes_fts`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.

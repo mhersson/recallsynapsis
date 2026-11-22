@@ -122,8 +122,8 @@ func fold(s string) string {
 	return strings.Map(unicode.ToLower, s)
 }
 
-// label is what a hit calls a note: its title, or the first line of its
-// body, cut at maxLabel characters, when it has none.
+// label is what a hit or a link calls a note: its title, or the first line
+// of its body, cut at maxLabel characters, when it has none.
 func label(title, body string) string {
 	if title != "" {
 		return title
@@ -139,7 +139,7 @@ func label(title, body string) string {
 	return line
 }
 
-// state is how a hit tells a capture that waits to be filed.
+// state is how a hit or a link tells a capture that waits to be filed.
 func state(inbox bool) string {
 	if inbox {
 		return "inbox"
