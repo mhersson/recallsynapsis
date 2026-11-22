@@ -31,3 +31,12 @@ The owner's words, which bind every change:
   holds history. Keep comments to one or two tight lines unless a longer
   explanation is genuinely necessary. Rewrite or delete if you find comments
   that don't follow this rule.
+
+## Layout
+
+Every package states its one responsibility in its package comment, and
+`go doc ./cmd/recallsynapsis` prints it.
+
+- `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
+  `run(args, stdin, stdout, stderr)`, which the tests call in process; each
+  verb registers itself from an `init` in its own file.
