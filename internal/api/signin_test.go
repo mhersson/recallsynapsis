@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -88,7 +89,7 @@ func (f *fixture) load(t *testing.T, fake map[string]any) {
 	}
 
 	ms, err := f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{testkit.New}, &config.Config{Modules: tables},
-		module.Deps{Now: func() time.Time { return *f.clock }, Dir: t.TempDir(), Changed: func(module.Change) {}})
+		module.Deps{Now: func() time.Time { return *f.clock }, Dir: t.TempDir(), Changed: func(context.Context, module.Change) {}})
 	require.NoError(t, err)
 
 	f.h = New(Deps{Auth: f.auth, Core: f.core, Modules: ms, Version: "1.2.3", PublicURL: f.publicURL, Timezone: "Europe/Oslo"})

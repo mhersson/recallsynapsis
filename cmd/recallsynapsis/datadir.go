@@ -44,7 +44,7 @@ type data struct {
 // directory private, opens the database and builds the modules, with every
 // migration applied, so the schema never depends on which verb ran first.
 // changed hears what a module changed.
-func openData(ctx context.Context, dirFlag, configFlag string, changed func(module.Change)) (*data, error) {
+func openData(ctx context.Context, dirFlag, configFlag string, changed func(context.Context, module.Change)) (*data, error) {
 	dir, err := dataDir(dirFlag)
 	if err != nil {
 		return nil, err

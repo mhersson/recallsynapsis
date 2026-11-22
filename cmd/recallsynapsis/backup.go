@@ -57,7 +57,7 @@ func runBackup(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 		return fmt.Errorf("no database to back up: %w", err)
 	}
 
-	d, err := openData(ctx, dir, *configFlag, func(module.Change) {})
+	d, err := openData(ctx, dir, *configFlag, func(context.Context, module.Change) {})
 	if err != nil {
 		return err
 	}

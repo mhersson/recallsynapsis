@@ -53,7 +53,7 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 	}
 
 	// Nothing streams the changes to open pages, so no change is heard.
-	d, err := openData(ctx, *dirFlag, *configFlag, func(module.Change) {})
+	d, err := openData(ctx, *dirFlag, *configFlag, func(context.Context, module.Change) {})
 	if err != nil {
 		return err
 	}

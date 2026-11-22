@@ -121,8 +121,10 @@ type Deps struct {
 
 	Resolve func(context.Context, Ref) (Item, error)          // the item ref names, unavailable rather than an error when no enabled module has it
 	LinksTo func(context.Context, Ref) ([]Ref, error)         // the items of every enabled module that link to ref
-	Changed func(Change)                                      // tells the open pages what changed
 	Notify  func(ctx context.Context, about Ref, text string) // tells the caller text about an item; no module delivers it, so it does nothing
+	// Changed tells the open pages of the caller its context carries what
+	// changed, once the change is stored; with no caller it tells no page.
+	Changed func(context.Context, Change)
 }
 
 // Caller is who an authorised request acts for.

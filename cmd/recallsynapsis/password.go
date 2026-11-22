@@ -68,7 +68,7 @@ func runPassword(ctx context.Context, args []string, stdin io.Reader, stdout, st
 		return nil
 	}
 
-	d, err := openData(ctx, *dirFlag, *configFlag, func(module.Change) {})
+	d, err := openData(ctx, *dirFlag, *configFlag, func(context.Context, module.Change) {})
 	if err != nil {
 		return err
 	}
