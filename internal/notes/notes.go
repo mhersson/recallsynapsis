@@ -1,8 +1,11 @@
 // Package notes keeps each user's notes and ideas: each in one of the user's
-// areas, with its tags, the inbox flag of a capture that waits to be filed,
-// and its history: a revision written by every change, any of which can be
-// restored. A note in the trash is kept unchanged until it is restored or
-// deleted for good. It owns the tables notes, note_tags and note_revisions.
+// areas, with its tags, its links to the items of any module, the inbox flag
+// of a capture that waits to be filed, and its history: a revision written by
+// every change, any of which can be restored. It searches them through an
+// index of their title, body and tags. A note in the trash is found by no
+// search and no link, and kept unchanged until it is restored or deleted for
+// good. It owns the tables notes, note_tags, note_revisions, note_links and
+// notes_fts.
 package notes
 
 import (
@@ -22,9 +25,11 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
-// migrations make the module's whole schema in one version. A note's id is
-// AUTOINCREMENT, so a note deleted for good never gives its id to another.
-// Nothing here writes said or links: they wait empty.
+// migrations make the module's schema. A note's id is AUTOINCREMENT, so a
+// note deleted for good never gives its id to another, and a link to it never
+// leads to another note. Nothing writes said: it waits empty. The index keeps
+// no copy of the text, which a hit reads from the note, and its trigrams let
+// a word find part of a compound.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE notes (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,6 +70,23 @@ CREATE TABLE note_revisions (
 	links         TEXT NOT NULL DEFAULT '[]',
 	PRIMARY KEY (note_id, revision)
 );
+`}, {Version: 2, SQL: `
+CREATE VIRTUAL TABLE notes_fts USING fts5 (title, body, tags, tokenize = 'trigram', content = '', contentless_delete = 1);
+
+INSERT INTO notes_fts (rowid, title, body, tags)
+	SELECT id, title, body, coalesce((SELECT group_concat(tag, ' ') FROM note_tags WHERE note_id = notes.id), '') FROM notes;
+
+CREATE TRIGGER notes_fts_delete AFTER DELETE ON notes BEGIN
+	DELETE FROM notes_fts WHERE rowid = old.id;
+END;
+
+CREATE TABLE note_links (
+	note_id INTEGER NOT NULL REFERENCES notes (id) ON DELETE CASCADE,
+	ref     TEXT NOT NULL,
+	PRIMARY KEY (note_id, ref)
+);
+
+CREATE INDEX note_links_ref ON note_links (ref);
 `}}
 
 const (
@@ -72,6 +94,7 @@ const (
 
 	maxTitle     = 200
 	maxTag       = 40
+	maxLinks     = 100
 	defaultLimit = 50
 	maxLimit     = 500
 )
@@ -95,6 +118,9 @@ func New(d module.Deps) module.Module {
 	return module.Module{
 		Name:       name,
 		Migrations: migrations,
+		Search:     n.search,
+		Resolve:    n.resolve,
+		LinksTo:    n.linksTo,
 		Routes: []module.Route{
 			{Pattern: "GET /api/notes", Access: module.Read, Serve: n.serveList},
 			{Pattern: "POST /api/notes", Access: module.Write, Serve: n.serveCreate},
@@ -129,10 +155,12 @@ type row struct {
 	TrashedAt *time.Time `json:"trashed_at"` // null unless the note is in the trash
 }
 
-// note is a note in full.
+// note is a note in full, with its links and the items that link to it.
 type note struct {
 	row
-	Body string `json:"body"`
+	Body       string        `json:"body"`
+	Links      []module.Item `json:"links"`
+	LinkedFrom []module.Item `json:"linked_from"`
 }
 
 // entry is a revision as the history lists it.
@@ -147,12 +175,13 @@ type entry struct {
 // version is a revision in full: the note as that change left it.
 type version struct {
 	entry
-	Title string   `json:"title"`
-	Body  string   `json:"body"`
-	Kind  string   `json:"kind"`
-	Area  string   `json:"area"` // its slug
-	Inbox bool     `json:"inbox"`
-	Tags  []string `json:"tags"`
+	Title string       `json:"title"`
+	Body  string       `json:"body"`
+	Kind  string       `json:"kind"`
+	Area  string       `json:"area"` // its slug
+	Inbox bool         `json:"inbox"`
+	Tags  []string     `json:"tags"`
+	Links []module.Ref `json:"links"`
 }
 
 // draft is a new note: of kind note unless it says, in the personal area
@@ -169,14 +198,15 @@ type draft struct {
 // change is what a change sets; a nil field stays as it is. Revision is the
 // one the change was made from, which one that only appends need not name.
 type change struct {
-	Revision *int64    `json:"revision"`
-	Title    *string   `json:"title"`
-	Body     *string   `json:"body"`
-	Append   *string   `json:"append"` // added to the end of the body, as a paragraph of its own
-	Kind     *string   `json:"kind"`
-	Area     *string   `json:"area"`
-	Tags     *[]string `json:"tags"`
-	Inbox    *bool     `json:"inbox"`
+	Revision *int64        `json:"revision"`
+	Title    *string       `json:"title"`
+	Body     *string       `json:"body"`
+	Append   *string       `json:"append"` // added to the end of the body, as a paragraph of its own
+	Kind     *string       `json:"kind"`
+	Area     *string       `json:"area"`
+	Tags     *[]string     `json:"tags"`
+	Links    *[]module.Ref `json:"links"`
+	Inbox    *bool         `json:"inbox"`
 }
 
 // filter is what a list asks for; a zero field asks for nothing.
@@ -227,10 +257,23 @@ const columns = `id, area_id, kind, title, substr(body, 1, 200), inbox, revision
 
 // snapshot writes the revision of the note ?1 as it now stands, restored from
 // the revision ?2 or from none when it is null.
-const snapshot = `INSERT INTO note_revisions (note_id, revision, at, source, restored_from, title, body, kind, area_id, inbox, tags)
+const snapshot = `INSERT INTO note_revisions (note_id, revision, at, source, restored_from, title, body, kind, area_id, inbox, tags, links)
 	SELECT id, revision, changed_at, source, ?2, title, body, kind, area_id, inbox,
-		(SELECT json_group_array(tag ORDER BY tag) FROM note_tags WHERE note_id = ?1)
+		(SELECT json_group_array(tag ORDER BY tag) FROM note_tags WHERE note_id = ?1), ` + linkList + `
 	FROM notes WHERE id = ?1`
+
+// linkList is the JSON list of a note's links in the order given: a change
+// that gives them writes them all anew, each with a rowid above the rest.
+const linkList = `(SELECT json_group_array(ref ORDER BY note_links.rowid) FROM note_links WHERE note_id = notes.id)`
+
+const (
+	// index writes the note ?1 into the search index as it now stands.
+	index = `REPLACE INTO notes_fts (rowid, title, body, tags)
+		SELECT id, title, body, coalesce((SELECT group_concat(tag, ' ') FROM note_tags WHERE note_id = ?1), '') FROM notes WHERE id = ?1`
+	// purge rewrites the search index whole. A delete only marks a note's
+	// rows in it, whose text a backup would copy until a merge drops them.
+	purge = `INSERT INTO notes_fts (notes_fts) VALUES ('optimize')`
+)
 
 const (
 	// entryColumns are an entry's, in the order scanEntry reads them.
@@ -326,20 +369,115 @@ func (n notes) get(ctx context.Context, id int64) (note, error) {
 	return n.read(ctx, slugs, c.UserID, id)
 }
 
+// read gives the user's note with the id in full, its links and the items
+// that link to it each as the core resolves it for the caller.
 func (n notes) read(ctx context.Context, slugs map[int64]string, userID, id int64) (note, error) {
 	var (
-		out note
-		err error
+		out   note
+		links string
+		err   error
 	)
 
-	out.row, err = scanRow(n.Store.QueryRowContext(ctx, `SELECT `+columns+`, body FROM notes WHERE user_id = ? AND id = ?`,
-		userID, id), slugs, &out.Body)
+	out.row, err = scanRow(n.Store.QueryRowContext(ctx, `SELECT `+columns+`, body, `+linkList+` FROM notes WHERE user_id = ? AND id = ?`,
+		userID, id), slugs, &out.Body, &links)
 	if errors.Is(err, sql.ErrNoRows) {
 		return note{}, fmt.Errorf("note %d: %w", id, store.ErrNotFound)
 	}
 
 	if err != nil {
 		return note{}, fmt.Errorf("notes: read: %w", err)
+	}
+
+	var refs []module.Ref
+	if err := json.Unmarshal([]byte(links), &refs); err != nil {
+		return note{}, fmt.Errorf("notes: read: %w", err)
+	}
+
+	from, err := n.LinksTo(ctx, out.Ref)
+	if err != nil {
+		return note{}, err
+	}
+
+	if out.Links, err = n.items(ctx, refs); err != nil {
+		return note{}, err
+	}
+
+	if out.LinkedFrom, err = n.items(ctx, from); err != nil {
+		return note{}, err
+	}
+
+	return out, nil
+}
+
+// items gives each of refs as the core resolves it.
+func (n notes) items(ctx context.Context, refs []module.Ref) ([]module.Item, error) {
+	out := make([]module.Item, 0, len(refs))
+
+	for _, r := range refs {
+		it, err := n.Resolve(ctx, r)
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, it)
+	}
+
+	return out, nil
+}
+
+// resolve gives the caller's note with the id as a link shows it. A note in
+// the trash is ErrNotFound, as an absent one and another user's are.
+func (n notes) resolve(ctx context.Context, id int64) (module.Item, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	var (
+		it          module.Item
+		title, body string
+		inbox       bool
+	)
+
+	err := n.Store.QueryRowContext(ctx, `SELECT kind, title, body, inbox FROM notes WHERE user_id = ? AND id = ? AND trashed_at IS NULL`,
+		c.UserID, id).Scan(&it.Kind, &title, &body, &inbox)
+	if errors.Is(err, sql.ErrNoRows) {
+		return module.Item{}, fmt.Errorf("note %d: %w", id, store.ErrNotFound)
+	}
+
+	if err != nil {
+		return module.Item{}, fmt.Errorf("notes: resolve: %w", err)
+	}
+
+	it.Title, it.State = label(title, body), state(inbox)
+
+	return it, nil
+}
+
+// linksTo gives the caller's notes outside the trash that link to ref, the
+// most recently changed first.
+func (n notes) linksTo(ctx context.Context, ref module.Ref) ([]module.Ref, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	// CROSS JOIN keeps note_links_ref the outer loop: the planner would rather
+	// walk every note of the user than sort the few that link.
+	rows, err := n.Store.QueryContext(ctx, `SELECT id FROM note_links CROSS JOIN notes ON notes.id = note_id
+		WHERE ref = ? AND user_id = ? AND trashed_at IS NULL ORDER BY changed_at DESC, id DESC`, ref, c.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("notes: links to %s: %w", ref, err)
+	}
+	defer rows.Close()
+
+	var out []module.Ref
+
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("notes: links to %s: %w", ref, err)
+		}
+
+		out = append(out, module.NewRef(name, id))
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("notes: links to %s: %w", ref, err)
 	}
 
 	return out, nil
@@ -491,7 +629,7 @@ func (n notes) create(ctx context.Context, d draft) (note, error) {
 			return fmt.Errorf("notes: create: %w", err)
 		}
 
-		return keep(ctx, tx, id, &tags, nil)
+		return keep(ctx, tx, id, &tags, nil, nil)
 	})
 	if err != nil {
 		return note{}, err
@@ -547,6 +685,15 @@ func (n notes) change(ctx context.Context, id int64, ch change) (note, error) {
 		ch.Tags = &tags
 	}
 
+	if ch.Links != nil {
+		links, err := cleanLinks(*ch.Links)
+		if err != nil {
+			return note{}, err
+		}
+
+		ch.Links = &links
+	}
+
 	var f fields
 
 	err = n.Store.Tx(ctx, func(tx *sql.Tx) error {
@@ -586,7 +733,7 @@ func (n notes) change(ctx context.Context, id int64, ch change) (note, error) {
 			return fmt.Errorf("notes: change: %w", err)
 		}
 
-		return keep(ctx, tx, id, ch.Tags, nil)
+		return keep(ctx, tx, id, ch.Tags, ch.Links, nil)
 	})
 	if err != nil {
 		return note{}, err
@@ -640,13 +787,13 @@ func (n notes) revision(ctx context.Context, id, rev int64) (version, error) {
 	}
 
 	var (
-		v    version
-		area int64
-		tags string
+		v           version
+		area        int64
+		tags, links string
 	)
 
-	v.entry, err = scanEntry(n.Store.QueryRowContext(ctx, `SELECT `+entryColumns+`, r.title, r.body, r.kind, r.area_id, r.inbox, r.tags
-		FROM `+revisions+` AND r.revision = ?`, c.UserID, id, rev), &v.Title, &v.Body, &v.Kind, &area, &v.Inbox, &tags)
+	v.entry, err = scanEntry(n.Store.QueryRowContext(ctx, `SELECT `+entryColumns+`, r.title, r.body, r.kind, r.area_id, r.inbox, r.tags, r.links
+		FROM `+revisions+` AND r.revision = ?`, c.UserID, id, rev), &v.Title, &v.Body, &v.Kind, &area, &v.Inbox, &tags, &links)
 	if errors.Is(err, sql.ErrNoRows) {
 		return version{}, fmt.Errorf("revision %d of note %d: %w", rev, id, store.ErrNotFound)
 	}
@@ -666,13 +813,17 @@ func (n notes) revision(ctx context.Context, id, rev int64) (version, error) {
 		return version{}, fmt.Errorf("notes: revision: %w", err)
 	}
 
+	if err := json.Unmarshal([]byte(links), &v.Links); err != nil {
+		return version{}, fmt.Errorf("notes: revision: %w", err)
+	}
+
 	return v, nil
 }
 
-// restoreRevision gives the caller's note with the id the title, the body
-// and the tags of its revision rev, one revision on, which names rev. The
-// area, the kind and the inbox flag stay as they are. A note in the trash is
-// ErrConflict.
+// restoreRevision gives the caller's note with the id the title, the body,
+// the tags and the links of its revision rev, one revision on, which names
+// rev. The area, the kind and the inbox flag stay as they are. A note in the
+// trash is ErrConflict.
 func (n notes) restoreRevision(ctx context.Context, id, rev int64) (note, error) {
 	c, _ := module.CallerFrom(ctx)
 
@@ -685,12 +836,12 @@ func (n notes) restoreRevision(ctx context.Context, id, rev int64) (note, error)
 
 	err = n.Store.Tx(ctx, func(tx *sql.Tx) error {
 		var (
-			trashed           bool
-			title, body, tags string
+			trashed                  bool
+			title, body, tags, links string
 		)
 
-		err := tx.QueryRowContext(ctx, `SELECT notes.area_id, notes.trashed_at IS NOT NULL, r.title, r.body, r.tags
-			FROM `+revisions+` AND r.revision = ?`, c.UserID, id, rev).Scan(&area, &trashed, &title, &body, &tags)
+		err := tx.QueryRowContext(ctx, `SELECT notes.area_id, notes.trashed_at IS NOT NULL, r.title, r.body, r.tags, r.links
+			FROM `+revisions+` AND r.revision = ?`, c.UserID, id, rev).Scan(&area, &trashed, &title, &body, &tags, &links)
 
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -701,8 +852,16 @@ func (n notes) restoreRevision(ctx context.Context, id, rev int64) (note, error)
 			return errTrashed
 		}
 
-		var restored []string
+		var (
+			restored []string
+			linked   []module.Ref
+		)
+
 		if err := json.Unmarshal([]byte(tags), &restored); err != nil {
+			return fmt.Errorf("notes: restore: %w", err)
+		}
+
+		if err := json.Unmarshal([]byte(links), &linked); err != nil {
 			return fmt.Errorf("notes: restore: %w", err)
 		}
 
@@ -712,7 +871,7 @@ func (n notes) restoreRevision(ctx context.Context, id, rev int64) (note, error)
 			return fmt.Errorf("notes: restore: %w", err)
 		}
 
-		return keep(ctx, tx, id, &restored, &rev)
+		return keep(ctx, tx, id, &restored, &linked, &rev)
 	})
 	if err != nil {
 		return note{}, err
@@ -756,8 +915,9 @@ func (n notes) trash(ctx context.Context, id int64, trashed bool) (note, error) 
 	return n.read(ctx, slugs, c.UserID, id)
 }
 
-// remove deletes the caller's note with the id for good, with its tags and
-// its revisions. A note outside the trash is ErrConflict.
+// remove deletes the caller's note with the id for good, with its tags, its
+// links, its revisions and its text in the search index. A note outside the
+// trash is ErrConflict.
 func (n notes) remove(ctx context.Context, id int64) error {
 	c, _ := module.CallerFrom(ctx)
 
@@ -782,6 +942,10 @@ func (n notes) remove(ctx context.Context, id int64) error {
 			return fmt.Errorf("notes: delete: %w", err)
 		}
 
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("notes: delete: %w", err)
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -793,12 +957,23 @@ func (n notes) remove(ctx context.Context, id int64) error {
 	return nil
 }
 
-// empty deletes every note in the caller's trash for good.
+// empty deletes every note in the caller's trash for good, as remove does.
 func (n notes) empty(ctx context.Context) error {
 	c, _ := module.CallerFrom(ctx)
 
-	if _, err := n.Store.ExecContext(ctx, `DELETE FROM notes WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
-		return fmt.Errorf("notes: empty the trash: %w", err)
+	err := n.Store.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
+			return fmt.Errorf("notes: empty the trash: %w", err)
+		}
+
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("notes: empty the trash: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	// One change for them all, since a stream that falls behind is ended.
@@ -846,10 +1021,10 @@ func (f *fields) apply(ch change, area, personal int64) {
 	}
 }
 
-// keep replaces the note's tags with tags, unless tags is nil, and writes
-// its revision as it now stands, restored from the revision from unless it
-// is nil.
-func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, from *int64) error {
+// keep replaces the note's tags with tags and its links with links, each
+// unless it is nil, and writes the note into the search index and its
+// revision as it now stands, restored from the revision from unless it is nil.
+func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, links *[]module.Ref, from *int64) error {
 	if tags != nil {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM note_tags WHERE note_id = ?`, id); err != nil {
 			return fmt.Errorf("notes: tags: %w", err)
@@ -860,6 +1035,22 @@ func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, from *int64
 				return fmt.Errorf("notes: tags: %w", err)
 			}
 		}
+	}
+
+	if links != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM note_links WHERE note_id = ?`, id); err != nil {
+			return fmt.Errorf("notes: links: %w", err)
+		}
+
+		for _, l := range *links {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO note_links (note_id, ref) VALUES (?, ?)`, id, l); err != nil {
+				return fmt.Errorf("notes: links: %w", err)
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, index, id); err != nil {
+		return fmt.Errorf("notes: index: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, snapshot, id, from); err != nil {
@@ -897,4 +1088,29 @@ func cleanTag(t string) (string, error) {
 	}
 
 	return t, nil
+}
+
+// cleanLinks gives each of links once, in the order given and written as
+// NewRef writes it, so a link to an item reads the same however it was
+// given. A link that is not module:id is refused, and so are more than
+// maxLinks, since a note is read with a query for each.
+func cleanLinks(links []module.Ref) ([]module.Ref, error) {
+	if len(links) > maxLinks {
+		return nil, fmt.Errorf("a note has at most %d links: %w", maxLinks, store.ErrInvalid)
+	}
+
+	out := make([]module.Ref, 0, len(links))
+
+	for _, l := range links {
+		mod, id, ok := l.Split()
+		if !ok {
+			return nil, fmt.Errorf("the link %q is not a reference, module:id: %w", l, store.ErrInvalid)
+		}
+
+		if r := module.NewRef(mod, id); !slices.Contains(out, r) {
+			out = append(out, r)
+		}
+	}
+
+	return out, nil
 }

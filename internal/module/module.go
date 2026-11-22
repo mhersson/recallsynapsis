@@ -26,7 +26,7 @@ type Module struct {
 
 	// Optional. Nil when the module has nothing to offer. Each acts for the caller its context carries.
 	Search  func(context.Context, Query) ([]Hit, error) // its hits, ranked
-	Resolve func(context.Context, int64) (Item, error)  // the title of one item, for links to it; store.ErrNotFound when there is none
+	Resolve func(context.Context, int64) (Item, error)  // one item as a link shows it; store.ErrNotFound when there is none
 	LinksTo func(context.Context, Ref) ([]Ref, error)   // its items that link to a ref
 }
 
@@ -83,12 +83,15 @@ func (r Ref) Split() (string, int64, bool) {
 	return name, n, name != "" && err == nil
 }
 
-// Item is what a link shows of the item it names. The core sets Ref and
-// Available; the module that has the item gives the rest.
+// Item is what a link shows of the item it names: its kind and state as a
+// hit of it gives them, and its title. The core sets Ref and Available; the
+// module that has the item gives the rest.
 type Item struct {
-	Ref       Ref
-	Title     string
-	Available bool // false when no enabled module has the item
+	Ref       Ref    `json:"ref"`
+	Kind      string `json:"kind"`
+	State     string `json:"state"`
+	Title     string `json:"title"`
+	Available bool   `json:"available"` // false when no enabled module has the item
 }
 
 // Change is what a module changed, as an open page hears of it.

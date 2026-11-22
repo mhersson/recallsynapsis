@@ -35,6 +35,14 @@ func TestAHitIsWrittenAsTheShapeSays(t *testing.T) {
 	assert.JSONEq(t, `{"ref":"notes:42","kind":"note","title":"Beds","snippet":"the beds","area":"garden","state":"filed","changed_at":"2026-11-22T09:30:00Z"}`, string(b))
 }
 
+func TestAnItemIsWrittenAsALinkIs(t *testing.T) {
+	t.Parallel()
+
+	b, err := json.Marshal(module.Item{Ref: module.NewRef("notes", 42), Kind: "idea", State: "inbox", Title: "Beds", Available: true})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"ref":"notes:42","kind":"idea","state":"inbox","title":"Beds","available":true}`, string(b))
+}
+
 func TestARefNamesAModuleAndAnID(t *testing.T) {
 	t.Parallel()
 
