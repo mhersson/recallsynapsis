@@ -1,4 +1,4 @@
-.PHONY: help build build-go install test test-race vet lint fmt fmt-check tidy-check scan scan-commits size check
+.PHONY: help build build-go install web-install web-build web-check test test-race vet lint fmt fmt-check tidy-check scan scan-commits size check
 
 # Stamps the version recallsynapsis prints; without it a build prints the commit.
 VERSION ?=
@@ -7,9 +7,12 @@ LDFLAGS = -s -w$(if $(VERSION), -X main.version=$(VERSION))
 help:
 	@echo "Targets:"
 	@echo "  help         show this list"
-	@echo "  build        build bin/recallsynapsis"
-	@echo "  build-go     build bin/recallsynapsis, as build does"
-	@echo "  install      install recallsynapsis into GOBIN, else the GOPATH bin directory"
+	@echo "  build        build the web app, then bin/recallsynapsis with it embedded"
+	@echo "  build-go     build bin/recallsynapsis with the web app as built last, or the placeholder page when none is"
+	@echo "  install      build the web app, then install recallsynapsis with it embedded into GOBIN, else the GOPATH bin directory"
+	@echo "  web-install  install the web app's npm packages; needs the Node of .nvmrc"
+	@echo "  web-build    build the web app into web/dist/app"
+	@echo "  web-check    lint, test and build the web app"
 	@echo "  test         run the tests"
 	@echo "  test-race    run the tests with the race detector"
 	@echo "  vet          go vet"
@@ -23,12 +26,23 @@ help:
 	@echo "  check        build-go, fmt-check, vet, lint, test-race, tidy-check, scan, size"
 	@echo "VERSION=x.y.z on a build target stamps the version recallsynapsis prints."
 
-build: build-go
+web-install:
+	cd web && npm ci
+
+web-build:
+	cd web && npm run build
+
+web-check:
+	cd web && npm run lint && npm test && npm run build
+
+# The web app first, even under make -j.
+build: web-build
+	$(MAKE) build-go
 
 build-go:
 	CGO_ENABLED=0 go build -trimpath -ldflags='$(LDFLAGS)' -o bin/recallsynapsis ./cmd/recallsynapsis
 
-install:
+install: web-build
 	CGO_ENABLED=0 go install -trimpath -ldflags='$(LDFLAGS)' ./cmd/recallsynapsis
 
 test:

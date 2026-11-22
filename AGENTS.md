@@ -37,10 +37,16 @@ The owner's words, which bind every change:
 - `make check` runs build-go, fmt-check, vet, lint, test-race, tidy-check, scan
   and size. Run it before a commit. It needs Go, a C compiler for the race
   detector, and golangci-lint, and no Node.
-- `make build` and `make build-go` build `bin/recallsynapsis`; `make install`
-  installs `recallsynapsis` into `GOBIN`, else `$(go env GOPATH)/bin`.
-  `VERSION=x.y.z` on any of them stamps the version `recallsynapsis version`
-  prints; without it a build prints the commit.
+- `make build` builds the web app, then `bin/recallsynapsis` with it embedded;
+  `make build-go` builds `bin/recallsynapsis` alone, with the app as built
+  last, or the placeholder page when none is; `make install` builds the web
+  app, then installs `recallsynapsis` into `GOBIN`, else
+  `$(go env GOPATH)/bin`. `VERSION=x.y.z` on any of them stamps the version
+  `recallsynapsis version` prints; without it a build prints the commit.
+- `make web-install` installs the web app's npm packages once (`npm ci` in
+  `web/`, with the Node of `.nvmrc`); `make web-build` builds the app into
+  `web/dist/app`; `make web-check` lints, tests and builds it. Run
+  `make web-check` when `web/` changes.
 - `make test`, `make test-race`: the tests, the second with the race detector.
 - `make vet`, `make lint`, `make fmt`, `make fmt-check`, `make tidy-check`: the
   static checks and the formatter (`golangci-lint fmt`: gofumpt and goimports).
@@ -73,7 +79,8 @@ Every package states its one responsibility in its package comment, and
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
-- `web`: the Go package that embeds the built web app and serves it in front
-  of the API. A binary built without the app serves the committed
+- `web`: the web app's npm package, with its sources in `web/src`, and the Go
+  package that embeds its build from `web/dist/app` and serves it in front of
+  the API. A binary built without the app serves the committed
   `web/dist/placeholder.html` in its place.
 - `scripts/`: the scans and the line count that `make` runs.
