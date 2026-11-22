@@ -11,6 +11,16 @@ if (typeof window.matchMedia !== 'function') {
     }) as unknown as MediaQueryList
 }
 
+// jsdom has no modal dialog; opening and closing one only sets and clears open.
+if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.open = true
+  }
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.open = false
+  }
+}
+
 // Node 25 and later expose no localStorage by default and jsdom does not install one there.
 if (typeof globalThis.localStorage?.getItem !== 'function') {
   const items = new Map<string, string>()

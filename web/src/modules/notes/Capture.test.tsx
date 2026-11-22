@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, json, narrow, type Call } from '../../test-server.ts'
@@ -93,7 +93,7 @@ test('Capture waits for a text, and Cancel and Escape close it without a request
   expect(screen.queryByRole('dialog')).toBeNull()
 
   await userEvent.click(nav().getByRole('button'))
-  await userEvent.keyboard('{Escape}')
+  fireEvent(screen.getByRole('dialog'), new Event('cancel'))
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(posts(calls)).toEqual([])
 })
