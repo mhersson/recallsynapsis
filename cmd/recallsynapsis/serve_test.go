@@ -204,6 +204,7 @@ func TestServeAnswersAndStopsOnASignal(t *testing.T) {
 	require.NoError(t, resp.Body.Close())
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, map[string]string{"status": "ok", "version": version}, health)
+	assert.Equal(t, http.StatusNotFound, fakeRoute(t, url), "the route of a module with no table is not served")
 
 	// A page path gets the web app, or the placeholder in a build without it, and its own log line.
 	req, err = http.NewRequestWithContext(t.Context(), http.MethodGet, url+"/settings", nil)

@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -88,8 +90,31 @@ func TestAModuleTableTheBinaryCannotUseStopsTheStart(t *testing.T) {
 	}
 }
 
+// fakeRoute is the status of a POST with no authority to the fake module's
+// route on the server at url, a refusal either way: 401 when the route is
+// served, else 404.
+func fakeRoute(t *testing.T, url string) int {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, url+"/api/fake/items", strings.NewReader("{}"))
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	// Read to its end, so the connection goes back idle and the shutdown need not wait on it.
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	require.NoError(t, resp.Body.Close())
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	assert.Len(t, got, 1)
+	assert.NotEmpty(t, got["error"])
+
+	return resp.StatusCode
+}
+
 // Not parallel: it signals the test process, and serve replaces the default logger.
-func TestServeRunsTheJobsOfAModuleThatIsOn(t *testing.T) {
+func TestServeServesAModuleThatIsOn(t *testing.T) {
 	keepDefaultLogger(t)
 
 	dir := filepath.Join(t.TempDir(), "data")
@@ -107,6 +132,10 @@ func TestServeRunsTheJobsOfAModuleThatIsOn(t *testing.T) {
 	ran := regexp.MustCompile(`module=fake job=tick`)
 
 	require.Eventually(t, func() bool { return len(ran.FindAllString(stderr.String(), -1)) >= 2 }, 5*time.Second, 10*time.Millisecond)
+
+	address := regexp.MustCompile(`address=(\S+)`).FindStringSubmatch(stderr.String())
+	require.Len(t, address, 2)
+	assert.Equal(t, http.StatusUnauthorized, fakeRoute(t, "http://"+address[1]), "its route is served behind the access check")
 
 	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
 	assert.Equal(t, 0, within(t, done, "serve did not stop on the signal"), stderr.String())

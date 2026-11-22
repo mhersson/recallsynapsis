@@ -1,7 +1,8 @@
-// Package api serves the REST API under /api/ from one route table, checks
-// the access each route declares in one place, and answers every refusal, and
-// every path no route matches once the mux has redirected it to its clean
-// form, in one JSON shape.
+// Package api serves the REST API under /api/ from one route table, with the
+// routes of the modules switched on beside the core's, checks the access each
+// route declares in one place, and answers every refusal, and every path no
+// route matches once the mux has redirected it to its clean form, in one JSON
+// shape.
 package api
 
 import (
@@ -22,6 +23,7 @@ import (
 type Deps struct {
 	Auth      *auth.Service
 	Core      *core.Service
+	Modules   *core.Modules
 	Version   string
 	PublicURL string // the configured public_url; the cookie is Secure when it is https
 	Timezone  string
@@ -42,6 +44,7 @@ var routes = []route{
 	{"GET /api/areas", module.Read, (*server).areas},
 	{"POST /api/areas", module.Write, (*server).createArea},
 	{"PATCH /api/areas/{id}", module.Write, (*server).changeArea},
+	{"GET /api/search", module.Read, (*server).search},
 	{"GET /api/tokens", module.Owner, (*server).tokens},
 	{"POST /api/tokens", module.Owner, (*server).createToken},
 	{"DELETE /api/tokens/{id}", module.Owner, (*server).deleteToken},
@@ -57,17 +60,27 @@ func New(d Deps) http.Handler {
 	s := &server{Deps: d, secure: strings.HasPrefix(d.PublicURL, "https://")}
 	mux := http.NewServeMux()
 
-	for _, rt := range routes {
-		mux.HandleFunc(rt.pattern, func(w http.ResponseWriter, r *http.Request) {
-			r, err := s.authorize(w, r, rt.access)
+	handle := func(pattern string, level module.Access, serve func(http.ResponseWriter, *http.Request) error) {
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			r, err := s.authorize(w, r, level)
 			if err == nil {
-				err = rt.serve(s, w, r)
+				err = serve(w, r)
 			}
 
 			if err != nil {
 				fail(w, r, err)
 			}
 		})
+	}
+
+	for _, rt := range routes {
+		handle(rt.pattern, rt.access, func(w http.ResponseWriter, r *http.Request) error { return rt.serve(s, w, r) })
+	}
+
+	for _, m := range d.Modules.On() {
+		for _, rt := range m.Routes {
+			handle(rt.Pattern, rt.Access, rt.Serve)
+		}
 	}
 
 	// Else the mux answers a request that matches no route in plain text.

@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
@@ -50,7 +51,7 @@ func refusal(t *testing.T, got map[string]any) string {
 func TestHealthNeedsNoAuthority(t *testing.T) {
 	t.Parallel()
 
-	code, got := do(t, New(Deps{Version: "1.2.3"}), http.MethodGet, "/api/health")
+	code, got := do(t, New(Deps{Modules: &core.Modules{}, Version: "1.2.3"}), http.MethodGet, "/api/health")
 
 	assert.Equal(t, http.StatusOK, code)
 	assert.Equal(t, map[string]any{"status": "ok", "version": "1.2.3"}, got)
@@ -59,7 +60,7 @@ func TestHealthNeedsNoAuthority(t *testing.T) {
 func TestAnyOtherRequestIsAJSONNotFound(t *testing.T) {
 	t.Parallel()
 
-	h := New(Deps{Version: "1.2.3"})
+	h := New(Deps{Modules: &core.Modules{}, Version: "1.2.3"})
 
 	for _, tt := range []struct{ method, target string }{
 		{http.MethodGet, "/"},

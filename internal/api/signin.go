@@ -159,9 +159,14 @@ func (s *server) session(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	modules := []string{}
+	for _, m := range s.Modules.On() {
+		modules = append(modules, m.Name)
+	}
+
 	module.Reply(w, http.StatusOK, map[string]any{
 		"user":        map[string]string{"name": name},
-		"modules":     []string{},
+		"modules":     modules,
 		"version":     s.Version,
 		"timezone":    s.Timezone,
 		"last_backup": nil,
