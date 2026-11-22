@@ -27,6 +27,7 @@ type Deps struct {
 	Version   string
 	PublicURL string // the configured public_url; the cookie is Secure when it is https
 	Timezone  string
+	BackupDir string // the configured backup.dir, whose newest snapshot is the last backup
 }
 
 // route is one REST route.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -230,6 +231,44 @@ func TestTheSession(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, code, headers)
 		refusal(t, got)
 	}
+}
+
+func TestTheLastBackupIsTheNewestSnapshot(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, "https://recall.example.org")
+	cookie := f.signIn(t)
+
+	// serving gives the last backup each request to a handler over dir answers.
+	serving := func(dir string) func() any {
+		h := New(Deps{Auth: f.auth, Core: f.core, Modules: &core.Modules{}, PublicURL: f.publicURL, BackupDir: dir})
+
+		return func() any {
+			f.h = h
+
+			code, got := f.json(t, http.MethodGet, "/api/session", "", cookie)
+			require.Equal(t, http.StatusOK, code)
+
+			return got["last_backup"]
+		}
+	}
+
+	dir := t.TempDir()
+	assert.Nil(t, serving(filepath.Join(dir, "absent"))(), "no backup yet")
+
+	last := serving(dir)
+	assert.Nil(t, last(), "no snapshot yet")
+
+	// Made at 03:00:05 and a half in Oslo, which is 02:00:05 in UTC.
+	path := filepath.Join(dir, "recallsynapsis-20261122.db")
+	made := time.Date(2026, 11, 22, 3, 0, 5, 5e8, time.FixedZone("CET", 3600))
+
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+	require.NoError(t, os.Chtimes(path, made, made))
+	assert.Equal(t, "2026-11-22T02:00:05Z", last(), "read when asked")
+
+	// A backup directory that cannot be read leaves the session as it is.
+	assert.Nil(t, serving(path)())
 }
 
 func TestAWrongNameAndAWrongPasswordGetTheSameAnswer(t *testing.T) {

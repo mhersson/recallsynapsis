@@ -100,7 +100,8 @@ Every package states its one responsibility in its package comment, and
   `modules`, the list of the binary's feature modules, empty but for the fake
   the tests add, and every verb that opens the database builds them all, so
   every module's migrations run whether it is on or not. `serve` runs the
-  jobs of the modules switched on, and stops them before the store closes.
+  jobs of the modules switched on and the nightly backup, and stops them
+  before the store closes.
 - `internal/api`: the REST API under `/api/`, served from one route table,
   with the routes of the modules switched on beside the core's. Every refusal
   and every path no route matches is answered as `{"error": "one line"}`; a
@@ -114,6 +115,12 @@ Every package states its one responsibility in its package comment, and
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables
   `users`, `sessions` and `api_tokens`.
+- `internal/backup`: backs up the data directory into a private directory,
+  once or every night at `backup.at`: a snapshot of the database by
+  `VACUUM INTO`, named by its day, the files under `files/` that the backup
+  lacks, and no more snapshots than it keeps. Of what it finds there it
+  removes only regular files with exactly a snapshot's name. It tells when
+  the newest snapshot was made, and owns no table.
 - `internal/config`: reads the configuration file strictly: an unknown key, a
   wrong type or an unusable value is refused with the key named. It keeps
   each `[modules.NAME]` table as read, and decodes one as strictly for its

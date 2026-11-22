@@ -115,7 +115,9 @@ type Deps struct {
 	Store    *store.Store
 	FindArea func(ctx context.Context, userID int64, ref string) (Area, error) // the area whose slug or name is ref, in any case
 	Now      func() time.Time
-	Dir      string // the data directory
+	// Dir is the data directory. A file under its files/ appears whole, by a
+	// rename, and never changes, since a backup never copies one it has again.
+	Dir string
 
 	Resolve func(context.Context, Ref) (Item, error)          // the item ref names, unavailable rather than an error when no enabled module has it
 	LinksTo func(context.Context, Ref) ([]Ref, error)         // the items of every enabled module that link to ref

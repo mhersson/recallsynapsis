@@ -15,6 +15,7 @@ import (
 
 	"github.com/mhersson/recallsynapsis/internal/api"
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/backup"
 	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/web"
 )
@@ -95,6 +96,11 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 		log.Warn("the owner has no password and cannot sign in; set one with recallsynapsis password", "owner", d.cfg.Owner)
 	}
 
+	backups, err := backup.New(d.store.DB, d.dir, d.cfg)
+	if err != nil {
+		return err
+	}
+
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", d.cfg.Listen)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
@@ -102,11 +108,17 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	log.Info("listening", "address", ln.Addr().String(), "public_url", d.cfg.PublicURL, "data_dir", d.dir, "version", version)
 
-	h := api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Version: version, PublicURL: d.cfg.PublicURL, Timezone: d.cfg.Timezone})
+	h := api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Version: version, PublicURL: d.cfg.PublicURL, Timezone: d.cfg.Timezone, BackupDir: d.cfg.Backup.Dir})
 
-	// A signal cancels the jobs in flight as the requests get their grace.
+	// A signal cancels the jobs and the backup in flight as the requests get their grace.
 	stop := runJobs(ctx, d.modules.On(), log)
 	defer stop()
+
+	if d.cfg.Backup.Dir == "" {
+		log.Info("there are no nightly backups; set backup.dir to make one every night")
+	} else {
+		defer runNightly(ctx, backups, log)()
+	}
 
 	return serve(ctx, ln, logRequests(web.Handler(h), log), shutdownGrace, log)
 }
@@ -140,6 +152,22 @@ func runJobs(ctx context.Context, ms []module.Module, log *slog.Logger) (stop fu
 			})
 		}
 	}
+
+	return func() {
+		cancel()
+		wg.Wait()
+	}
+}
+
+// runNightly runs b's nightly backups until ctx ends or stop is called, which
+// ends the backup in flight and waits for it. They are the core's, at a time of
+// day, so not a module's job.
+func runNightly(ctx context.Context, b *backup.Backup, log *slog.Logger) (stop func()) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	var wg sync.WaitGroup
+
+	wg.Go(func() { b.Nightly(ctx, log) })
 
 	return func() {
 		cancel()
