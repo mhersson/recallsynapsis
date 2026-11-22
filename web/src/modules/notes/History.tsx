@@ -3,11 +3,9 @@ import { api, message } from '../../api/client.ts'
 import { Markdown } from '../../components/Markdown.tsx'
 import { clock } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { from, useRead, type Note, type Revision, type Version } from './api.ts'
+import { count, from, useRead, type Note, type Revision, type Version } from './api.ts'
 import { HistoryIcon } from './icons.tsx'
 import Section from './Section.tsx'
-
-const revisions = (n: number) => (n === 1 ? '1 revision' : `${n} revisions`)
 
 // The note's revisions, the newest first, read again whenever the note moves on. fresh is the one a restore just wrote.
 export default function History({ note, fresh, onRead }: { note: Note; fresh?: number; onRead: (revision: number) => void }) {
@@ -29,7 +27,7 @@ export default function History({ note, fresh, onRead }: { note: Note; fresh?: n
   }, [note.id, note.revision])
 
   return (
-    <Section title="History" count={revisions(note.revision)}>
+    <Section title="History" count={count(note.revision, 'revision')}>
       {failed && (
         <p role="alert" className="err">
           {failed}

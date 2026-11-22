@@ -94,6 +94,11 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
   if (url.pathname === '/api/notes' && method === 'GET') return json(listNotes(notes, url.searchParams))
   if (url.pathname === '/api/notes/tags' && method === 'GET') return json(tagsOf(notes))
   if (url.pathname === '/api/notes/limits' && method === 'GET') return json({ file_max_bytes: 15 << 20 })
+  if (url.pathname === '/api/notes/trash' && method === 'DELETE') {
+    for (const n of notes.filter((x) => x.trashed_at)) notes.splice(notes.indexOf(n), 1)
+    tell({ module: 'notes', kind: 'trash', id: 0, area: 0 })
+    return new Response(null, { status: 204 })
+  }
   if (url.pathname === '/api/notes' && method === 'POST') {
     const n = note(Math.max(0, ...notes.map((x) => x.id)) + 1, 0, {
       revision: 0,
@@ -105,7 +110,7 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
     notes.push(n)
     return json(changed(n), 201)
   }
-  const [, id, part, sub, restore] = /^\/api\/notes\/(\d+)(?:\/(trash|files|revisions)(?:\/(\d+)(\/restore)?)?)?$/.exec(url.pathname) ?? []
+  const [, id, part, sub, restore] = /^\/api\/notes\/(\d+)(?:\/(trash|restore|files|revisions)(?:\/(\d+)(\/restore)?)?)?$/.exec(url.pathname) ?? []
   const n = notes.find((x) => x.id === Number(id))
   if (!n) return json({ error: 'not found' }, 404)
   const revisions = historyOf(n)
@@ -135,9 +140,16 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
   }
   if (part) {
     if (method === 'POST' && part === 'trash') return json(told(Object.assign(n, { trashed_at: new Date().toISOString() })))
+    if (method === 'POST' && part === 'restore') return json(told(Object.assign(n, { trashed_at: null })))
     return json({ error: 'not found' }, 404)
   }
   if (method === 'GET') return json(full(notes, n))
+  if (method === 'DELETE') {
+    if (!n.trashed_at) return json({ error: `note ${n.id} is not in the trash, and only a note in the trash is deleted: conflict` }, 409)
+    notes.splice(notes.indexOf(n), 1)
+    told(n)
+    return new Response(null, { status: 204 })
+  }
   if (method !== 'PATCH') return json({ error: 'not found' }, 404)
   if (n.trashed_at) return json({ error: 'the note is in the trash, and is restored before it is changed: conflict' }, 409)
   if (query.get('save') === 'moved' && 'body' in body && !moved.has(n.id)) {

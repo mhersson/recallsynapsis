@@ -11,9 +11,8 @@ import Section from './Section.tsx'
 
 type Props = { note: Note; areas: Area[]; trashed: boolean; sending: boolean; onLinks: (refs: string[]) => Promise<string> }
 
-// What the note links to and what links to it, each with the mark of what it names. What it links to is changed here,
-// each removal and addition a change of the note, so its history can bring a link back; what links to it is what other
-// items say. A note in the trash changes nothing.
+// What the note links to, each removed or added as a change of the note so its history can bring it back, and what
+// links to it. A note in the trash changes nothing, and shows the section only when it has a link.
 export default function Links({ note, areas, trashed, sending, onLinks }: Props) {
   const item = useItem()
   const [finding, setFinding] = useState(false)
@@ -51,6 +50,7 @@ export default function Links({ note, areas, trashed, sending, onLinks }: Props)
     )
   }
 
+  if (trashed && note.links.length + note.linked_from.length === 0) return null
   const add = !trashed && !finding && (
     <button className="btn link" onClick={() => setFinding(true)}>
       <LinkIcon />

@@ -80,8 +80,11 @@ export function full(notes: Note[], n: Note): Note {
   return { ...n, links: n.links.map((l) => item(l.ref)), linked_from: from.map((x) => item(x.ref)) }
 }
 
-// GET /api/notes/{id} for each note: the captures that wait in the inbox, then filed notes and ideas. A list gives the
-// first 200 characters of the body as the excerpt.
+// A note trashed hours ago, changed ten hours before that.
+const trashed = (id: number, hours: number, n: Partial<Note>) => note(id, (hours + 10) * 60, { ...n, trashed_at: before(hours * 60) })
+
+// GET /api/notes/{id} for each note: the captures that wait in the inbox, then filed notes and ideas, then those in the
+// trash. A list gives the first 200 characters of the body as the excerpt.
 export const NOTES: Note[] = [
   note(118, 12, {
     inbox: true,
@@ -163,6 +166,19 @@ export const NOTES: Note[] = [
     body: 'Start a server on last night’s backup and open the inbox.',
   }),
   note(15, 8 * 24 * 60, { area: 'portal', tags: ['approval'], title: 'Marks are set per tool, never by the service', body: 'The service cannot vouch for itself.' }),
+  trashed(50, 2, {
+    tags: ['garage'],
+    revision: 3,
+    title: 'Old shelf measurements',
+    body: 'Left wall 240 cm, right wall 185 cm up to the window.\n\nFive shelves, 40 cm deep, the lowest 30 cm off the floor so the tyres fit under it.',
+    files: [{ id: 4, name: 'shelf.jpg', type: 'image/jpeg', size: 1_258_291 }],
+  }),
+  trashed(51, 26, { inbox: true, source: 'portal', body: 'Ring the garage door company about the spring.' }),
+  trashed(52, 50, { area: 'recallsynapsis', kind: 'idea', title: 'A weekly digest of new captures by mail', body: 'Sent on Sunday evening.' }),
+  trashed(53, 74, { area: 'cavu', title: 'Meeting moved to Thursday, bring the drawings', body: 'At ten, in the small room.' }),
+  trashed(54, 5 * 24, { area: 'recallsynapsis', title: 'Token names, first draft', body: 'portal, aim, home-assistant' }),
+  trashed(55, 7 * 24, { kind: 'idea', title: 'Capture by voice from the watch', body: 'A shortcut that sends what was said.' }),
+  trashed(56, 10 * 24, { body: 'test' }),
 ]
 
 // Revision n of note as it is now, as GET /api/notes/{id}/revisions/{n} gives it; the first carries what was said.
@@ -221,13 +237,15 @@ export const OLDER: Note[] = Array.from({ length: 60 }, (_, i) => {
   return note(300 + i, (10 + 2 * i) * 24 * 60, { kind, title, area, tags, body: title })
 })
 
-// GET /api/notes from notes, as the server answers it: those outside the trash that the query asks for, the most
-// recently changed first, as many as its limit, and how many it asked for in all.
+// GET /api/notes from notes, as the server answers it: those the query asks for, outside the trash or with trashed=true
+// in it, the most recently changed or trashed first, as many as its limit, and how many it asked for in all.
 export function listNotes(notes: Note[], q: URLSearchParams): List {
   const asks = (key: string, value: string) => !q.has(key) || q.get(key) === value
+  const trash = q.get('trashed') === 'true'
+  const when = (n: Note) => (trash ? n.trashed_at! : n.changed_at)
   const found = notes
-    .filter((n) => !n.trashed_at && asks('inbox', String(n.inbox)) && asks('area', n.area) && asks('kind', n.kind) && (!q.has('tag') || n.tags.includes(q.get('tag')!)))
-    .sort((a, b) => b.changed_at.localeCompare(a.changed_at))
+    .filter((n) => !!n.trashed_at === trash && asks('inbox', String(n.inbox)) && asks('area', n.area) && asks('kind', n.kind) && (!q.has('tag') || n.tags.includes(q.get('tag')!)))
+    .sort((a, b) => when(b).localeCompare(when(a)))
   return { notes: found.slice(0, Number(q.get('limit')) || 50).map(row), total: found.length }
 }
 

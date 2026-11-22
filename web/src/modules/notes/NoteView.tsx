@@ -7,16 +7,17 @@ import Field from '../../components/Field.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import { ago, when } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { from, mark, nameOf, useNotes, type Kind, type Note, type Version } from './api.ts'
+import { count, from, mark, nameOf, useNotes, type Kind, type Note, type Version } from './api.ts'
 import { Place } from './Filing.tsx'
 import Files from './Files.tsx'
 import History, { RevisionView } from './History.tsx'
 import { AttachIcon, RestoreIcon } from './icons.tsx'
+import { TrashIcon } from './nav.tsx'
 import Links from './Links.tsx'
 import TagField from './TagField.tsx'
 import { size, useUploads } from './uploads.ts'
 
-type Props = { id: number; areas: Area[]; onGone: () => void; onChanged?: () => void }
+type Props = { id: number; areas: Area[]; onGone: () => void; onChanged?: () => void; onRestored?: (n: Note) => void }
 
 // What is typed, and the note as the editing began; moved once a save was refused because the note moved on, and shown
 // while the note as it now is shows above the text typed.
@@ -32,9 +33,9 @@ const changeOf = (d: Draft) => ({
   ...(d.tags.join(' ') !== d.from.tags.join(' ') && { tags: d.tags }),
 })
 
-// A note, read first. Edit swaps the text for a Markdown text area, and the note read again meanwhile never replaces
-// what is typed. onChanged tells of a change made here; onGone closes the note once it is trashed.
-export default function NoteView({ id, areas, onGone, onChanged }: Props) {
+// A note, read first; Edit swaps in a text area that no read of the note replaces, and in the trash it is read only.
+// onChanged tells of a change made here, onGone of the note trashed or deleted, onRestored, when given, of a restore.
+export default function NoteView({ id, areas, onGone, onChanged, onRestored }: Props) {
   const narrow = useNarrow()
   const [note, setNote] = useState<Note>()
   const [failed, setFailed] = useState('')
@@ -44,8 +45,9 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
   // The earlier revision being read, and the one a restore just brought back, as which revision and from when.
   const [reading, setReading] = useState<number>()
   const [restored, setRestored] = useState<{ from: number; at: string; as: number }>()
-  // A note read, or a change's answer, that left the server before the note shown would show the note as it was. A file
-  // changes no revision, so of the reads only the last one asked is shown.
+  const [deleting, setDeleting] = useState(false)
+  // A note read, or a change's answer, that left the server before the note shown would show the note as it was. A file,
+  // a trash or a restore changes no revision, so only the last read asked is shown, and none asked before a change.
   const show = (n: Note) => setNote((x) => (x && x.revision > n.revision ? x : n))
   const asked = useRef(0)
   const read = () => {
@@ -55,7 +57,11 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
         if (n === asked.current) show(got)
         return got
       },
-      (e: unknown) => void setFailed(message(e)),
+      (e: unknown) => {
+        // A note deleted meanwhile, as by emptying the trash elsewhere, closes to say so.
+        if (e instanceof ApiError && e.status === 404) setNote(undefined)
+        setFailed(message(e))
+      },
     )
   }
   useNotes(() => void read())
@@ -119,6 +125,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
   // Sends a change, shows the note it answers and gives it to done. A refusal reads the note again and gives the server's
   // line, which the page shows where the change was asked for.
   async function send(method: string, path: string, body?: unknown, done?: (n: Note) => void) {
+    asked.current++
     setRefused('')
     setSending(true)
     try {
@@ -139,6 +146,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
   async function save(d: Draft, revision: number) {
     const change = changeOf(d)
     if (Object.keys(change).length === 0) return setDraft(undefined)
+    asked.current++
     setRefused('')
     setSending(true)
     try {
@@ -277,7 +285,24 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
     )
 
   const trashed = !!note.trashed_at
-  const acts = !trashed && (
+  const remove = () =>
+    api('DELETE', `/notes/${id}`).then(
+      () => {
+        onChanged?.()
+        onGone()
+      },
+      (e: unknown) => setRefused(message(e)),
+    )
+  const acts = trashed ? (
+    <>
+      <button className="btn" disabled={sending} onClick={() => void send('POST', `/notes/${id}/restore`, undefined, onRestored).then(setRefused)}>
+        Restore
+      </button>
+      <button className="btn danger" disabled={sending} onClick={() => setDeleting(true)}>
+        Delete for good
+      </button>
+    </>
+  ) : (
     <>
       <button className="btn" disabled={sending} onClick={() => setDraft({ from: note, title: note.title, body: note.body, area: note.area, kind: note.kind, tags: note.tags })}>
         Edit
@@ -336,13 +361,16 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
         <span>{note.kind}</span>
         <span>{nameOf(areas, note.area)}</span>
         {note.inbox && <span>in the inbox</span>}
-        <span>changed {ago(note.changed_at)}</span>
+        <span>{trashed ? `trashed ${ago(note.trashed_at!)}` : `changed ${ago(note.changed_at)}`}</span>
         <span>{from(note.source)}</span>
         <span>revision {note.revision}</span>
       </span>
       {trashed && (
         <div className="notice">
-          <div className="nt">In the trash</div>
+          <div className="nt">
+            <TrashIcon />
+            In the trash
+          </div>
           <p className="nd">It cannot be changed, and no list, search or link finds it until it is restored.</p>
         </div>
       )}
@@ -366,6 +394,27 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
         <History note={note} fresh={restored?.as} onRead={setReading} />
       </div>
       {narrow && acts && <div className="acts stack note-foot">{acts}</div>}
+      {deleting && (
+        <Dialog title={note.title ? `Delete “${note.title}” for good?` : 'Delete this note for good?'} onClose={() => setDeleting(false)}>
+          <p className="note">
+            The note, its {count(note.revision, 'revision')} and its {count(note.files.length, 'attachment')} are deleted. This cannot be undone.
+          </p>
+          <div className="acts">
+            <button className="btn" onClick={() => setDeleting(false)}>
+              Keep it
+            </button>
+            <button
+              className="btn danger"
+              onClick={() => {
+                setDeleting(false)
+                void remove()
+              }}
+            >
+              Delete for good
+            </button>
+          </div>
+        </Dialog>
+      )}
     </div>
   )
 }

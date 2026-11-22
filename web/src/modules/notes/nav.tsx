@@ -24,6 +24,12 @@ export const IdeasIcon = () => (
   </Icon>
 )
 
+export const TrashIcon = () => (
+  <Icon>
+    <path d="M2.5 4.5h11M6.5 4.5V2.8h3v1.7M4 4.5l.7 9h6.6l.7-9" />
+  </Icon>
+)
+
 // How many captures wait: the total of a list of one.
 export function Waiting() {
   const [n, setN] = useState(0)

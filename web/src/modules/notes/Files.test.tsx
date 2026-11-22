@@ -35,7 +35,7 @@ function server(notes: Note[], answer: (c: Call) => Response | Promise<Response>
 }
 
 const sections = () => [...screen.getByRole('main').querySelectorAll<HTMLElement>('.sect')]
-const files = () => sections()[1]
+const files = () => sections().find((s) => s.querySelector('.tiles'))!
 const tiles = () => [...files().querySelectorAll<HTMLElement>('.tile')]
 const picker = () => files().querySelector<HTMLInputElement>('input[type=file]:not([capture])')!
 const uploads = (calls: Call[]) => calls.filter((c) => c.method === 'POST' && c.path.includes('/files'))

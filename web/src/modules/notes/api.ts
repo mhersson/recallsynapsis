@@ -94,6 +94,9 @@ export function useList(asked: string) {
   return { list, failed, more, reread }
 }
 
+// A count of things, as a sentence says it.
+export const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
+
 // The name of the area a note names by its slug.
 export const nameOf = (areas: Area[], slug: string) => areas.find((a) => a.slug === slug)?.name ?? slug
 

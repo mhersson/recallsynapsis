@@ -19,6 +19,7 @@ function server(notes: Note[], answer: (c: Call) => Response | Promise<Response>
     if (a || c.method === 'GET') return a
     const n = notes.find((x) => c.path.startsWith(`/api/notes/${x.id}`))!
     if (c.path.endsWith('/trash')) return json(Object.assign(n, { trashed_at: new Date().toISOString() }))
+    if (c.path.endsWith('/restore')) return json(Object.assign(n, { trashed_at: null }))
     const { revision, ...change } = c.body as { revision: number }
     if (n.trashed_at || revision !== n.revision) return json({ error: 'conflict' }, 409)
     return json(Object.assign(n, change, { revision: n.revision + 1 }))
@@ -460,13 +461,16 @@ test('a list that cannot be read says why, and keeps the dropdowns to choose aga
   expect(main().queryByRole('alert')).toBeNull()
 })
 
-test('a trashed note opened by its address can be neither edited nor trashed', async () => {
+test('a trashed note opened by its address is read only, and Restore there puts it back to be changed', async () => {
   narrow(true)
-  server([filed(1, 5, { tags: ['nas'], trashed_at: new Date().toISOString() })])
+  const calls = server([filed(1, 5, { tags: ['nas'], trashed_at: new Date().toISOString() })])
   await open('/notes/1')
   expect(await main().findByRole('heading', { level: 1 })).toHaveTextContent('note 1')
-  expect(main().queryAllByRole('button')).toEqual([])
   expect(main().queryAllByRole('textbox')).toEqual([])
+  expect(tools()).toHaveLength(2)
+  await userEvent.click(tools()[0])
+  expect(writes(calls)).toEqual([['POST', '/api/notes/1/restore', undefined]])
+  await waitFor(() => expect(main().getAllByRole('textbox')).toHaveLength(1))
 })
 
 test('the list reads again on a change of a note made elsewhere, and of an area, since a renamed project changes the slug of its notes', async () => {

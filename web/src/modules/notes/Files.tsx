@@ -15,9 +15,8 @@ const ext = (name: string) => /\.(\w{1,8})$/.exec(name)?.[1].toLowerCase() ?? 'f
 
 type Props = { note: Note; trashed: boolean; up: Uploads; onRemoved: () => void }
 
-// The note's files as tiles: one of the server's inline images shows as an image and opens to fill the view, and any
-// other is a download. A file is never shown any other way. Removing one asks first, every time, since nothing brings
-// it back. A note in the trash attaches and removes nothing.
+// The note's files: the server's inline images as images that open to fill the view, any other as a download, and a
+// removal asked first, every time. A note in the trash changes none, and shows the section only when it has one.
 export default function Files({ note, trashed, up, onRemoved }: Props) {
   const narrow = useNarrow()
   const [opened, setOpened] = useState<Attached>()
@@ -39,6 +38,7 @@ export default function Files({ note, trashed, up, onRemoved }: Props) {
       (e: unknown) => up.refuse(message(e)),
     )
 
+  if (trashed && note.files.length === 0) return null
   const add = !trashed && !narrow && (
     <button className="btn link" onClick={() => picker.current!.click()}>
       <AttachIcon />
