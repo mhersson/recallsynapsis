@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mhersson/recallsynapsis/internal/api"
+	"github.com/mhersson/recallsynapsis/internal/auth"
 	"github.com/mhersson/recallsynapsis/internal/config"
 	"github.com/mhersson/recallsynapsis/internal/store"
 	"github.com/mhersson/recallsynapsis/web"
@@ -69,7 +70,7 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 	log := slog.New(slog.NewTextHandler(stderr, nil))
 	slog.SetDefault(log)
 
-	st, err := store.Open(ctx, filepath.Join(dir, "recallsynapsis.db"), nil)
+	st, err := store.Open(ctx, filepath.Join(dir, "recallsynapsis.db"), auth.Migrations)
 	if err != nil {
 		return err
 	}
@@ -81,6 +82,11 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 		}
 	}()
 
+	signin := auth.New(st, time.Now)
+	if _, err := signin.EnsureUser(ctx, cfg.Owner); err != nil {
+		return err
+	}
+
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Listen)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
@@ -88,7 +94,9 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	log.Info("listening", "address", ln.Addr().String(), "public_url", cfg.PublicURL, "data_dir", dir, "version", version)
 
-	return serve(ctx, ln, logRequests(web.Handler(api.New(api.Deps{Version: version})), log), shutdownGrace, log)
+	h := api.New(api.Deps{Auth: signin, Version: version, PublicURL: cfg.PublicURL, Timezone: cfg.Timezone})
+
+	return serve(ctx, ln, logRequests(web.Handler(h), log), shutdownGrace, log)
 }
 
 // serve serves h on ln until ctx ends, then gives the open requests grace to

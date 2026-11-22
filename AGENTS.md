@@ -94,7 +94,11 @@ Every package states its one responsibility in its package comment, and
 - `internal/api`: the REST API under `/api/`, served from one route table.
   Every refusal and every path no route matches is answered as
   `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
-  to its clean form. Request bodies are decoded strictly.
+  to its clean form. Request bodies are decoded strictly. Each route declares
+  its access, `open`, `read`, `write` or `owner`, and one check admits a
+  bearer token, else the session cookie, refuses a cookie request that
+  changes something without the `X-Recallsynapsis-CSRF` header, and puts the
+  `module.Caller` in the request's context.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables

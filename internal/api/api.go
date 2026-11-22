@@ -1,6 +1,7 @@
-// Package api serves the REST API under /api/ from one route table, and
-// answers every refusal, and every path no route matches once the mux has
-// redirected it to its clean form, in one JSON shape.
+// Package api serves the REST API under /api/ from one route table, checks
+// the access each route declares in one place, and answers every refusal, and
+// every path no route matches once the mux has redirected it to its clean
+// form, in one JSON shape.
 package api
 
 import (
@@ -11,7 +12,9 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/mhersson/recallsynapsis/internal/auth"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -19,29 +22,57 @@ const maxBody = 1 << 20
 
 // Deps is what the handler works on.
 type Deps struct {
-	Version string
+	Auth      *auth.Service
+	Version   string
+	PublicURL string // the configured public_url; the cookie is Secure when it is https
+	Timezone  string
 }
+
+// access is what a route asks of the request's authority.
+type access int
+
+const (
+	open  access = iota // nothing
+	read                // the session cookie or any token
+	write               // the session cookie or a write token
+	owner               // the session cookie alone, so no token makes or revokes a token
+)
 
 // route is one REST route.
 type route struct {
 	pattern string
+	access  access
 	serve   func(*server, http.ResponseWriter, *http.Request) error
 }
 
 var routes = []route{
-	{"GET /api/health", (*server).health},
+	{"GET /api/health", open, (*server).health},
+	{"POST /api/auth/login", open, (*server).login},
+	{"POST /api/auth/logout", read, (*server).logout},
+	{"GET /api/session", read, (*server).session},
+	{"GET /api/tokens", owner, (*server).tokens},
+	{"POST /api/tokens", owner, (*server).createToken},
+	{"DELETE /api/tokens/{id}", owner, (*server).deleteToken},
 }
 
-type server struct{ Deps }
+type server struct {
+	Deps
+	secure bool
+}
 
 // New returns the handler of every route.
 func New(d Deps) http.Handler {
-	s := &server{d}
+	s := &server{Deps: d, secure: strings.HasPrefix(d.PublicURL, "https://")}
 	mux := http.NewServeMux()
 
 	for _, rt := range routes {
 		mux.HandleFunc(rt.pattern, func(w http.ResponseWriter, r *http.Request) {
-			if err := rt.serve(s, w, r); err != nil {
+			r, err := s.authorize(w, r, rt.access)
+			if err == nil {
+				err = rt.serve(s, w, r)
+			}
+
+			if err != nil {
 				fail(w, r, err)
 			}
 		})
