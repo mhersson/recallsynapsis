@@ -25,6 +25,7 @@ import (
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
 	"github.com/mhersson/recallsynapsis/internal/core"
+	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -457,7 +458,7 @@ func TestAStartMakesTheOwnersPersonalArea(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	config := writeConfig(t, t.TempDir(), unbindable)
 
-	personal := func(owner string) []core.Area {
+	personal := func(owner string) []module.Area {
 		st, err := store.Open(t.Context(), filepath.Join(dir, "recallsynapsis.db"), migrations)
 		require.NoError(t, err)
 

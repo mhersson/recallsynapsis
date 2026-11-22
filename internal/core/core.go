@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -44,16 +45,6 @@ const (
 	maxName        = 64
 	maxDescription = 500
 )
-
-// Area is a user's personal area or one of their projects.
-type Area struct {
-	ID          int64  `json:"id"`
-	Kind        string `json:"kind"` // "personal" or "project"
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Description string `json:"description"`
-	Archived    bool   `json:"archived"`
-}
 
 // Change is what a change to an area sets; a nil field stays as it is.
 type Change struct {
@@ -88,7 +79,7 @@ func (c *Service) EnsurePersonal(ctx context.Context, userID int64) error {
 
 // Areas lists the user's areas, the personal area first, then the projects
 // by name in any case, leaving the archived ones out unless archived is true.
-func (c *Service) Areas(ctx context.Context, userID int64, archived bool) ([]Area, error) {
+func (c *Service) Areas(ctx context.Context, userID int64, archived bool) ([]module.Area, error) {
 	rows, err := c.store.QueryContext(ctx, selectArea+`WHERE user_id = ? AND (? OR NOT archived)
 		ORDER BY kind <> 'personal', name_fold`, userID, archived)
 	if err != nil {
@@ -96,7 +87,7 @@ func (c *Service) Areas(ctx context.Context, userID int64, archived bool) ([]Are
 	}
 	defer rows.Close()
 
-	out := []Area{}
+	out := []module.Area{}
 
 	for rows.Next() {
 		a, err := scan(rows)
@@ -115,23 +106,23 @@ func (c *Service) Areas(ctx context.Context, userID int64, archived bool) ([]Are
 }
 
 // Area returns the user's area with the id; one the user lacks is ErrNotFound.
-func (c *Service) Area(ctx context.Context, userID, id int64) (Area, error) {
+func (c *Service) Area(ctx context.Context, userID, id int64) (module.Area, error) {
 	return byID(ctx, c.store, userID, id)
 }
 
 // Find returns the user's area whose slug or name is ref, in any case. A
 // slug is found before another area's name; no such area is ErrNotFound.
-func (c *Service) Find(ctx context.Context, userID int64, ref string) (Area, error) {
+func (c *Service) Find(ctx context.Context, userID int64, ref string) (module.Area, error) {
 	key := fold(ref)
 
 	a, err := scan(c.store.QueryRowContext(ctx, selectArea+`WHERE user_id = ?1 AND ?2 IN (slug, name_fold)
 		ORDER BY slug = ?2 DESC LIMIT 1`, userID, key))
 	if errors.Is(err, sql.ErrNoRows) {
-		return Area{}, fmt.Errorf("area %q: %w", ref, store.ErrNotFound)
+		return module.Area{}, fmt.Errorf("area %q: %w", ref, store.ErrNotFound)
 	}
 
 	if err != nil {
-		return Area{}, fmt.Errorf("core: find area: %w", err)
+		return module.Area{}, fmt.Errorf("core: find area: %w", err)
 	}
 
 	return a, nil
@@ -139,18 +130,18 @@ func (c *Service) Find(ctx context.Context, userID int64, ref string) (Area, err
 
 // CreateProject makes a project of the user. A name another of their areas
 // has, in any case, is ErrConflict.
-func (c *Service) CreateProject(ctx context.Context, userID int64, name, description string) (Area, error) {
+func (c *Service) CreateProject(ctx context.Context, userID int64, name, description string) (module.Area, error) {
 	name, err := checkName(name)
 	if err != nil {
-		return Area{}, err
+		return module.Area{}, err
 	}
 
 	description, err = checkDescription(description)
 	if err != nil {
-		return Area{}, err
+		return module.Area{}, err
 	}
 
-	a := Area{Kind: project, Name: name, Description: description}
+	a := module.Area{Kind: project, Name: name, Description: description}
 
 	err = c.store.Tx(ctx, func(tx *sql.Tx) error {
 		var err error
@@ -167,11 +158,11 @@ func (c *Service) CreateProject(ctx context.Context, userID int64, name, descrip
 		return nil
 	})
 	if store.IsUniqueViolation(err) {
-		return Area{}, fmt.Errorf("an area named %q exists: %w", name, store.ErrConflict)
+		return module.Area{}, fmt.Errorf("an area named %q exists: %w", name, store.ErrConflict)
 	}
 
 	if err != nil {
-		return Area{}, err
+		return module.Area{}, err
 	}
 
 	return a, nil
@@ -180,11 +171,11 @@ func (c *Service) CreateProject(ctx context.Context, userID int64, name, descrip
 // ChangeArea sets what ch holds on the user's area with the id and returns
 // the area. The personal area keeps its name and is never archived, and a
 // name another of the user's areas has, in any case, is ErrConflict.
-func (c *Service) ChangeArea(ctx context.Context, userID, id int64, ch Change) (Area, error) {
+func (c *Service) ChangeArea(ctx context.Context, userID, id int64, ch Change) (module.Area, error) {
 	if ch.Name != nil {
 		name, err := checkName(*ch.Name)
 		if err != nil {
-			return Area{}, err
+			return module.Area{}, err
 		}
 
 		ch.Name = &name
@@ -193,13 +184,13 @@ func (c *Service) ChangeArea(ctx context.Context, userID, id int64, ch Change) (
 	if ch.Description != nil {
 		description, err := checkDescription(*ch.Description)
 		if err != nil {
-			return Area{}, err
+			return module.Area{}, err
 		}
 
 		ch.Description = &description
 	}
 
-	var a Area
+	var a module.Area
 
 	err := c.store.Tx(ctx, func(tx *sql.Tx) error {
 		var err error
@@ -243,11 +234,11 @@ func (c *Service) ChangeArea(ctx context.Context, userID, id int64, ch Change) (
 		return nil
 	})
 	if store.IsUniqueViolation(err) {
-		return Area{}, fmt.Errorf("an area named %q exists: %w", a.Name, store.ErrConflict)
+		return module.Area{}, fmt.Errorf("an area named %q exists: %w", a.Name, store.ErrConflict)
 	}
 
 	if err != nil {
-		return Area{}, err
+		return module.Area{}, err
 	}
 
 	return a, nil
@@ -258,21 +249,21 @@ type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-func byID(ctx context.Context, q querier, userID, id int64) (Area, error) {
+func byID(ctx context.Context, q querier, userID, id int64) (module.Area, error) {
 	a, err := scan(q.QueryRowContext(ctx, selectArea+`WHERE user_id = ? AND id = ?`, userID, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return Area{}, fmt.Errorf("area %d: %w", id, store.ErrNotFound)
+		return module.Area{}, fmt.Errorf("area %d: %w", id, store.ErrNotFound)
 	}
 
 	if err != nil {
-		return Area{}, fmt.Errorf("core: read area: %w", err)
+		return module.Area{}, fmt.Errorf("core: read area: %w", err)
 	}
 
 	return a, nil
 }
 
-func scan(row interface{ Scan(dest ...any) error }) (Area, error) {
-	var a Area
+func scan(row interface{ Scan(dest ...any) error }) (module.Area, error) {
+	var a module.Area
 
 	err := row.Scan(&a.ID, &a.Kind, &a.Name, &a.Slug, &a.Description, &a.Archived)
 

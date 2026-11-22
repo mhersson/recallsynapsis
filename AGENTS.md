@@ -116,11 +116,16 @@ Every package states its one responsibility in its package comment, and
   keeps its name and is never archived, and their projects, each with a name
   unique in any case and a slug made from it. It finds one of a user's areas
   by its id, its slug or its name. It owns the table `areas`.
-- `internal/module`: what the core and its feature modules share: the
-  `Caller` an authorised request carries in its context, with the user, the
-  source of the request and whether it may write; the access levels a route
-  declares; and the refusal, the JSON reply and the strict decoding of a body
-  that every route uses.
+- `internal/module`: what the core and its feature modules share. The
+  contract: the `Module` a feature module's constructor returns, with its
+  settings, migrations, routes, MCP tools, jobs, and optionally its search,
+  the title of an item for a link and what links to a reference; the `Deps`
+  it is built with; and the shapes they exchange, among them the `Area`.
+  `NewTool` makes a tool from a typed function, so no module touches the MCP
+  SDK. Beside it: the `Caller` an authorised request carries in its context,
+  with the user, the source of the request and whether it may write; the
+  access levels a route or a tool declares; and the refusal, the JSON reply
+  and the strict decoding of a body that every route uses.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.

@@ -23,7 +23,7 @@ func (s *server) areas(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	module.Reply(w, http.StatusOK, map[string][]core.Area{"areas": list})
+	module.Reply(w, http.StatusOK, map[string][]module.Area{"areas": list})
 
 	return nil
 }
