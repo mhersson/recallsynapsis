@@ -8,6 +8,7 @@ import Dialog from './components/Dialog.tsx'
 import PageHead from './components/PageHead.tsx'
 import PhoneTabs from './components/PhoneTabs.tsx'
 import SideBar from './components/SideBar.tsx'
+import { useClose } from './components/useClose.ts'
 import { useNarrow } from './components/useNarrow.ts'
 import type { Action } from './modules/registry.ts'
 import Login from './pages/Login/Login.tsx'
@@ -19,13 +20,10 @@ import Settings from './pages/Settings/Settings.tsx'
 import { SessionContext, enabled } from './session.ts'
 import './App.css'
 
-// The page of a module's action, as a phone opens it. Opened by its tab it closes back to where it was opened from;
-// opened by its address, or again after a sign-in, there is no page of the app to go back to, so it closes to the landing page.
+// The page of a module's action, as a phone opens it.
 function ActionPage({ action, home }: { action: Action; home: string }) {
-  const navigate = useNavigate()
-  const { state } = useLocation()
+  const close = useClose(home)
   const [params] = useSearchParams()
-  const close = () => ((state as { back?: boolean } | null)?.back ? navigate(-1) : navigate(home, { replace: true }))
   return (
     <div className="page">
       <PageHead title={action.label} />

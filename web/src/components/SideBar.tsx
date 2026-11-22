@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation } from 'react-router'
 import { useAreas } from '../api/areas.ts'
 import type { Action, Module } from '../modules/registry.ts'
 import { AddIcon, ProjectsIcon, SearchIcon, SettingsIcon } from './icons.tsx'
+import { back } from './useClose.ts'
 import './SideBar.css'
 
 type Props = { modules: Module[]; action?: Action; onAction: () => void; live: boolean }
@@ -42,7 +43,7 @@ export default function SideBar({ modules, action, onAction, live }: Props) {
         <Link to="/projects" className={projects ? 'on' : undefined} aria-current={projects ? 'page' : undefined}>
           Areas
         </Link>
-        <Link to="/areas/new" className="side-add" aria-label="New project" title="New project">
+        <Link to="/areas/new" state={back} className="side-add" aria-label="New project" title="New project">
           <AddIcon />
         </Link>
       </div>

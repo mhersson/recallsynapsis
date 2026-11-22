@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import { touchesAreas, useStream } from '../../api/stream.ts'
 import type { Area } from '../../api/types.ts'
 import Dialog from '../../components/Dialog.tsx'
 import PageHead from '../../components/PageHead.tsx'
 import { ProjectsIcon } from '../../components/icons.tsx'
+import { back, useClose } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useSession } from '../../session.ts'
 import AreaForm from './AreaForm.tsx'
@@ -19,8 +20,6 @@ function count(n: number) {
 // making opens the form that makes a project: over the list on desktop, as its own page on a phone.
 export default function Projects({ making = false }: { making?: boolean }) {
   const narrow = useNarrow()
-  const navigate = useNavigate()
-  const { key } = useLocation()
   const { modules } = useSession()
   const [areas, setAreas] = useState<Area[] | null>(null)
   const [refused, setRefused] = useState('')
@@ -41,8 +40,7 @@ export default function Projects({ making = false }: { making?: boolean }) {
     }
   }
 
-  // Back to where the form was opened from, so going back never opens it again; a form opened by its address leaves for the list.
-  const close = () => (key === 'default' ? navigate('/projects', { replace: true }) : navigate(-1))
+  const close = useClose('/projects')
   const made = () => {
     close()
     void read()
@@ -80,7 +78,7 @@ export default function Projects({ making = false }: { making?: boolean }) {
   return (
     <div className="page narrow">
       <PageHead title="Projects">
-        <Link className="btn" to="/areas/new">
+        <Link className="btn" to="/areas/new" state={back}>
           New project
         </Link>
       </PageHead>

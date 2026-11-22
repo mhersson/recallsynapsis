@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router'
 import type { Action, Entry, Module } from '../modules/registry.ts'
 import { MoreIcon, ProjectsIcon } from './icons.tsx'
+import { back } from './useClose.ts'
 import './PhoneTabs.css'
 
 const core: Entry[] = [
@@ -37,7 +38,7 @@ export default function PhoneTabs({ modules, action, area }: Props) {
   if (action) {
     // Pressed again on its own page, the action's tab leaves that page as it is; from elsewhere it tells the page to close back.
     const here = current(action.to)
-    tabs.splice(Math.floor(tabs.length / 2), 0, tab(action, here ? pathname + search : area ? `${action.to}?area=${area}` : action.to, here ? state : { back: true }))
+    tabs.splice(Math.floor(tabs.length / 2), 0, tab(action, here ? pathname + search : area ? `${action.to}?area=${area}` : action.to, here ? state : back))
   }
   return <nav className="tabs">{tabs}</nav>
 }
