@@ -94,10 +94,21 @@ Every package states its one responsibility in its package comment, and
 - `internal/api`: the REST API under `/api/`, served from one route table.
   Every refusal and every path no route matches is answered as
   `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
-  to its clean form. Request bodies are decoded strictly.
+  to its clean form. Request bodies are decoded strictly. Each route declares
+  its access, `open`, `read`, `write` or `owner`, and one check admits a
+  bearer token, else the session cookie, refuses a cookie request that
+  changes something without the `X-Recallsynapsis-CSRF` header, and puts the
+  `module.Caller` in the request's context.
+- `internal/auth`: signs a user in with a name and an argon2id password,
+  slows wrong ones by the name's digest and the address, and keeps the
+  sessions and API tokens, both stored only as hashes. It owns the tables
+  `users`, `sessions` and `api_tokens`.
 - `internal/config`: reads the configuration file strictly: an unknown key, a
   wrong type or an unusable value is refused with the key named. It keeps
   each `[modules.NAME]` table as read.
+- `internal/module`: what the core and its feature modules share: the
+  `Caller` an authorised request carries in its context, with the user, the
+  source of the request and whether it may write.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.

@@ -1,10 +1,48 @@
 package main
 
 import (
+	"cmp"
+	"context"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/config"
+	"github.com/mhersson/recallsynapsis/internal/store"
 )
+
+// dataFlags adds --data-dir and --config to flags.
+func dataFlags(flags *flag.FlagSet) (dirFlag, configFlag *string) {
+	return flags.String("data-dir", "", "the data directory (default $RECALLSYNAPSIS_DATA_DIR, else $XDG_DATA_HOME/recallsynapsis, else ~/.local/share/recallsynapsis)"),
+		flags.String("config", "", "the configuration file (default <data-dir>/recallsynapsis.toml)")
+}
+
+// openData resolves the data directory, reads the configuration, makes the
+// directory private and opens the database with every migration applied.
+func openData(ctx context.Context, dirFlag, configFlag string) (string, *config.Config, *store.Store, error) {
+	dir, err := dataDir(dirFlag)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	cfg, err := config.Load(cmp.Or(configFlag, filepath.Join(dir, "recallsynapsis.toml")))
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	if err := privateDataDir(dir); err != nil {
+		return "", nil, nil, err
+	}
+
+	st, err := store.Open(ctx, filepath.Join(dir, "recallsynapsis.db"), auth.Migrations)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	return dir, cfg, st, nil
+}
 
 // dataDir is the data directory: the flag, else RECALLSYNAPSIS_DATA_DIR, else
 // $XDG_DATA_HOME/recallsynapsis, else ~/.local/share/recallsynapsis.

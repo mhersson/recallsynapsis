@@ -9,7 +9,8 @@ import (
 	"errors"
 	"fmt"
 
-	_ "modernc.org/sqlite" // registers the "sqlite" driver
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // The API gives the caller either error with all the text that wraps it, so
@@ -79,4 +80,12 @@ func (s *Store) Tx(ctx context.Context, fn func(*sql.Tx) error) error {
 	}
 
 	return nil
+}
+
+// IsUniqueViolation reports whether err is a write refused by a UNIQUE
+// constraint, which the package that owns the table answers as ErrConflict.
+func IsUniqueViolation(err error) bool {
+	se, ok := errors.AsType[*sqlite.Error](err)
+
+	return ok && se.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }

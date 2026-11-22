@@ -254,3 +254,22 @@ func TestTx(t *testing.T) {
 
 	assert.Equal(t, []string{"kept"}, column(t, s, `SELECT v FROM a`))
 }
+
+func TestIsUniqueViolation(t *testing.T) {
+	t.Parallel()
+
+	s := open(t, dbPath(t), Migration{Owner: "core", Version: 1, SQL: `
+		CREATE TABLE a (name TEXT NOT NULL UNIQUE, other INTEGER CHECK (other > 0))
+	`})
+	insert := func(name string, other int) error {
+		_, err := s.ExecContext(t.Context(), `INSERT INTO a (name, other) VALUES (?, ?)`, name, other)
+
+		return err
+	}
+
+	require.NoError(t, insert("ada", 1))
+	assert.True(t, IsUniqueViolation(insert("ada", 1)))
+	assert.False(t, IsUniqueViolation(insert("bob", 0)), "another constraint is no conflict")
+	assert.False(t, IsUniqueViolation(nil))
+	assert.False(t, IsUniqueViolation(errors.New("unique")))
+}
