@@ -9,7 +9,7 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
-// serveList answers the notes that ?area=, ?kind=, ?inbox=, ?tag= and ?limit= ask for.
+// serveList answers the notes that ?area=, ?kind=, ?inbox=, ?tag=, ?trashed= and ?limit= ask for.
 func (n notes) serveList(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	f := filter{area: q.Get("area"), kind: q.Get("kind"), tag: q.Get("tag")}
@@ -21,6 +21,14 @@ func (n notes) serveList(w http.ResponseWriter, r *http.Request) error {
 		f.inbox = &inbox
 	default:
 		return &module.Refusal{Status: http.StatusBadRequest, Text: `inbox is "true" or "false"`}
+	}
+
+	switch q.Get("trashed") {
+	case "", "false":
+	case "true":
+		f.trashed = true
+	default:
+		return &module.Refusal{Status: http.StatusBadRequest, Text: `trashed is "true" or "false"`}
 	}
 
 	// list takes a limit of 0 for its default, which a request names by leaving it out.
@@ -101,6 +109,51 @@ func (n notes) serveChange(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	module.Reply(w, http.StatusOK, out)
+
+	return nil
+}
+
+// serveTrash answers the note once it is in the trash, or out of it when
+// trashed is false.
+func (n notes) serveTrash(trashed bool) func(http.ResponseWriter, *http.Request) error {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		id, err := noteID(r)
+		if err != nil {
+			return err
+		}
+
+		out, err := n.trash(r.Context(), id, trashed)
+		if err != nil {
+			return err
+		}
+
+		module.Reply(w, http.StatusOK, out)
+
+		return nil
+	}
+}
+
+func (n notes) serveDelete(w http.ResponseWriter, r *http.Request) error {
+	id, err := noteID(r)
+	if err != nil {
+		return err
+	}
+
+	if err := n.remove(r.Context(), id); err != nil {
+		return err
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+
+	return nil
+}
+
+func (n notes) serveEmpty(w http.ResponseWriter, r *http.Request) error {
+	if err := n.empty(r.Context()); err != nil {
+		return err
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 
 	return nil
 }

@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,10 +30,22 @@ import (
 
 type object = map[string]any
 
+const password = "correct horse battery"
+
+// passwordHash is password's hash, made once since each costs an argon2 run.
+var passwordHash = sync.OnceValue(func() string {
+	h, err := auth.HashPassword(password)
+	if err != nil {
+		panic(err)
+	}
+
+	return h
+})
+
 // fixture serves a database whose user ada has her personal area and the
 // project Garden, and whose user grace has her personal area alone. Each
-// user is reached by the Authorization header of a token, never a session,
-// so no test spends an argon2 run.
+// user is reached by the Authorization header of a token, and only a test of
+// what no token may do signs in, since each sign-in spends an argon2 run.
 type fixture struct {
 	h       http.Handler
 	store   *store.Store
@@ -111,15 +125,45 @@ func (f *fixture) load(t *testing.T, table object) {
 	f.h = api.New(api.Deps{Auth: f.auth, Core: f.core, Modules: ms, PublicURL: "https://recall.example.org", Hub: f.hub})
 }
 
-// do serves one request with the Authorization header auth and decodes its answer.
+// signIn gives ada's session, as do takes it.
+func (f *fixture) signIn(t *testing.T) string {
+	t.Helper()
+
+	require.NoError(t, f.auth.SetPasswordHash(t.Context(), f.ada, passwordHash()))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/login", strings.NewReader(`{"name":"ada","password":"`+password+`"}`))
+	rec := httptest.NewRecorder()
+	f.h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+
+	cookies := rec.Result().Cookies()
+	require.Len(t, cookies, 1)
+
+	return "Cookie " + cookies[0].Name + "=" + cookies[0].Value
+}
+
+// do serves one request and decodes its answer, nil for a 204. auth is the
+// Authorization header of a token, or a session as signIn gives it.
 func (f *fixture) do(t *testing.T, method, target, body, auth string) (int, object) {
 	t.Helper()
 
 	req := httptest.NewRequestWithContext(t.Context(), method, target, strings.NewReader(body))
-	req.Header.Set("Authorization", auth)
+	if cookie, ok := strings.CutPrefix(auth, "Cookie "); ok {
+		req.Header.Set("Cookie", cookie)
+		req.Header.Set("X-Recallsynapsis-CSRF", "1")
+	} else {
+		req.Header.Set("Authorization", auth)
+	}
 
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusNoContent {
+		assert.Empty(t, rec.Body.String())
+
+		return rec.Code, nil
+	}
+
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
 	var got object
@@ -143,6 +187,16 @@ func (f *fixture) change(t *testing.T, note object, body, auth string) object {
 	t.Helper()
 
 	code, got := f.do(t, http.MethodPatch, path(note), body, auth)
+	require.Equal(t, http.StatusOK, code, got)
+
+	return got
+}
+
+// read gives note as it now reads.
+func (f *fixture) read(t *testing.T, note object, auth string) object {
+	t.Helper()
+
+	code, got := f.do(t, http.MethodGet, path(note), "", auth)
 	require.Equal(t, http.StatusOK, code, got)
 
 	return got
@@ -279,6 +333,10 @@ func TestAModuleSwitchedOffKeepsItsNotes(t *testing.T) {
 			{http.MethodGet, "/api/notes/tags", ""},
 			{http.MethodGet, path(made[0]), ""},
 			{http.MethodPatch, path(made[0]), `{"revision":1,"title":"Lost"}`},
+			{http.MethodPost, path(made[0]) + "/trash", ""},
+			{http.MethodPost, path(made[0]) + "/restore", ""},
+			{http.MethodDelete, path(made[0]), ""},
+			{http.MethodDelete, "/api/notes/trash", ""},
 		} {
 			code, got := f.do(t, r.method, r.target, r.body, f.laptop)
 			refused(t, http.StatusNotFound, code, got)
@@ -634,6 +692,181 @@ func TestANoteOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
 	refused(t, http.StatusNotFound, code, answer)
 }
 
+// trash sends note to the trash, or out of it with "/restore", and returns the note it answers.
+func (f *fixture) trash(t *testing.T, note object, to, auth string) object {
+	t.Helper()
+
+	code, got := f.do(t, http.MethodPost, path(note)+to, "", auth)
+	require.Equal(t, http.StatusOK, code, got)
+
+	return got
+}
+
+func TestATrashedNoteIsInNoListButTheTrash(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	seeds := f.create(t, `{"title":"Seeds","area":"garden","tags":["spring"]}`, f.laptop)
+	seeds = f.change(t, seeds, `{"revision":1,"body":"Tomatoes"}`, f.desk)
+	plumber := f.create(t, `{"title":"Plumber","inbox":true}`, f.laptop)
+	f.create(t, `{"title":"Beds","area":"garden"}`, f.laptop)
+
+	assert.Nil(t, seeds["trashed_at"], "null unless the note is in the trash")
+
+	f.trash(t, plumber, "/trash", f.laptop)
+
+	trashed := f.trash(t, seeds, "/trash", f.laptop)
+	require.NotNil(t, trashed["trashed_at"])
+
+	at, err := time.Parse(time.RFC3339, trashed["trashed_at"].(string))
+	require.NoError(t, err)
+	assert.Equal(t, time.UTC, at.Location())
+
+	want := maps.Clone(seeds)
+	want["trashed_at"] = trashed["trashed_at"]
+	assert.Equal(t, want, trashed, "trashing changes nothing else: no revision, source or time of change")
+	assert.Equal(t, trashed, f.trash(t, seeds, "/trash", f.desk), "trashing a trashed note changes nothing")
+
+	for _, tt := range []struct {
+		query string
+		want  []string
+	}{
+		{"", []string{"Beds"}},
+		{"?area=garden", []string{"Beds"}},
+		{"?tag=spring", []string{}},
+		{"?inbox=true", []string{}},
+		{"?trashed=false", []string{"Beds"}},
+		{"?trashed=true", []string{"Seeds", "Plumber"}},
+		{"?trashed=true&area=garden", []string{"Seeds"}},
+	} {
+		listed, total := f.titles(t, tt.query, f.phone)
+		assert.Equal(t, tt.want, listed, tt.query)
+		assert.Equal(t, len(tt.want), total, tt.query)
+	}
+
+	listed, total := f.titles(t, "?trashed=true&limit=1", f.phone)
+	assert.Equal(t, []string{"Seeds"}, listed, "the most recently trashed first")
+	assert.Equal(t, 2, total, "the Trash's count")
+
+	code, got := f.do(t, http.MethodGet, "/api/notes/tags", "", f.phone)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, object{"tags": []any{}}, got, "a trashed note's tags are counted nowhere")
+
+	assert.Equal(t, trashed, f.read(t, seeds, f.phone), "a trashed note is still read")
+
+	for _, body := range []string{`{"revision":2,"title":"Lost"}`, `{"append":"Lost"}`} {
+		code, got = f.do(t, http.MethodPatch, path(seeds), body, f.laptop)
+		refused(t, http.StatusConflict, code, got)
+	}
+
+	code, got = f.do(t, http.MethodGet, "/api/notes?trashed=yes", "", f.phone)
+	refused(t, http.StatusBadRequest, code, got)
+
+	restored := f.trash(t, seeds, "/restore", f.laptop)
+	assert.Equal(t, seeds, restored, "restored, it is as it was, with the source of its last change")
+	assert.Equal(t, restored, f.trash(t, seeds, "/restore", f.desk), "restoring a note outside the trash changes nothing")
+
+	listed, _ = f.titles(t, "", f.phone)
+	assert.Equal(t, []string{"Beds", "Seeds"}, listed, "back where it was in its list")
+
+	var revisions int
+	require.NoError(t, f.store.QueryRowContext(t.Context(), `SELECT count(*) FROM note_revisions WHERE note_id = ?`, seeds["id"]).Scan(&revisions))
+	assert.Equal(t, 2, revisions, "with its history, and no revision of its own")
+
+	for _, to := range []string{"/trash", "/restore"} {
+		code, got = f.do(t, http.MethodPost, path(seeds)+to, "", f.phone)
+		refused(t, http.StatusForbidden, code, got)
+
+		code, got = f.do(t, http.MethodPost, path(seeds)+to, "", f.grace)
+		refused(t, http.StatusNotFound, code, got)
+
+		code, got = f.do(t, http.MethodPost, "/api/notes/9999"+to, "", f.laptop)
+		refused(t, http.StatusNotFound, code, got)
+	}
+
+	assert.Equal(t, seeds, f.read(t, seeds, f.phone), "the refused tries changed nothing")
+}
+
+func TestOnlyASessionDeletesFromTheTrash(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	session := f.signIn(t)
+
+	seeds := f.change(t, f.create(t, `{"title":"Seeds","tags":["spring"]}`, f.laptop), `{"revision":1,"body":"Tomatoes"}`, f.laptop)
+	beds := f.create(t, `{"title":"Beds","area":"garden","tags":["spring"]}`, f.laptop)
+	plums := f.create(t, `{"title":"Plums"}`, f.laptop)
+	kept := f.create(t, `{"title":"Kept","tags":["spring"]}`, f.laptop)
+	theirs := f.create(t, `{"title":"Theirs","tags":["spring"]}`, f.grace)
+
+	code, got := f.do(t, http.MethodDelete, path(seeds), "", session)
+	refused(t, http.StatusConflict, code, got)
+
+	for _, note := range []object{seeds, beds, plums} {
+		f.trash(t, note, "/trash", f.laptop)
+	}
+
+	f.trash(t, theirs, "/trash", f.grace)
+
+	for _, token := range []string{f.laptop, f.phone} {
+		for _, target := range []string{path(seeds), "/api/notes/trash"} {
+			code, got := f.do(t, http.MethodDelete, target, "", token)
+			refused(t, http.StatusForbidden, code, got)
+		}
+	}
+
+	code, got = f.do(t, http.MethodPost, path(theirs)+"/restore", "", f.laptop)
+	refused(t, http.StatusNotFound, code, got)
+
+	listed, _ := f.titles(t, "?trashed=true", f.phone)
+	assert.Equal(t, []string{"Plums", "Beds", "Seeds"}, listed, "no token deleted anything")
+
+	code, got = f.do(t, http.MethodDelete, path(seeds), "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+
+	code, got = f.do(t, http.MethodGet, path(seeds), "", f.phone)
+	refused(t, http.StatusNotFound, code, got)
+
+	for _, table := range []string{"note_tags", "note_revisions"} {
+		var n int
+		require.NoError(t, f.store.QueryRowContext(t.Context(), `SELECT count(*) FROM `+table+` WHERE note_id = ?`, seeds["id"]).Scan(&n))
+		assert.Zero(t, n, "its %s go with it", table)
+	}
+
+	for _, target := range []string{path(seeds), "/api/notes/9999", "/api/notes/seeds", path(theirs)} {
+		code, got = f.do(t, http.MethodDelete, target, "", session)
+		refused(t, http.StatusNotFound, code, got)
+	}
+
+	code, got = f.do(t, http.MethodDelete, "/api/notes/trash", "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+
+	listed, total := f.titles(t, "?trashed=true", f.phone)
+	assert.Equal(t, []string{}, listed)
+	assert.Zero(t, total)
+
+	listed, _ = f.titles(t, "", f.phone)
+	assert.Equal(t, []string{"Kept"}, listed, "emptying deletes no note outside the trash")
+	assert.Equal(t, []any{"spring"}, f.read(t, kept, f.phone)["tags"])
+
+	listed, _ = f.titles(t, "?trashed=true", f.grace)
+	assert.Equal(t, []string{"Theirs"}, listed, "nor another user's trash")
+	assert.Equal(t, []any{"spring"}, f.read(t, theirs, f.grace)["tags"])
+
+	assert.Equal(t, 2, f.count(t, "notes"))
+	assert.Equal(t, 2, f.count(t, "note_tags"))
+	assert.Equal(t, 2, f.count(t, "note_revisions"))
+
+	code, _ = f.do(t, http.MethodDelete, "/api/notes/trash", "", session)
+	assert.Equal(t, http.StatusNoContent, code, "an empty trash empties")
+
+	last := f.trash(t, f.create(t, `{"title":"Last"}`, f.laptop), "/trash", f.laptop)
+
+	code, got = f.do(t, http.MethodDelete, path(last), "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+	assert.NotEqual(t, last["id"], f.create(t, `{"title":"Next"}`, f.laptop)["id"], "the id of a note deleted for good is never given again")
+}
+
 func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	t.Parallel()
 
@@ -701,4 +934,24 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 
 	expect(f.change(t, made, `{"revision":1,"inbox":true}`, f.laptop), "personal")
 	expect(f.change(t, made, `{"append":"Sow in March"}`, f.desk), "personal")
+
+	expect(f.trash(t, made, "/trash", f.laptop), "personal")
+	f.trash(t, made, "/trash", f.laptop)
+
+	beds := f.create(t, `{"title":"Beds","area":"garden"}`, f.laptop)
+	expect(beds, "garden") // and not the trashing that changed nothing
+	expect(f.trash(t, made, "/restore", f.laptop), "personal")
+	expect(f.trash(t, made, "/trash", f.laptop), "personal")
+
+	session := f.signIn(t)
+
+	code, got = f.do(t, http.MethodDelete, path(made), "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+	expect(made, "personal")
+
+	expect(f.trash(t, beds, "/trash", f.laptop), "garden")
+
+	code, got = f.do(t, http.MethodDelete, "/api/notes/trash", "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+	assert.JSONEq(t, `{"module":"notes","kind":"trash","id":0,"area":0}`, strings.TrimPrefix(next(), "data: "), "emptying tells once")
 }

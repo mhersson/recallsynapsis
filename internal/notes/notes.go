@@ -1,7 +1,8 @@
 // Package notes keeps each user's notes and ideas: each in one of the user's
-// areas, with its tags, the inbox flag of a capture that waits to be filed,
-// and a revision written by every change. It owns the tables notes,
-// note_tags and note_revisions.
+// areas, with its tags, the inbox flag of a capture that waits to be filed
+// and a revision written by every change. A note in the trash is kept
+// unchanged until it is restored or deleted for good. It owns the tables
+// notes, note_tags and note_revisions.
 package notes
 
 import (
@@ -20,11 +21,12 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
-// migrations make the module's whole schema in one version. Nothing here
-// writes trashed_at, said, restored_from or links: they wait empty.
+// migrations make the module's whole schema in one version. A note's id is
+// AUTOINCREMENT, so a note deleted for good never gives its id to another.
+// Nothing here writes said, restored_from or links: they wait empty.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE notes (
-	id         INTEGER PRIMARY KEY,
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
 	user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
 	area_id    INTEGER NOT NULL REFERENCES areas (id) ON DELETE CASCADE,
 	kind       TEXT NOT NULL CHECK (kind IN ('note', 'idea')),
@@ -77,6 +79,8 @@ var (
 	kinds    = []string{"note", "idea"}
 	errKind  = fmt.Errorf(`a kind is "note" or "idea": %w`, store.ErrInvalid)
 	errLimit = fmt.Errorf("limit is 1 to %d: %w", maxLimit, store.ErrInvalid)
+
+	errTrashed = fmt.Errorf("the note is in the trash, and is restored before it is changed: %w", store.ErrConflict)
 )
 
 type notes struct {
@@ -96,6 +100,10 @@ func New(d module.Deps) module.Module {
 			{Pattern: "GET /api/notes/tags", Access: module.Read, Serve: n.serveTags},
 			{Pattern: "GET /api/notes/{id}", Access: module.Read, Serve: n.serveGet},
 			{Pattern: "PATCH /api/notes/{id}", Access: module.Write, Serve: n.serveChange},
+			{Pattern: "POST /api/notes/{id}/trash", Access: module.Write, Serve: n.serveTrash(true)},
+			{Pattern: "POST /api/notes/{id}/restore", Access: module.Write, Serve: n.serveTrash(false)},
+			{Pattern: "DELETE /api/notes/{id}", Access: module.Owner, Serve: n.serveDelete},
+			{Pattern: "DELETE /api/notes/trash", Access: module.Owner, Serve: n.serveEmpty},
 		},
 	}
 }
@@ -114,6 +122,7 @@ type row struct {
 	Source    string     `json:"source"` // that of the last change
 	CreatedAt time.Time  `json:"created_at"`
 	ChangedAt time.Time  `json:"changed_at"`
+	TrashedAt *time.Time `json:"trashed_at"` // null unless the note is in the trash
 }
 
 // note is a note in full.
@@ -148,11 +157,12 @@ type change struct {
 
 // filter is what a list asks for; a zero field asks for nothing.
 type filter struct {
-	area  string // a slug or a name
-	kind  string
-	inbox *bool
-	tag   string
-	limit int // defaultLimit when 0
+	area    string // a slug or a name
+	kind    string
+	inbox   *bool
+	tag     string
+	trashed bool // the trash alone, else none of it
+	limit   int  // defaultLimit when 0
 }
 
 // page is what a list gives: its notes, and how many it was asked for in all.
@@ -188,7 +198,7 @@ func (f fields) check() error {
 }
 
 // columns are a row's, in the order scanRow reads them.
-const columns = `id, area_id, kind, title, substr(body, 1, 200), inbox, revision, source, created_at, changed_at,
+const columns = `id, area_id, kind, title, substr(body, 1, 200), inbox, revision, source, created_at, changed_at, trashed_at,
 	coalesce((SELECT group_concat(tag, ' ' ORDER BY tag) FROM note_tags WHERE note_id = notes.id), '')`
 
 // snapshot writes the revision of the note ?1 as it now stands.
@@ -203,12 +213,13 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 	var (
 		r                      row
 		area, created, changed int64
+		trashed                sql.NullInt64
 		tags                   string
 	)
 
 	err := sc.Scan(append([]any{
 		&r.ID, &area, &r.Kind, &r.Title, &r.Excerpt, &r.Inbox, &r.Revision, &r.Source,
-		&created, &changed, &tags,
+		&created, &changed, &trashed, &tags,
 	}, extra...)...)
 	if err != nil {
 		return row{}, err
@@ -223,6 +234,10 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 	// A tag has no spaces, so the space that joins them parts them again.
 	r.Ref, r.Area, r.Tags = module.NewRef(name, r.ID), slug, strings.Fields(tags)
 	r.CreatedAt, r.ChangedAt = time.UnixMilli(created).UTC(), time.UnixMilli(changed).UTC()
+
+	if trashed.Valid {
+		r.TrashedAt = new(time.UnixMilli(trashed.Int64).UTC())
+	}
 
 	return r, nil
 }
@@ -282,7 +297,8 @@ func (n notes) read(ctx context.Context, slugs map[int64]string, userID, id int6
 }
 
 // list gives the caller's notes that f asks for, the most recently changed
-// first, and how many there are in all.
+// first or the trash the most recently trashed first, and how many there are
+// in all.
 func (n notes) list(ctx context.Context, f filter) (page, error) {
 	c, _ := module.CallerFrom(ctx)
 
@@ -321,11 +337,13 @@ func (n notes) list(ctx context.Context, f filter) (page, error) {
 		return page{}, err
 	}
 
-	// The window counts every row the query matches, before the limit cuts them.
+	// The window counts every row the query matches, before the limit cuts
+	// them. Outside the trash trashed_at is null, so only the trash sorts by it.
 	rows, err := n.Store.QueryContext(ctx, `SELECT `+columns+`, count(*) OVER () FROM notes
 		WHERE user_id = ?1 AND ?2 IN (0, area_id) AND ?3 IN ('', kind) AND (?4 IS NULL OR inbox = ?4)
 			AND (?5 = '' OR EXISTS (SELECT 1 FROM note_tags WHERE note_id = notes.id AND tag = ?5))
-		ORDER BY changed_at DESC, id DESC LIMIT ?6`, c.UserID, area, f.kind, f.inbox, f.tag, f.limit)
+			AND (trashed_at IS NOT NULL) = ?6
+		ORDER BY coalesce(trashed_at, changed_at) DESC, id DESC LIMIT ?7`, c.UserID, area, f.kind, f.inbox, f.tag, f.trashed, f.limit)
 	if err != nil {
 		return page{}, fmt.Errorf("notes: list: %w", err)
 	}
@@ -349,12 +367,13 @@ func (n notes) list(ctx context.Context, f filter) (page, error) {
 	return out, nil
 }
 
-// tags gives each tag of the caller's notes, by tag, with how many notes have it.
+// tags gives each tag of the caller's notes outside the trash, by tag, with
+// how many notes have it.
 func (n notes) tags(ctx context.Context) ([]tagCount, error) {
 	c, _ := module.CallerFrom(ctx)
 
 	rows, err := n.Store.QueryContext(ctx, `SELECT tag, count(*) FROM note_tags JOIN notes ON notes.id = note_id
-		WHERE user_id = ? GROUP BY tag ORDER BY tag`, c.UserID)
+		WHERE user_id = ? AND trashed_at IS NULL GROUP BY tag ORDER BY tag`, c.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("notes: tags: %w", err)
 	}
@@ -438,7 +457,7 @@ func (n notes) create(ctx context.Context, d draft) (note, error) {
 // on. A change of area, kind or tags takes the note out of the inbox unless
 // the same change puts it there, and a note in the inbox is in the personal
 // area. A change from another revision than the note's is ErrConflict, unless
-// it only appends.
+// it only appends, and so is a change of a note in the trash.
 func (n notes) change(ctx context.Context, id int64, ch change) (note, error) {
 	c, _ := module.CallerFrom(ctx)
 	appends := ch == change{Revision: ch.Revision, Append: ch.Append} && ch.Append != nil
@@ -482,16 +501,23 @@ func (n notes) change(ctx context.Context, id int64, ch change) (note, error) {
 	var f fields
 
 	err = n.Store.Tx(ctx, func(tx *sql.Tx) error {
-		var revision int64
+		var (
+			revision int64
+			trashed  bool
+		)
 
-		err := tx.QueryRowContext(ctx, `SELECT title, body, kind, area_id, inbox, revision FROM notes WHERE user_id = ? AND id = ?`,
-			c.UserID, id).Scan(&f.title, &f.body, &f.kind, &f.area, &f.inbox, &revision)
+		err := tx.QueryRowContext(ctx, `SELECT title, body, kind, area_id, inbox, revision, trashed_at IS NOT NULL FROM notes
+			WHERE user_id = ? AND id = ?`, c.UserID, id).Scan(&f.title, &f.body, &f.kind, &f.area, &f.inbox, &revision, &trashed)
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("note %d: %w", id, store.ErrNotFound)
 		}
 
 		if err != nil {
 			return fmt.Errorf("notes: change: %w", err)
+		}
+
+		if trashed {
+			return errTrashed
 		}
 
 		if !appends && *ch.Revision != revision {
@@ -520,6 +546,90 @@ func (n notes) change(ctx context.Context, id int64, ch change) (note, error) {
 	n.Changed(ctx, module.Change{Module: name, Kind: "note", ID: id, Area: f.area})
 
 	return n.read(ctx, slugs, c.UserID, id)
+}
+
+// trash puts the caller's note with the id in the trash, or takes it out
+// when trashed is false. Neither writes a revision or moves the note in its
+// list, and finding the note where it is asked to be changes nothing.
+func (n notes) trash(ctx context.Context, id int64, trashed bool) (note, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	slugs, _, err := n.places(ctx, c.UserID)
+	if err != nil {
+		return note{}, err
+	}
+
+	var (
+		at   any // null takes the note out
+		area int64
+	)
+
+	if trashed {
+		at = n.Now().UnixMilli()
+	}
+
+	err = n.Store.QueryRowContext(ctx, `UPDATE notes SET trashed_at = ?1 WHERE user_id = ?2 AND id = ?3 AND (trashed_at IS NULL) = ?4
+		RETURNING area_id`, at, c.UserID, id, trashed).Scan(&area)
+
+	switch {
+	case err == nil:
+		n.Changed(ctx, module.Change{Module: name, Kind: "note", ID: id, Area: area})
+	case !errors.Is(err, sql.ErrNoRows):
+		return note{}, fmt.Errorf("notes: trash: %w", err)
+	}
+
+	return n.read(ctx, slugs, c.UserID, id)
+}
+
+// remove deletes the caller's note with the id for good, with its tags and
+// its revisions. A note outside the trash is ErrConflict.
+func (n notes) remove(ctx context.Context, id int64) error {
+	c, _ := module.CallerFrom(ctx)
+
+	var area int64
+
+	err := n.Store.Tx(ctx, func(tx *sql.Tx) error {
+		var trashed bool
+
+		err := tx.QueryRowContext(ctx, `SELECT area_id, trashed_at IS NOT NULL FROM notes WHERE user_id = ? AND id = ?`,
+			c.UserID, id).Scan(&area, &trashed)
+
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return fmt.Errorf("note %d: %w", id, store.ErrNotFound)
+		case err != nil:
+			return fmt.Errorf("notes: delete: %w", err)
+		case !trashed:
+			return fmt.Errorf("note %d is not in the trash, and only a note in the trash is deleted: %w", id, store.ErrConflict)
+		}
+
+		if _, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE user_id = ? AND id = ?`, c.UserID, id); err != nil {
+			return fmt.Errorf("notes: delete: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	n.Changed(ctx, module.Change{Module: name, Kind: "note", ID: id, Area: area})
+
+	return nil
+}
+
+// empty deletes every note in the caller's trash for good.
+func (n notes) empty(ctx context.Context) error {
+	c, _ := module.CallerFrom(ctx)
+
+	if _, err := n.Store.ExecContext(ctx, `DELETE FROM notes WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
+		return fmt.Errorf("notes: empty the trash: %w", err)
+	}
+
+	// One change for them all, since a stream that falls behind is ended.
+	n.Changed(ctx, module.Change{Module: name, Kind: "trash"})
+
+	return nil
 }
 
 // apply sets on f what ch gives, with area the id of the area it names and
