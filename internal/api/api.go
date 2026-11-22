@@ -4,7 +4,8 @@
 // path no route matches once the mux has redirected it to its clean form, in
 // one JSON shape. It serves the core's MCP tools and those of the modules
 // switched on at /mcp, to an API token alone, and gives a tool's refusal as
-// REST's line.
+// REST's line. Its hub gives each change to the open event streams of the
+// user whose change it is.
 package api
 
 import (
@@ -30,6 +31,7 @@ type Deps struct {
 	PublicURL string // the configured public_url; the cookie is Secure when it is https
 	Timezone  string
 	BackupDir string // the configured backup.dir, whose newest snapshot is the last backup
+	Hub       *Hub   // what the event streams hear; the area routes tell it of their changes
 }
 
 // route is one REST route.
@@ -48,6 +50,7 @@ var routes = []route{
 	{"POST /api/areas", module.Write, (*server).createArea},
 	{"PATCH /api/areas/{id}", module.Write, (*server).changeArea},
 	{"GET /api/search", module.Read, (*server).search},
+	{"GET /api/events", module.Read, (*server).events},
 	{"GET /api/tokens", module.Owner, (*server).tokens},
 	{"POST /api/tokens", module.Owner, (*server).createToken},
 	{"DELETE /api/tokens/{id}", module.Owner, (*server).deleteToken},

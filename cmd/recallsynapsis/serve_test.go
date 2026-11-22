@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -487,4 +488,92 @@ func TestAStartMakesTheOwnersPersonalArea(t *testing.T) {
 	runVerb("serve", "--data-dir", dir, "--config", config)
 
 	assert.Equal(t, made, personal("grace"))
+}
+
+// Not parallel: it signals the test process, and serve replaces the default logger.
+func TestServeStreamsAChangeAndEndsTheStreamsAsItStops(t *testing.T) {
+	keepDefaultLogger(t)
+
+	dir := filepath.Join(t.TempDir(), "data")
+	config := writeConfig(t, t.TempDir(), validConfig)
+
+	code, _, stderr := runWithInput(rightPhrase, "password", "--data-dir", dir, "--config", config)
+	require.Equal(t, 0, code, stderr)
+
+	var logged logBuffer
+
+	done := make(chan int, 1)
+
+	go func() {
+		done <- run([]string{"serve", "--data-dir", dir, "--config", config}, strings.NewReader(""), io.Discard, &logged)
+	}()
+
+	address := regexp.MustCompile(`address=(\S+)`)
+
+	require.Eventually(t, func() bool { return address.MatchString(logged.String()) }, 5*time.Second, 10*time.Millisecond)
+
+	url := "http://" + address.FindStringSubmatch(logged.String())[1]
+
+	var session *http.Cookie
+
+	send := func(method, path, body string) *http.Response {
+		req, err := http.NewRequestWithContext(t.Context(), method, url+path, strings.NewReader(body))
+		require.NoError(t, err)
+
+		if session != nil {
+			req.AddCookie(session)
+			req.Header.Set("X-Recallsynapsis-CSRF", "1")
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+
+		return resp
+	}
+
+	resp := send(http.MethodPost, "/api/auth/login", `{"name":"ada","password":"`+rightPhrase+`"}`)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	require.Len(t, resp.Cookies(), 1)
+	session = resp.Cookies()[0]
+
+	stream := send(http.MethodGet, "/api/events", "")
+	require.Equal(t, http.StatusOK, stream.StatusCode)
+
+	events := make(chan string)
+
+	go func() {
+		defer close(events)
+
+		for sc := bufio.NewScanner(stream.Body); sc.Scan(); {
+			if data, ok := strings.CutPrefix(sc.Text(), "data: "); ok {
+				events <- data
+			}
+		}
+	}()
+
+	t.Cleanup(func() {
+		_ = stream.Body.Close()
+
+		for range events {
+		}
+	})
+
+	resp = send(http.MethodPost, "/api/areas", `{"name":"Garden"}`)
+
+	var garden module.Area
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&garden))
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	assert.JSONEq(t, fmt.Sprintf(`{"module":"core","kind":"area","id":%[1]d,"area":%[1]d}`, garden.ID),
+		within(t, events, "the change never reached the stream"))
+
+	signalled := time.Now()
+
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
+
+	assert.Empty(t, within(t, events, "the stream did not end"), "the stream ends with nothing more")
+	assert.Equal(t, 0, within(t, done, "serve did not stop on the signal"), logged.String())
+	assert.Less(t, time.Since(signalled), shutdownGrace, "the open stream did not hold the shutdown for its grace")
 }

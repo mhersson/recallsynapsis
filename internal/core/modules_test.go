@@ -112,7 +112,7 @@ func TestLoadModules(t *testing.T) {
 	ms, err := f.svc.LoadModules(t.Context(),
 		[]func(module.Deps) module.Module{stub("off", nil, nil, nil), tuned, stub("plain", nil, map[int64]string{1: "Beds"}, nil), stub("bare", nil, nil, nil)},
 		&config.Config{Modules: map[string]table{"off": {"enabled": false}, "tuned": {"enabled": true, "size": int64(9)}, "plain": {"enabled": true}}},
-		module.Deps{Now: clock, Dir: "/data", Changed: func(c module.Change) { heard = append(heard, c) }})
+		module.Deps{Now: clock, Dir: "/data", Changed: func(_ context.Context, c module.Change) { heard = append(heard, c) }})
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"tuned", "plain"}, names(ms), "the modules on, in the list's order; one with no table is off")
@@ -127,7 +127,7 @@ func TestLoadModules(t *testing.T) {
 	assert.Same(t, f.store, got.Store)
 	assert.Equal(t, time.Unix(7, 0), got.Now())
 	assert.Equal(t, "/data", got.Dir)
-	got.Changed(module.Change{Module: "tuned", Kind: "item", ID: 1, Area: 2})
+	got.Changed(t.Context(), module.Change{Module: "tuned", Kind: "item", ID: 1, Area: 2})
 	assert.Equal(t, []module.Change{{Module: "tuned", Kind: "item", ID: 1, Area: 2}}, heard)
 	got.Notify(t.Context(), module.NewRef("tuned", 1), "hello")
 

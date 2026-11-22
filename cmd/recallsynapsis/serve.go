@@ -52,8 +52,10 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 		return errors.New("serve takes no arguments; name the data directory with --data-dir")
 	}
 
-	// Nothing streams the changes to open pages, so no change is heard.
-	d, err := openData(ctx, *dirFlag, *configFlag, func(module.Change) {})
+	// The shutdown waits on the open requests, so the streams end as the signal begins it.
+	hub := api.NewHub(ctx.Done())
+
+	d, err := openData(ctx, *dirFlag, *configFlag, hub.Changed)
 	if err != nil {
 		return err
 	}
@@ -108,7 +110,7 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	log.Info("listening", "address", ln.Addr().String(), "public_url", d.cfg.PublicURL, "data_dir", d.dir, "version", version)
 
-	h := api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Version: version, PublicURL: d.cfg.PublicURL, Timezone: d.cfg.Timezone, BackupDir: d.cfg.Backup.Dir})
+	h := api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Version: version, PublicURL: d.cfg.PublicURL, Timezone: d.cfg.Timezone, BackupDir: d.cfg.Backup.Dir, Hub: hub})
 
 	// A signal cancels the jobs and the backup in flight as the requests get their grace.
 	stop := runJobs(ctx, d.modules.On(), log)
