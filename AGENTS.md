@@ -63,6 +63,10 @@ Every package states its one responsibility in its package comment, and
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
   verb registers itself from an `init` in its own file.
+- `internal/api`: the REST API under `/api/`, served from one route table.
+  Every refusal and every path no route matches is answered as
+  `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
+  to its clean form. Request bodies are decoded strictly.
 - `internal/config`: reads the configuration file strictly: an unknown key, a
   wrong type or an unusable value is refused with the key named. It keeps
   each `[modules.NAME]` table as read.

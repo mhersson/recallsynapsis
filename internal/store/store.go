@@ -12,6 +12,8 @@ import (
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 )
 
+// The API gives the caller either error with all the text that wraps it, so
+// wrap them only with what the caller may see, never with a driver error.
 var (
 	// ErrNotFound is returned when a row does not exist.
 	ErrNotFound = errors.New("not found")
