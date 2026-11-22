@@ -1,0 +1,33 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: color-mix(in oklab, var(--bg-dim) 74%, transparent);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 84px 16px 24px;
+  overflow-y: auto;
+}
+
+.dialog {
+  width: min(540px, 100%);
+  background: var(--bg0);
+  border: 1px solid var(--bg3);
+  border-radius: 10px;
+  padding: 20px 22px 18px;
+  box-shadow: 0 10px 30px color-mix(in oklab, var(--bg-dim) 70%, transparent);
+}
+
+.dialog h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+
+.dialog .acts {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}

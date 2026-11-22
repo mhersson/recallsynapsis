@@ -1,0 +1,173 @@
+/* The only file that writes a colour out. Selector order matters: the palette
+   blocks share a specificity with the theme block, so a later one wins. */
+
+/* Copper - dark palette. Cool neutral greys with a copper accent; the state
+   colors (red, yellow, green, blue, purple) keep their usual meaning. */
+:root {
+  /* Native form controls render dark; overridden for the light theme. */
+  color-scheme: dark;
+
+  /* Backgrounds */
+  --bg-dim: #17161b; /* deepest background */
+  --bg0: #211f27; /* default background */
+  --bg1: #2c2833; /* raised surfaces: cards, panels */
+  --bg2: #35303e; /* popups, modals, dropdowns */
+  --bg3: #403b49; /* borders, dividers */
+  --bg4: #514a5b; /* subtle UI elements, disabled states */
+  --bg5: #62596e; /* hover states on muted elements */
+
+  /* Semantic backgrounds */
+  --bg-red: #432831;
+  --bg-yellow: #403425;
+  --bg-green: #24392e;
+  --bg-blue: #29334c;
+  --bg-purple: #392d46;
+  --bg-aqua: #3e2a24;
+  --bg-orange: #3d2a14;
+  --bg-visual: #3e2a24; /* copper tint - selection/drag highlight */
+
+  /* Foreground - every grey clears WCAG AA 4.5:1 on --bg-dim..--bg2 */
+  --fg: #f1eef5;
+  --grey0: #b2aaba;
+  --grey1: #bdb5c5;
+  --grey2: #c9c1d0;
+
+  /* Accent colors - --aqua is the copper accent (links, focus rings) */
+  --red: #ffb0bc;
+  --orange: #f57f0a;
+  --yellow: #f2cf8f;
+  --green: #a7dfbb;
+  --aqua: #f2a17e;
+  --blue: #b3c4ff;
+  --purple: #d2b9ed;
+
+  /* Fonts - self-hosted via @font-face declarations in base.css; woff2
+     binaries under public/fonts/<family>/. System font stacks are retained
+     as fallbacks. */
+  --font-sans:
+    "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas,
+    monospace;
+
+  /* The mark of something that waits on the owner. */
+  --wait-yellow: var(--yellow);
+}
+
+/* Copper - light palette */
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Backgrounds */
+  --bg-dim: #f5f4f7; /* deepest background */
+  --bg0: #ffffff; /* default background */
+  --bg1: #f0eef3; /* raised surfaces: cards, panels */
+  --bg2: #e9e6ed; /* popups, modals, dropdowns */
+  --bg3: #dedbe3; /* borders, dividers */
+  --bg4: #ccc6d3; /* subtle UI elements, disabled states */
+  --bg5: #b2aaba; /* hover states on muted elements */
+
+  /* Semantic backgrounds */
+  --bg-red: #fcebf0;
+  --bg-yellow: #fff3dd;
+  --bg-green: #e8f4ed;
+  --bg-blue: #eaf0ff;
+  --bg-purple: #f1eaf8;
+  --bg-aqua: #fbeee7;
+  --bg-orange: #f8ecdf;
+  --bg-visual: #fbeee7; /* copper tint - selection/drag highlight */
+
+  /* Foreground - every grey clears WCAG AA 4.5:1 on --bg-dim..--bg2 */
+  --fg: #25232b;
+  --grey0: #68636f;
+  --grey1: #625b6b;
+  --grey2: #574f60;
+
+  /* Accent colors - --aqua is the copper accent (links, focus rings) */
+  --red: #a42a3b;
+  --orange: #793809;
+  --yellow: #855313;
+  --green: #216346;
+  --aqua: #a83d17;
+  --blue: #3452a3;
+  --purple: #725096;
+
+  /* Light yellows are too pale for text; deepened toward black, text in this colour and --bg0
+     text on it clear 4.5:1 on --bg0 to --bg2. */
+  --wait-yellow: color-mix(in oklab, var(--yellow) 65%, black);
+}
+
+/* Catppuccin Mocha - dark palette with high contrast pastels */
+[data-palette="catppuccin"] {
+  /* Backgrounds - Mantle/Base/Surface/Overlay scale */
+  --bg-dim: #181825; /* mantle - deepest background */
+  --bg0: #1e1e2e; /* base - default background */
+  --bg1: #313244; /* surface0 - raised surfaces: cards, panels */
+  --bg2: #45475a; /* surface1 - popups, modals, dropdowns */
+  --bg3: #585b70; /* surface2 - borders, dividers */
+  --bg4: #6c7086; /* overlay0 - subtle UI elements, disabled states */
+  --bg5: #7f849c; /* overlay1 - hover states on muted elements */
+
+  /* Semantic backgrounds - darkened tints of accents */
+  --bg-visual: #382a45;
+  --bg-red: #3a2432;
+  --bg-yellow: #3d362a;
+  --bg-green: #24352e;
+  --bg-blue: #253346;
+  --bg-purple: #322440;
+  --bg-aqua: #1f3537;
+  --bg-orange: #3d2a1d;
+
+  /* Foreground - Text and Subtext scale */
+  --fg: #cdd6f4; /* text - primary */
+  --grey0: #9399b2; /* overlay2 - muted/placeholder */
+  --grey1: #a6adc8; /* subtext0 - secondary */
+  --grey2: #bac2de; /* subtext1 - tertiary */
+
+  /* Accent colors */
+  --red: #f38ba8; /* red */
+  --orange: #fab387; /* peach */
+  --yellow: #f9e2af; /* yellow */
+  --green: #a6e3a1; /* green */
+  --aqua: #94e2d5; /* teal */
+  --blue: #89b4fa; /* blue */
+  --purple: #cba6f7; /* mauve */
+}
+
+/* Catppuccin Latte - light palette */
+[data-palette="catppuccin"][data-theme="light"] {
+  /* Backgrounds */
+  --bg-dim: #dce0e8; /* crust - deepest/page background */
+  --bg0: #eff1f5; /* base - default background */
+  --bg1: #e6e9ef; /* mantle - raised surfaces: cards, panels */
+  --bg2: #ccd0da; /* surface0 - popups, modals, dropdowns */
+  --bg3: #bcc0cc; /* surface1 - borders, dividers */
+  --bg4: #acb0be; /* surface2 - subtle UI elements, disabled states */
+  --bg5: #9ca0b0; /* overlay0 - hover states on muted elements */
+
+  /* Semantic backgrounds - pale tints of accents */
+  --bg-visual: #e6d9f4;
+  --bg-red: #f6d5dc;
+  --bg-yellow: #f7ecc9;
+  --bg-green: #d7ecd0;
+  --bg-blue: #d6e3fc;
+  --bg-purple: #e6d9f4;
+  --bg-aqua: #cfe9e3;
+  --bg-orange: #fbd9c1;
+
+  /* Foreground */
+  --fg: #4c4f69; /* text - primary */
+  --grey0: #7c7f93; /* overlay2 - muted/placeholder */
+  --grey1: #6c6f85; /* subtext0 - secondary */
+  --grey2: #5c5f77; /* subtext1 - tertiary */
+
+  /* Accent colors */
+  --red: #d20f39; /* red */
+  --orange: #fe640b; /* peach */
+  --yellow: #df8e1d; /* yellow */
+  --green: #40a02b; /* green */
+  --aqua: #179299; /* teal */
+  --blue: #1e66f5; /* blue */
+  --purple: #8839ef; /* mauve */
+}

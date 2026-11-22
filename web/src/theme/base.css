@@ -1,0 +1,288 @@
+/* Typefaces are served by the binary; the browser asks for nothing else. */
+
+/* latin-ext */
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(/fonts/geist/geist-normal-latin-ext-71d275e3.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(/fonts/geist/geist-normal-latin-678c0385.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/jetbrains-mono/jetbrains-mono-normal-latin-ext-c8b23d7b.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/jetbrains-mono/jetbrains-mono-normal-latin-0a7197f9.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/fonts/jetbrains-mono/jetbrains-mono-normal-latin-ext-c8b23d7b.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/fonts/jetbrains-mono/jetbrains-mono-normal-latin-0a7197f9.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/fonts/jetbrains-mono/jetbrains-mono-normal-latin-ext-c8b23d7b.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/fonts/jetbrains-mono/jetbrains-mono-normal-latin-0a7197f9.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Base element styles. */
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg4) transparent;
+}
+
+html {
+  font-size: 14px;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg-dim);
+  color: var(--fg);
+  line-height: 1.5;
+  font-feature-settings: "ss01", "ss02", "cv11"; /* Geist stylistic sets */
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  /* The page reaches under a phone's notch and home bar; its content stays clear of them. The tabs keep the bottom. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+
+a {
+  color: var(--aqua);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.ic {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+code,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--aqua);
+  outline-offset: 2px;
+}
+
+/* Firefox and Chromium 121+ use the standard properties above and skip the
+   ::-webkit-scrollbar rules, which remain for engines without them. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg0);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg4);
+}
+
+.brand {
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  font-size: 13px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.btn {
+  border: 1px solid var(--bg4);
+  background: var(--bg1);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.btn:hover {
+  background: var(--bg2);
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.btn.primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--bg0);
+  font-weight: 600;
+}
+
+.btn.primary:hover {
+  background: color-mix(in oklab, var(--green) 88%, var(--fg));
+}
+
+.btn.danger {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--red) 50%, transparent);
+  color: var(--fg);
+}
+
+.btn.link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--aqua);
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--grey2);
+  margin-bottom: 4px;
+}
+
+.field input,
+.field select,
+.field textarea {
+  background: var(--bg0);
+  color: var(--fg);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  width: 100%;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: var(--grey0);
+}
+
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.seg button {
+  border: 1px solid var(--bg3);
+  background: var(--bg1);
+  color: var(--grey2);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 12.5px;
+}
+
+.seg button.on {
+  background: var(--bg-blue);
+  border-color: var(--blue);
+  color: var(--fg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn,
+  .seg button {
+    transition: background-color 0.12s;
+  }
+}
+
+/* Safari on iOS zooms into a field whose text is under 16 px; the floor must win over the class rules that set smaller text. */
+@media (max-width: 720px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

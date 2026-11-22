@@ -18,6 +18,22 @@ updates:
       prefix: "build"
       include: "scope"
 
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "02:00"
+      timezone: "Europe/Oslo"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "build"
+      include: "scope"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

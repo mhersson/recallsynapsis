@@ -37,10 +37,16 @@ The owner's words, which bind every change:
 - `make check` runs build-go, fmt-check, vet, lint, test-race, tidy-check, scan
   and size. Run it before a commit. It needs Go, a C compiler for the race
   detector, and golangci-lint, and no Node.
-- `make build` and `make build-go` build `bin/recallsynapsis`; `make install`
-  installs `recallsynapsis` into `GOBIN`, else `$(go env GOPATH)/bin`.
-  `VERSION=x.y.z` on any of them stamps the version `recallsynapsis version`
-  prints; without it a build prints the commit.
+- `make build` builds the web app, then `bin/recallsynapsis` with it embedded;
+  `make build-go` builds `bin/recallsynapsis` alone, with the app as built
+  last, or the placeholder page when none is; `make install` builds the web
+  app, then installs `recallsynapsis` into `GOBIN`, else
+  `$(go env GOPATH)/bin`. `VERSION=x.y.z` on any of them stamps the version
+  `recallsynapsis version` prints; without it a build prints the commit.
+- `make web-install` installs the web app's npm packages once (`npm ci` in
+  `web/`, with the Node of `.nvmrc`); `make web-build` builds the app into
+  `web/dist/app`; `make web-check` lints, tests and builds it. Run
+  `make web-check` when `web/` changes.
 - `make test`, `make test-race`: the tests, the second with the race detector.
 - `make vet`, `make lint`, `make fmt`, `make fmt-check`, `make tidy-check`: the
   static checks and the formatter (`golangci-lint fmt`: gofumpt and goimports).
@@ -52,8 +58,30 @@ The owner's words, which bind every change:
   messages and added lines, and on blobs over 500 KB.
 - `make size`: count the non-test Go lines. `make help` lists the targets.
 - CI (`.github/workflows/ci.yaml`) runs the gates of `make check`,
-  `govulncheck`, and on a pull request `make scan-commits` against its base.
-  Dependabot bumps the Go modules and the pinned actions every week.
+  `govulncheck`, `make web-check` and `npm audit`, and on a pull request
+  `make scan-commits` against its base. Dependabot bumps the Go modules, the
+  web app's npm packages and the pinned actions every week.
+
+## Looking at the web app
+
+After a change to `web/`, look at the screen before you finish.
+
+- Run `make web-install` once, then start Vite in `web/` on a loopback port in
+  the background and record its pid:
+  `./node_modules/.bin/vite --host 127.0.0.1 --port 5197 --strictPort > /tmp/vite.log 2>&1 & echo $!`.
+  Started through `npx`, the pid would be npm's, and stopping it would leave
+  Vite running.
+- Take the shot from `web/` with headless Firefox, which opens no window:
+  `node shoot.mjs 1280 900 "http://127.0.0.1:5197/harness.html?palette=copper&theme=dark" /tmp/shot.png`.
+  Use `390 844` for a phone.
+- `web/harness.html` shows the app on the fixed data of
+  `web/src/dev/fixtures.ts`. Its `palette` is `copper` or `catppuccin`, its
+  `theme` is `dark` or `light`, and its `path` picks the route, for example
+  `path=/settings`. `click=TEXT` clicks the first button, link or summary
+  whose text starts with TEXT; `login=wrong` refuses a sign-in and
+  `login=wait` makes it wait; `lapsed=1` ends the access to the page.
+- Read the PNG and say what you see. Fix what looks wrong and shoot again.
+- Stop Vite by the pid you recorded, never by port or name.
 
 ## Layout
 
@@ -73,4 +101,9 @@ Every package states its one responsibility in its package comment, and
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
+- `web`: the web app's npm package, with its sources in `web/src`, and the Go
+  package that embeds its build from `web/dist/app` and serves it in front of
+  the API. A binary built without the app serves the committed
+  `web/dist/placeholder.html` in its place. Each module of the web app is one
+  folder under `web/src/modules/`, listed in `web/src/modules/registry.ts`.
 - `scripts/`: the scans and the line count that `make` runs.
