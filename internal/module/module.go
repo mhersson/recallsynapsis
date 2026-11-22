@@ -114,6 +114,7 @@ type Area struct {
 type Deps struct {
 	Store    *store.Store
 	FindArea func(ctx context.Context, userID int64, ref string) (Area, error) // the area whose slug or name is ref, in any case
+	Areas    func(ctx context.Context, userID int64) ([]Area, error)           // every area of the user, the archived ones too, the personal area first
 	Now      func() time.Time
 	// Dir is the data directory. A file under its files/ appears whole, by a
 	// rename, and never changes, since a backup never copies one it has again.
