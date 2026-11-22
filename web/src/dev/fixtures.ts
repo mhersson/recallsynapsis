@@ -1,5 +1,5 @@
 import type { Area, Hit, Session, Token } from '../api/types.ts'
-import type { Kind, List, Note, Row } from '../modules/notes/api.ts'
+import type { Kind, Linked, List, Note, Row, Version } from '../modules/notes/api.ts'
 
 // What the API serves, in its shapes; the harness answers from it. Times are counted back from when the page loads.
 const before = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
@@ -46,7 +46,7 @@ export const note = (id: number, minutes: number, n: Partial<Note>): Note => ({
   title: '',
   inbox: false,
   tags: [],
-  file_count: 0,
+  file_count: n.files?.length ?? 0,
   revision: 1,
   source: 'web',
   created_at: before(minutes),
@@ -56,14 +56,35 @@ export const note = (id: number, minutes: number, n: Partial<Note>): Note => ({
   said: '',
   links: [],
   linked_from: [],
+  files: [],
   ...n,
 })
 
 // A note as a list gives it.
-export const row = ({ body: _, said: __, links: ___, linked_from: ____, ...r }: Note): Row => r
+export const row = ({ body: _, said: __, links: ___, linked_from: ____, files: _____, ...r }: Note): Row => r
 
-// GET /api/notes/{id} for each note: the captures that wait in the inbox, then filed notes and ideas. A list gives the
-// first 200 characters of the body as the excerpt.
+// Links as a note keeps them, by reference alone; full resolves them.
+export const refs = (...to: string[]): Linked[] => to.map((ref) => ({ ref, kind: '', state: '', title: '', available: false }))
+
+// What a note goes by in a hit and in a link: its title, or the first line of its body.
+const label = (n: Note) => n.title || n.body.split('\n')[0].slice(0, 80)
+
+// GET /api/notes/{id} from notes: n with its links as the core resolves them, unavailable once their note is in the
+// trash or gone, and the notes outside the trash that link to it.
+export function full(notes: Note[], n: Note): Note {
+  const item = (ref: string): Linked => {
+    const t = notes.find((x) => x.ref === ref && !x.trashed_at)
+    return t ? { ref, kind: t.kind, state: t.inbox ? 'inbox' : 'filed', title: label(t), available: true } : refs(ref)[0]
+  }
+  const from = notes.filter((x) => !x.trashed_at && x.links.some((l) => l.ref === n.ref))
+  return { ...n, links: n.links.map((l) => item(l.ref)), linked_from: from.map((x) => item(x.ref)) }
+}
+
+// A note trashed hours ago, changed ten hours before that.
+const trashed = (id: number, hours: number, n: Partial<Note>) => note(id, (hours + 10) * 60, { ...n, trashed_at: before(hours * 60) })
+
+// GET /api/notes/{id} for each note: the captures that wait in the inbox, then filed notes and ideas, then those in the
+// trash. A list gives the first 200 characters of the body as the excerpt.
 export const NOTES: Note[] = [
   note(118, 12, {
     inbox: true,
@@ -79,13 +100,27 @@ export const NOTES: Note[] = [
     said: 'Legg inn at jeg må bestille EU-kontroll før desember.',
   }),
   note(116, 3 * 60, { inbox: true, body: 'Let the idea bank bring up ideas nobody has touched for 90 days.' }),
-  note(40, 13 * 60, { inbox: true, source: 'aim', title: 'Sjekk backupjobben på NAS-en i helgen', body: 'Den feilet to netter på rad forrige uke.' }),
+  note(40, 13 * 60, {
+    inbox: true,
+    source: 'aim',
+    title: 'Sjekk backupjobben på NAS-en i helgen',
+    body: 'Den feilet to netter på rad forrige uke.',
+    links: refs('notes:12'),
+  }),
   note(115, 26 * 60, { inbox: true, source: 'aim', body: 'The capture cap should count characters after trimming.' }),
   note(12, 2 * 60, {
     area: 'recallsynapsis',
     tags: ['approval', 'portal'],
     revision: 3,
     title: 'Approval belongs to the client',
+    said: 'Note that approving what an AI writes is the client’s job, not ours.',
+    // notes:37 was deleted for good, so its link leads nowhere.
+    links: refs('notes:18', 'notes:44', 'notes:37'),
+    files: [
+      { id: 1, name: 'allow-card.png', type: 'image/png', size: 186_000 },
+      { id: 2, name: 'whiteboard.jpg', type: 'image/jpeg', size: 2_516_582 },
+      { id: 3, name: 'portal-marks.pdf', type: 'application/pdf', size: 86_016 },
+    ],
     body: `Portal marks each tool as free or as needing a tap. Recall Synapsis only has to split its tools by risk.
 
 ## What follows
@@ -106,7 +141,14 @@ export const NOTES: Note[] = [
     body: 'So a search for port finds garasjeport too.',
   }),
   note(22, 26 * 60, { tags: ['garage'], title: 'Garage shelving layout', body: 'Left wall 240 cm, right wall 185 cm up to the window.' }),
-  note(25, 27 * 60, { area: 'aim', kind: 'idea', tags: ['agents'], title: 'A context pack when an agent session starts', body: 'What the project is, what was done last, and what waits.' }),
+  note(25, 27 * 60, {
+    area: 'aim',
+    kind: 'idea',
+    tags: ['agents'],
+    title: 'A context pack when an agent session starts',
+    body: 'What the project is, what was done last, and what waits.',
+    links: refs('notes:12'),
+  }),
   note(18, 2 * 24 * 60, { area: 'recallsynapsis', tags: ['push'], title: 'Push is switched per module', body: 'Each module says whether it may push, and the owner switches it.' }),
   note(27, 3 * 24 * 60, { area: 'cavu', kind: 'idea', title: 'A read-only status page for the kitchen tablet', body: 'What runs, what waits, and nothing to press.' }),
   note(21, 4 * 24 * 60, { tags: ['hytte'], title: 'Pakkeliste til hytteturen', body: 'Sovepose, hodelykt, ved og fyrstikker.' }),
@@ -124,7 +166,58 @@ export const NOTES: Note[] = [
     body: 'Start a server on last night’s backup and open the inbox.',
   }),
   note(15, 8 * 24 * 60, { area: 'portal', tags: ['approval'], title: 'Marks are set per tool, never by the service', body: 'The service cannot vouch for itself.' }),
+  trashed(50, 2, {
+    tags: ['garage'],
+    revision: 3,
+    title: 'Old shelf measurements',
+    body: 'Left wall 240 cm, right wall 185 cm up to the window.\n\nFive shelves, 40 cm deep, the lowest 30 cm off the floor so the tyres fit under it.',
+    files: [{ id: 4, name: 'shelf.jpg', type: 'image/jpeg', size: 1_258_291 }],
+  }),
+  trashed(51, 26, { inbox: true, source: 'portal', body: 'Ring the garage door company about the spring.' }),
+  trashed(52, 50, { area: 'recallsynapsis', kind: 'idea', title: 'A weekly digest of new captures by mail', body: 'Sent on Sunday evening.' }),
+  trashed(53, 74, { area: 'cavu', title: 'Meeting moved to Thursday, bring the drawings', body: 'At ten, in the small room.' }),
+  trashed(54, 5 * 24, { area: 'recallsynapsis', title: 'Token names, first draft', body: 'portal, aim, home-assistant' }),
+  trashed(55, 7 * 24, { kind: 'idea', title: 'Capture by voice from the watch', body: 'A shortcut that sends what was said.' }),
+  trashed(56, 10 * 24, { body: 'test' }),
 ]
+
+// Revision n of note as it is now, as GET /api/notes/{id}/revisions/{n} gives it; the first carries what was said.
+export const version = (n: Note, revision: number): Version => ({
+  revision,
+  at: revision === n.revision ? n.changed_at : n.created_at,
+  source: n.source,
+  said: revision === 1 ? n.said : '',
+  restored_from: null,
+  title: n.title,
+  body: n.body,
+  kind: n.kind,
+  area: n.area,
+  inbox: n.inbox,
+  tags: n.tags,
+  links: n.links.map((l) => l.ref),
+})
+
+// What a note's earlier revisions held where it was not what the note holds now, oldest first.
+const EARLIER: Record<number, Partial<Version>[]> = {
+  12: [
+    { at: before(3 * 24 * 60 + 200), source: 'portal', body: 'Portal marks each tool as free or as needing a tap.', tags: ['approval'], links: [] },
+    {
+      at: before(2 * 24 * 60 + 300),
+      source: 'aim',
+      body: 'Portal marks each tool as free or as needing a tap. Recall Synapsis only has to split its tools by risk.\n\n- capture, list and read tools can be free\n- knowledge changes always meet the Allow card',
+      tags: ['approval'],
+      links: ['notes:18'],
+    },
+  ],
+}
+
+// The revisions a note has, oldest first: each holds what the note holds now, but where EARLIER says otherwise.
+export const history = (n: Note): Version[] => Array.from({ length: n.revision }, (_, i) => ({ ...version(n, i + 1), ...EARLIER[n.id]?.[i] }))
+
+// GET /api/notes/{id}/revisions from a note's revisions, oldest first: each as the history lists it, the newest first.
+export const listed = (versions: Version[]) => ({
+  revisions: versions.map(({ revision, at, source, said, restored_from }) => ({ revision, at, source, said, restored_from })).reverse(),
+})
 
 // What many=1 adds: older notes, two days apart from ten days back, so a list holds more than it shows.
 const PAST: [Kind, string, string, string[]][] = [
@@ -144,13 +237,15 @@ export const OLDER: Note[] = Array.from({ length: 60 }, (_, i) => {
   return note(300 + i, (10 + 2 * i) * 24 * 60, { kind, title, area, tags, body: title })
 })
 
-// GET /api/notes from notes, as the server answers it: those outside the trash that the query asks for, the most
-// recently changed first, as many as its limit, and how many it asked for in all.
+// GET /api/notes from notes, as the server answers it: those the query asks for, outside the trash or with trashed=true
+// in it, the most recently changed or trashed first, as many as its limit, and how many it asked for in all.
 export function listNotes(notes: Note[], q: URLSearchParams): List {
   const asks = (key: string, value: string) => !q.has(key) || q.get(key) === value
+  const trash = q.get('trashed') === 'true'
+  const when = (n: Note) => (trash ? n.trashed_at! : n.changed_at)
   const found = notes
-    .filter((n) => !n.trashed_at && asks('inbox', String(n.inbox)) && asks('area', n.area) && asks('kind', n.kind) && (!q.has('tag') || n.tags.includes(q.get('tag')!)))
-    .sort((a, b) => b.changed_at.localeCompare(a.changed_at))
+    .filter((n) => !!n.trashed_at === trash && asks('inbox', String(n.inbox)) && asks('area', n.area) && asks('kind', n.kind) && (!q.has('tag') || n.tags.includes(q.get('tag')!)))
+    .sort((a, b) => when(b).localeCompare(when(a)))
   return { notes: found.slice(0, Number(q.get('limit')) || 50).map(row), total: found.length }
 }
 
@@ -170,7 +265,7 @@ export function searchNotes(notes: Note[], q: string, area: string | null): Hit[
     .map((n) => ({
       ref: n.ref,
       kind: n.kind,
-      title: n.title || n.body.split('\n')[0].slice(0, 80),
+      title: label(n),
       snippet: n.body,
       area: n.area,
       state: n.inbox ? 'inbox' : 'filed',

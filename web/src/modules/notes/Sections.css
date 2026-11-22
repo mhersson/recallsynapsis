@@ -1,0 +1,543 @@
+/* The sections of a note: under a head on desktop, folded on a phone. */
+.sects {
+  margin-top: 14px;
+}
+
+.sect {
+  border-top: 1px solid var(--bg2);
+  padding: 12px 0 14px;
+}
+
+.sect-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin-bottom: 6px;
+}
+
+.sect-head h2 {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.sect .dim {
+  color: var(--grey1);
+  font-weight: 400;
+}
+
+details.sect {
+  padding: 0;
+}
+
+details.sect > summary {
+  padding: 11px 2px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+details.sect[open] {
+  padding-bottom: 14px;
+}
+
+.sect-add {
+  margin: -4px 0 4px;
+}
+
+.sect .btn.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sect .err {
+  font-size: 13px;
+  margin: 4px 0 8px;
+}
+
+/* Links */
+.lgrp {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--grey1);
+  letter-spacing: 0;
+  padding: 6px 0 2px;
+}
+
+.lrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  font-size: 13.5px;
+}
+
+.lrow .mk,
+.fhit .mk {
+  margin-top: 0;
+}
+
+.lrow > a,
+.lrow > span:not(.tag) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lrow .mono {
+  color: var(--grey1);
+}
+
+/* A small button of an icon alone, such as the x that removes. */
+.xb {
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: none;
+  color: var(--grey1);
+}
+
+.xb:hover {
+  background: var(--bg2);
+  color: var(--fg);
+}
+
+.xb .ic {
+  width: 14px;
+  height: 14px;
+}
+
+.finder {
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 8px 0 6px;
+  background: var(--bg-dim);
+}
+
+.finder .search-field input {
+  padding: 7px 0;
+  font-size: 15px;
+}
+
+.fhits {
+  margin: 8px 0 6px;
+}
+
+.fhit {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+.fhit:hover,
+.fhit:focus-visible {
+  background: var(--bg2);
+}
+
+.fhit:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: none;
+}
+
+.fhit .item {
+  flex: 1;
+  min-width: 0;
+}
+
+.fhit .t1 {
+  font-weight: 400;
+  font-size: 13.5px;
+}
+
+.fhit .t3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fhit .t2 {
+  font-size: 11px;
+  column-gap: 9px;
+}
+
+.finder .acts .note,
+.finder .acts .err {
+  margin: 0;
+}
+
+/* Attachments */
+.tiles {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tile {
+  position: relative;
+  width: 132px;
+  border: 1px solid var(--bg2);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg0);
+}
+
+.tile-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.tile-open:hover {
+  text-decoration: none;
+}
+
+.tile img,
+.tile .doc {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 78px;
+  object-fit: cover;
+  background: var(--bg1);
+}
+
+.tile .doc,
+.tile .nm {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey1);
+  letter-spacing: 0;
+}
+
+.tile .nm {
+  display: block;
+  padding: 5px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile .x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--bg0) 85%, transparent);
+  color: var(--grey2);
+}
+
+.tile .x .ic {
+  width: 13px;
+  height: 13px;
+}
+
+/* A file under way: what it is, and a bar that moves while it goes. */
+.tile.up {
+  border-style: dashed;
+  border-color: var(--bg4);
+}
+
+.tile.up .doc {
+  background: var(--bg0);
+}
+
+.tile .bar {
+  display: block;
+  height: 3px;
+  margin: 0 8px 2px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--bg2);
+}
+
+.tile .bar::after {
+  content: '';
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--aqua);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tile .bar::after {
+    animation: going 1.4s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes going {
+  from {
+    transform: translateX(-20%);
+  }
+
+  to {
+    transform: translateX(170%);
+  }
+}
+
+.fline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--grey2);
+}
+
+.sect .tiles ~ .err {
+  margin-top: 10px;
+}
+
+.sect .tiles ~ .note {
+  margin-top: 10px;
+}
+
+.acts.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 14px;
+}
+
+.acts.two .btn,
+.sect-head .btn,
+.viewer .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.acts.two .btn {
+  padding: 9px 12px;
+}
+
+/* A file dragged over the note: the note fades behind where it goes, and the box says so. */
+.box:has(> .dropping) {
+  outline: 2px dashed var(--aqua);
+  outline-offset: -1px;
+}
+
+.dropping > :not(.drop) {
+  opacity: 0.2;
+}
+
+.drop {
+  position: sticky;
+  top: 30%;
+  z-index: 2;
+  height: 0;
+}
+
+.drop > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 300px;
+  margin: 0 auto;
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--bg0);
+  border: 1px solid var(--bg3);
+  font-weight: 500;
+}
+
+.drop .ic {
+  width: 28px;
+  height: 28px;
+  color: var(--aqua);
+}
+
+.drop span {
+  color: var(--grey2);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* An image opened: it fills the view, under a bar with its name, what it is, and what can be done. */
+.dialog.viewer {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-dim);
+}
+
+.dialog.viewer[open] {
+  display: grid;
+  grid-template-columns: minmax(0, auto) 1fr;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.viewer h2,
+.vbar {
+  margin: 0;
+  background: var(--bg0);
+  border-bottom: 1px solid var(--bg2);
+}
+
+.viewer h2 {
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0 10px 0 18px;
+  align-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 0;
+}
+
+.vbar .spacer {
+  flex: 1;
+}
+
+.viewer img {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  padding: 28px;
+}
+
+.vfoot {
+  grid-column: 1 / -1;
+  display: grid;
+  padding: 10px 14px 30px;
+}
+
+.vfoot .btn {
+  padding: 9px 12px;
+}
+
+@media (max-width: 720px) {
+  .tile {
+    width: calc((100% - 16px) / 3);
+  }
+
+  .viewer h2 {
+    padding-left: 14px;
+  }
+
+  .vbar {
+    padding-right: 14px;
+  }
+
+  .viewer img {
+    padding: 16px 10px;
+  }
+}
+
+/* History */
+.hrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  align-items: baseline;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.hrow.fresh {
+  background: var(--bg-visual);
+}
+
+.hrow .n {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  min-width: 76px;
+}
+
+.hrow .src {
+  color: var(--grey1);
+}
+
+.hrow .btn.link {
+  margin-left: auto;
+  padding: 0 2px;
+  font-size: 13px;
+}
+
+.hrow .said {
+  flex-basis: 100%;
+  margin: 2px 0 2px 86px;
+}
+
+.note-read .notice.restored {
+  margin: 0 0 16px;
+}
+
+.notice .nt .ic {
+  color: var(--grey1);
+}
+
+/* An earlier revision, in a frame that is clearly not the current text. */
+.rev {
+  margin-top: 16px;
+  padding: 14px 18px 12px;
+  border: 1px dashed var(--bg5);
+  border-radius: 8px;
+  background: var(--bg-dim);
+}
+
+.rev .rt {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin: 6px 0 0;
+}
+
+.rev .md {
+  margin: 12px 0 10px;
+}
+
+.revision .err {
+  margin: 12px 0 0;
+}
+
+@media (max-width: 720px) {
+  .hrow .said {
+    margin-left: 0;
+  }
+}

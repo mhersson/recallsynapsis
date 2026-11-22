@@ -26,9 +26,11 @@ export function onRedirect(handler: () => void) {
   redirected = handler
 }
 
-export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+// A file or a blob is sent as it is, as its own type; any other body as JSON. signal ends the request.
+export async function api<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const raw = body instanceof Blob
+  if (body !== undefined) headers['Content-Type'] = raw ? body.type || 'application/octet-stream' : 'application/json'
   if (method !== 'GET' && method !== 'HEAD') headers['X-Recallsynapsis-CSRF'] = '1'
   const res = await fetch('/api' + path, {
     method,
@@ -36,7 +38,8 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
     credentials: 'same-origin',
     // With the default follow, the page's policy refuses a redirect to another origin and fetch fails as if offline.
     redirect: 'manual',
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined || raw ? body : JSON.stringify(body),
+    signal,
   })
   if (res.type === 'opaqueredirect') {
     redirected()

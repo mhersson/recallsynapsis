@@ -4,7 +4,7 @@ import { listNotes, note } from '../../dev/fixtures.ts'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, json, narrow, type Call } from '../../test-server.ts'
 import type { Note, Row } from './api.ts'
-import { notesServer } from './test-notes.ts'
+import { capture, notesServer } from './test-notes.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -19,6 +19,7 @@ function server(notes: Note[], answer: (c: Call) => Response | Promise<Response>
     if (a || c.method === 'GET') return a
     const n = notes.find((x) => c.path.startsWith(`/api/notes/${x.id}`))!
     if (c.path.endsWith('/trash')) return json(Object.assign(n, { trashed_at: new Date().toISOString() }))
+    if (c.path.endsWith('/restore')) return json(Object.assign(n, { trashed_at: null }))
     const { revision, ...change } = c.body as { revision: number }
     if (n.trashed_at || revision !== n.revision) return json({ error: 'conflict' }, 409)
     return json(Object.assign(n, change, { revision: n.revision + 1 }))
@@ -145,6 +146,36 @@ test('Save sends the title, the text and the tags with the revision the editing 
   expect(writes(calls)).toEqual([['PATCH', '/api/notes/1', { revision: 3, title: 'renamed', body: 'new text', tags: ['nas', 'backup'] }]])
   await waitFor(() => expect(note1().getByRole('heading', { level: 1 })).toHaveTextContent('renamed'))
   expect(screen.getByRole('main').querySelector('textarea')).toBeNull()
+})
+
+test('the editor moves a note to another area and changes its kind, and Save sends only those', async () => {
+  narrow(false)
+  const calls = server([filed(1, 5, { revision: 2 })])
+  await open('/notes/1')
+  await userEvent.click(tools()[0])
+  // The areas are the personal area and garden, and the kinds a note and an idea, each in that order.
+  const [area, kind] = note1().getAllByRole('radiogroup').map((g) => within(g).getAllByRole('radio'))
+  expect(area[0]).toHaveAttribute('aria-checked', 'true')
+  await userEvent.click(area[1])
+  await userEvent.click(kind[1])
+  await userEvent.click(acts()[0])
+  expect(writes(calls)).toEqual([['PATCH', '/api/notes/1', { revision: 2, area: 'garden', kind: 'idea' }]])
+  await waitFor(() => expect(screen.getByRole('main').querySelector('.note-edit')).toBeNull())
+})
+
+test('on a phone the editor chooses the area from a dropdown, and a change of the area alone makes leaving ask first', async () => {
+  narrow(true)
+  const calls = server([filed(1, 30), capture(2, 5)])
+  const { where } = await open('/notes/2')
+  await userEvent.click(tools()[0])
+  await userEvent.selectOptions(note1().getByRole('combobox'), 'garden')
+  await userEvent.click(main().getAllByRole('link')[0])
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
+  expect(where()).toBe('/notes/2')
+  await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[0])
+  await userEvent.click(acts()[0])
+  // A capture moved to an area is filed by the server.
+  expect(writes(calls)).toEqual([['PATCH', '/api/notes/2', { revision: 1, area: 'garden' }]])
 })
 
 test('a change made elsewhere shows without a reload, and never replaces a text being edited; its save is refused, keeps what was typed, shows the note as it now is, and saves over it on asking', async () => {
@@ -430,13 +461,16 @@ test('a list that cannot be read says why, and keeps the dropdowns to choose aga
   expect(main().queryByRole('alert')).toBeNull()
 })
 
-test('a trashed note opened by its address can be neither edited nor trashed', async () => {
+test('a trashed note opened by its address is read only, and Restore there puts it back to be changed', async () => {
   narrow(true)
-  server([filed(1, 5, { tags: ['nas'], trashed_at: new Date().toISOString() })])
+  const calls = server([filed(1, 5, { tags: ['nas'], trashed_at: new Date().toISOString() })])
   await open('/notes/1')
   expect(await main().findByRole('heading', { level: 1 })).toHaveTextContent('note 1')
-  expect(main().queryAllByRole('button')).toEqual([])
   expect(main().queryAllByRole('textbox')).toEqual([])
+  expect(tools()).toHaveLength(2)
+  await userEvent.click(tools()[0])
+  expect(writes(calls)).toEqual([['POST', '/api/notes/1/restore', undefined]])
+  await waitFor(() => expect(main().getAllByRole('textbox')).toHaveLength(1))
 })
 
 test('the list reads again on a change of a note made elsewhere, and of an area, since a renamed project changes the slug of its notes', async () => {

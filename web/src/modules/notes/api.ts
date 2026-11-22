@@ -32,11 +32,20 @@ export type Row = {
 // What a link names, as the core resolves it: an item of a module switched on, unavailable once it is gone.
 export type Linked = { ref: string; kind: string; state: string; title: string; available: boolean }
 
+// A file attached to a note, of the type it was declared as.
+export type Attached = { id: number; name: string; type: string; size: number }
+
 // A note as GET /api/notes/{id} gives it: in full, with the owner's own words on its first revision when a client gave
-// them, its links and the items that link to it.
-export type Note = Row & { body: string; said: string; links: Linked[]; linked_from: Linked[] }
+// them, its links, the items that link to it and its files in the order they were attached.
+export type Note = Row & { body: string; said: string; links: Linked[]; linked_from: Linked[]; files: Attached[] }
 
 export type List = { notes: Row[]; total: number }
+
+// A revision as the history lists it, the newest first: restored_from is the revision a restore brought back.
+export type Revision = { revision: number; at: string; source: string; said: string; restored_from: number | null }
+
+// A revision in full, its links as references.
+export type Version = Revision & { title: string; body: string; kind: Kind; area: string; inbox: boolean; tags: string[]; links: string[] }
 
 // Reads when the page mounts, when the stream opens again, on any change of a note and on any change of an area, whose
 // slug names the notes in it. A note moved between areas tells of its new area alone, so no change is passed over.
@@ -84,6 +93,9 @@ export function useList(asked: string) {
   const more = limit < most ? () => setShown({ asked, limit: limit + step }) : undefined
   return { list, failed, more, reread }
 }
+
+// A count of things, as a sentence says it.
+export const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 
 // The name of the area a note names by its slug.
 export const nameOf = (areas: Area[], slug: string) => areas.find((a) => a.slug === slug)?.name ?? slug

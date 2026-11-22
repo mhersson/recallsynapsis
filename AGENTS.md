@@ -92,14 +92,17 @@ After a change to `web/`, look at the screen before you finish.
   `web/src/dev/fixtures.ts`. Its `palette` is `copper` or `catppuccin`, its
   `theme` is `dark` or `light`, and its `path` picks the route, for example
   `path=/settings`. `click=TEXT` clicks the first button, link or summary
-  whose text starts with TEXT, and `type=TEXT` types TEXT into the field
-  that has the focus; given more than once, they run in the order given,
-  and `end=1` then scrolls the page to its end.
+  whose text, or label, starts with TEXT, `type=TEXT` types TEXT into the
+  field that has the focus, and `choose=N` chooses an image of N bytes in
+  the file picker of the note being read; given more than once, they run
+  in the order given, and `end=1` then scrolls the page, and the note open
+  beside a list, to their end.
   `login=wrong` refuses a sign-in and `login=wait` makes it wait;
   `lapsed=1` ends the access to the page; `empty=1` starts with the
   personal area alone, no token and no note; `many=1` adds older notes, so
   a list holds more than it shows; `save=moved` refuses the first save of
   each note's text, as if a client had saved the note meanwhile;
+  `upload=wait` holds every upload, so it stays under way;
   `modules=notes` switches the named modules on, so the Inbox, Notes and
   Search find the fixed notes; `backup=old` makes the last backup three
   days old and `backup=none` leaves none. What the page changes holds until
