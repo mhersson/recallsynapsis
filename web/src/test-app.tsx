@@ -1,6 +1,6 @@
 import { useLayoutEffect } from 'react'
 import { act, render } from '@testing-library/react'
-import { MemoryRouter, useLocation, useNavigate } from 'react-router'
+import { RouterProvider, createMemoryRouter, useLocation, useNavigate } from 'react-router'
 import App from './App.tsx'
 
 // Opens the whole app at path, as a person who follows a link there; where() tells the path it shows now, and back()
@@ -18,12 +18,21 @@ export async function open(path: string) {
     })
     return null
   }
-  const view = render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-      <Here />
-    </MemoryRouter>,
+  const router = createMemoryRouter(
+    [
+      {
+        path: '*',
+        element: (
+          <>
+            <App />
+            <Here />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: [path] },
   )
+  const view = render(<RouterProvider router={router} />)
   await act(async () => {})
   return { ...view, where: () => here, back: () => act(async () => goBack()) }
 }

@@ -1,7 +1,7 @@
 // Development only: shows any route on fixed data, with no server. Vite builds index.html alone.
 import { useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router'
+import { RouterProvider, createMemoryRouter } from 'react-router'
 import '../theme/tokens.css'
 import '../theme/base.css'
 import App from '../App.tsx'
@@ -192,8 +192,20 @@ void (async () => {
 })()
 
 createRoot(document.getElementById('root')!).render(
-  <MemoryRouter initialEntries={[query.get('path') ?? '/']}>
-    <Apply />
-    <App />
-  </MemoryRouter>,
+  <RouterProvider
+    router={createMemoryRouter(
+      [
+        {
+          path: '*',
+          element: (
+            <>
+              <Apply />
+              <App />
+            </>
+          ),
+        },
+      ],
+      { initialEntries: [query.get('path') ?? '/'] },
+    )}
+  />,
 )

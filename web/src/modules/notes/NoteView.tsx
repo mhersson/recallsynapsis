@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useBlocker } from 'react-router'
 import { ApiError, api, message } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
+import Dialog from '../../components/Dialog.tsx'
 import Field from '../../components/Field.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import { ago } from '../../components/time.ts'
@@ -13,6 +15,14 @@ type Props = { id: number; areas: Area[]; onGone: () => void; onChanged?: () => 
 // What is typed, and the note as the editing began; moved once a save was refused because the note moved on, and shown
 // while the note as it now is shows above the text typed.
 type Draft = { from: Note; title: string; body: string; tags: string[]; moved?: boolean; shown?: boolean }
+
+// What differs from the note as the editing began: only that is saved, so a change made elsewhere meanwhile stands,
+// and a capture is filed only by a change of its tags.
+const changeOf = (d: Draft) => ({
+  ...(d.title !== d.from.title && { title: d.title }),
+  ...(d.body !== d.from.body && { body: d.body }),
+  ...(d.tags.join(' ') !== d.from.tags.join(' ') && { tags: d.tags }),
+})
 
 // A note, read first. Edit swaps the text for a Markdown text area, and the note read again meanwhile never replaces
 // what is typed. onChanged tells of a change made here; onGone closes the note once it is trashed.
@@ -33,6 +43,19 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
       (e: unknown) => void setFailed(message(e)),
     )
   useNotes(() => void read())
+  // Leaving the note with what is typed unsaved asks first. A change of the filters keeps the note open, and asks nothing.
+  const typed = !!draft && Object.keys(changeOf(draft)).length > 0
+  const leaving = useBlocker(({ currentLocation, nextLocation }) => typed && currentLocation.pathname !== nextLocation.pathname)
+  // A save that lands while the way out is held leaves nothing to lose, so the way out goes on.
+  useEffect(() => {
+    if (!typed && leaving.state === 'blocked') leaving.proceed()
+  }, [typed, leaving])
+  useEffect(() => {
+    if (!typed) return
+    const ask = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', ask)
+    return () => window.removeEventListener('beforeunload', ask)
+  }, [typed])
 
   if (!note)
     return (
@@ -59,14 +82,9 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
     }
   }
 
-  // Only what was changed here is sent, so a change made elsewhere meanwhile stands, and a capture is filed only by a
-  // change of its tags. A save refused because the note moved on keeps what was typed and reads the note again.
+  // A save refused because the note moved on keeps what was typed and reads the note again.
   async function save(d: Draft, revision: number) {
-    const change = {
-      ...(d.title !== d.from.title && { title: d.title }),
-      ...(d.body !== d.from.body && { body: d.body }),
-      ...(d.tags.join(' ') !== d.from.tags.join(' ') && { tags: d.tags }),
-    }
+    const change = changeOf(d)
     if (Object.keys(change).length === 0) return setDraft(undefined)
     setRefused('')
     setSending(true)
@@ -172,6 +190,19 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
             </>
           )}
         </div>
+        {leaving.state === 'blocked' && (
+          <Dialog title="Give up what you typed?" onClose={() => leaving.reset()}>
+            <p className="note">It is not saved, and leaving the note loses it.</p>
+            <div className="acts">
+              <button className="btn" onClick={() => leaving.reset()}>
+                Keep editing
+              </button>
+              <button className="btn danger" onClick={() => leaving.proceed()}>
+                Give up mine
+              </button>
+            </div>
+          </Dialog>
+        )}
       </div>
     )
   }
