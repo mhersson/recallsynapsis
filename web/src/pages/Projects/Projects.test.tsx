@@ -110,6 +110,38 @@ test('the form opened from the side bar closes back to the page it was opened on
   expect(where()).toBe('/areas/1')
 })
 
+test('the form opened from the list closes back to it, so Back leaves the list', async () => {
+  narrow(false)
+  server([area(1, 'personal', 'Personal')])
+  const { where, back } = await open('/areas/1')
+  await userEvent.click(within(screen.getByRole('navigation')).getAllByRole('link').find((a) => a.getAttribute('href') === '/projects')!)
+  await userEvent.click(newProject())
+  await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[0])
+  expect(where()).toBe('/projects')
+  await back()
+  expect(where()).toBe('/areas/1')
+})
+
+test('the form opened by its address after a sign-in closes to the Projects list', async () => {
+  narrow(false)
+  let signedIn = false
+  server([area(1, 'personal', 'Personal')], (c) => {
+    if (c.path === '/api/auth/login') {
+      signedIn = true
+      return new Response(null, { status: 204 })
+    }
+    if (c.path === '/api/session' && !signedIn) return json({ error: 'sign in' }, 401)
+  })
+  const { where } = await open('/areas/new')
+  expect(where()).toBe('/login')
+  await userEvent.type(screen.getByRole('textbox'), 'ada')
+  await userEvent.type(document.querySelector<HTMLInputElement>('input[type=password]')!, 'pw')
+  await userEvent.click(screen.getByRole('button'))
+  await userEvent.click(within(await screen.findByRole('dialog')).getAllByRole('button')[0])
+  expect(where()).toBe('/projects')
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
+
 test('on a phone a project is made on a page of its own', async () => {
   narrow(true)
   const calls = server([area(1, 'personal', 'Personal')], (c) => (c.method === 'POST' ? json(area(2, 'project', 'garden'), 201) : undefined))
