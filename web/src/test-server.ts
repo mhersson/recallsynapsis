@@ -1,4 +1,4 @@
-// Fakes of what a page talks to: fetch and EventSource.
+// Fakes of what a page talks to, fetch and EventSource, and of the window's width.
 export class FakeEventSource {
   static CONNECTING = 0
   static OPEN = 1
@@ -63,4 +63,13 @@ export function fakeServer(answer: (c: Call) => Response | undefined) {
     }),
   )
   return calls
+}
+
+export function narrow(matches: boolean) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }))
 }

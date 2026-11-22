@@ -82,5 +82,6 @@ Every package states its one responsibility in its package comment, and
 - `web`: the web app's npm package, with its sources in `web/src`, and the Go
   package that embeds its build from `web/dist/app` and serves it in front of
   the API. A binary built without the app serves the committed
-  `web/dist/placeholder.html` in its place.
+  `web/dist/placeholder.html` in its place. Each module of the web app is one
+  folder under `web/src/modules/`, listed in `web/src/modules/registry.ts`.
 - `scripts/`: the scans and the line count that `make` runs.

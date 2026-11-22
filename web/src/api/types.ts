@@ -3,3 +3,6 @@ export type Change = { module: string; kind: string; id: number; area: number }
 
 // GET /api/session: who is signed in and what the server has switched on. last_backup is null until there is one.
 export type Session = { user: { name: string }; modules: string[]; version: string; timezone: string; last_backup: string | null }
+
+// An area as GET /api/areas lists it: the personal area or a project.
+export type Area = { id: number; kind: 'personal' | 'project'; name: string; slug: string; description: string; archived: boolean }

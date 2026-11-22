@@ -4,6 +4,10 @@
   display: flex;
 }
 
+.frame.narrow {
+  flex-direction: column;
+}
+
 .main {
   flex: 1;
   min-width: 0;

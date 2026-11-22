@@ -4,12 +4,17 @@ import { api, onRedirect, onUnauthorized } from './api/client.ts'
 import { useEvents } from './api/stream.ts'
 import type { Session } from './api/types.ts'
 import AccessEnded from './components/AccessEnded.tsx'
+import PhoneTabs from './components/PhoneTabs.tsx'
+import SideBar from './components/SideBar.tsx'
+import { useNarrow } from './components/useNarrow.ts'
+import { modules } from './modules/registry.ts'
 import Login from './pages/Login/Login.tsx'
 import Placeholder from './pages/Placeholder.tsx'
 import { SessionContext } from './session.ts'
 import './App.css'
 
 function Frame() {
+  const narrow = useNarrow()
   const [session, setSession] = useState<Session | null>(null)
   const { live } = useEvents()
   // Read whenever the stream opens or drops: a restart may have switched a module, and an ended session answers 401, which opens sign-in.
@@ -18,10 +23,12 @@ function Frame() {
   }, [live])
 
   if (!session) return null
+  const on = modules.filter((m) => session.modules.includes(m.name))
 
   return (
     <SessionContext value={session}>
-      <div className="frame">
+      <div className={narrow ? 'frame narrow' : 'frame'}>
+        {!narrow && <SideBar modules={on} live={live} />}
         <main className="main">
           <Routes>
             <Route path="/" element={<Placeholder title="Projects" />} />
@@ -30,9 +37,13 @@ function Frame() {
             <Route path="/search" element={<Placeholder title="Search" />} />
             <Route path="/settings" element={<Placeholder title="Settings" />} />
             <Route path="/more" element={<Placeholder title="More" />} />
+            {on.flatMap((m) => m.routes).map((r) => (
+              <Route key={r.path} path={r.path} element={r.element} />
+            ))}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+        {narrow && <PhoneTabs modules={on} />}
       </div>
     </SessionContext>
   )
