@@ -1,14 +1,15 @@
 // Package notes keeps each user's notes and ideas: each in one of the user's
-// areas, with its tags, the inbox flag of a capture that waits to be filed
-// and a revision written by every change. A note in the trash is kept
-// unchanged until it is restored or deleted for good. It owns the tables
-// notes, note_tags and note_revisions.
+// areas, with its tags, the inbox flag of a capture that waits to be filed,
+// and its history: a revision written by every change, any of which can be
+// restored. A note in the trash is kept unchanged until it is restored or
+// deleted for good. It owns the tables notes, note_tags and note_revisions.
 package notes
 
 import (
 	"cmp"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -23,7 +24,7 @@ import (
 
 // migrations make the module's whole schema in one version. A note's id is
 // AUTOINCREMENT, so a note deleted for good never gives its id to another.
-// Nothing here writes said, restored_from or links: they wait empty.
+// Nothing here writes said or links: they wait empty.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE notes (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,6 +105,9 @@ func New(d module.Deps) module.Module {
 			{Pattern: "POST /api/notes/{id}/restore", Access: module.Write, Serve: n.serveTrash(false)},
 			{Pattern: "DELETE /api/notes/{id}", Access: module.Owner, Serve: n.serveDelete},
 			{Pattern: "DELETE /api/notes/trash", Access: module.Owner, Serve: n.serveEmpty},
+			{Pattern: "GET /api/notes/{id}/revisions", Access: module.Read, Serve: n.serveHistory},
+			{Pattern: "GET /api/notes/{id}/revisions/{n}", Access: module.Read, Serve: n.serveRevision},
+			{Pattern: "POST /api/notes/{id}/revisions/{n}/restore", Access: module.Write, Serve: n.serveRestoreRevision},
 		},
 	}
 }
@@ -129,6 +133,26 @@ type row struct {
 type note struct {
 	row
 	Body string `json:"body"`
+}
+
+// entry is a revision as the history lists it.
+type entry struct {
+	Revision     int64     `json:"revision"`
+	At           time.Time `json:"at"`
+	Source       string    `json:"source"`
+	Said         string    `json:"said"`
+	RestoredFrom *int64    `json:"restored_from"` // the revision a restore brought back, else null
+}
+
+// version is a revision in full: the note as that change left it.
+type version struct {
+	entry
+	Title string   `json:"title"`
+	Body  string   `json:"body"`
+	Kind  string   `json:"kind"`
+	Area  string   `json:"area"` // its slug
+	Inbox bool     `json:"inbox"`
+	Tags  []string `json:"tags"`
 }
 
 // draft is a new note: of kind note unless it says, in the personal area
@@ -201,11 +225,20 @@ func (f fields) check() error {
 const columns = `id, area_id, kind, title, substr(body, 1, 200), inbox, revision, source, created_at, changed_at, trashed_at,
 	coalesce((SELECT group_concat(tag, ' ' ORDER BY tag) FROM note_tags WHERE note_id = notes.id), '')`
 
-// snapshot writes the revision of the note ?1 as it now stands.
-const snapshot = `INSERT INTO note_revisions (note_id, revision, at, source, title, body, kind, area_id, inbox, tags)
-	SELECT id, revision, changed_at, source, title, body, kind, area_id, inbox,
+// snapshot writes the revision of the note ?1 as it now stands, restored from
+// the revision ?2 or from none when it is null.
+const snapshot = `INSERT INTO note_revisions (note_id, revision, at, source, restored_from, title, body, kind, area_id, inbox, tags)
+	SELECT id, revision, changed_at, source, ?2, title, body, kind, area_id, inbox,
 		(SELECT json_group_array(tag ORDER BY tag) FROM note_tags WHERE note_id = ?1)
 	FROM notes WHERE id = ?1`
+
+const (
+	// entryColumns are an entry's, in the order scanEntry reads them.
+	entryColumns = `r.revision, r.at, r.source, r.said, r.restored_from`
+	// revisions is the FROM and WHERE of one note's revisions, binding the
+	// user's id and then the note's; a query may add to the WHERE.
+	revisions = `note_revisions r JOIN notes ON notes.id = r.note_id WHERE notes.user_id = ? AND r.note_id = ?`
+)
 
 // scanRow reads a row of columns, and extra after it, naming its area by
 // its slug in slugs.
@@ -240,6 +273,22 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 	}
 
 	return r, nil
+}
+
+// scanEntry reads an entry of entryColumns, and extra after it.
+func scanEntry(sc interface{ Scan(dest ...any) error }, extra ...any) (entry, error) {
+	var (
+		e  entry
+		at int64
+	)
+
+	if err := sc.Scan(append([]any{&e.Revision, &at, &e.Source, &e.Said, &e.RestoredFrom}, extra...)...); err != nil {
+		return entry{}, err
+	}
+
+	e.At = time.UnixMilli(at).UTC()
+
+	return e, nil
 }
 
 // places gives the slug of each area of the user by its id, and the id of
@@ -442,7 +491,7 @@ func (n notes) create(ctx context.Context, d draft) (note, error) {
 			return fmt.Errorf("notes: create: %w", err)
 		}
 
-		return keep(ctx, tx, id, &tags)
+		return keep(ctx, tx, id, &tags, nil)
 	})
 	if err != nil {
 		return note{}, err
@@ -537,13 +586,139 @@ func (n notes) change(ctx context.Context, id int64, ch change) (note, error) {
 			return fmt.Errorf("notes: change: %w", err)
 		}
 
-		return keep(ctx, tx, id, ch.Tags)
+		return keep(ctx, tx, id, ch.Tags, nil)
 	})
 	if err != nil {
 		return note{}, err
 	}
 
 	n.Changed(ctx, module.Change{Module: name, Kind: "note", ID: id, Area: f.area})
+
+	return n.read(ctx, slugs, c.UserID, id)
+}
+
+// history gives the revisions of the caller's note with the id, the newest first.
+func (n notes) history(ctx context.Context, id int64) ([]entry, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	rows, err := n.Store.QueryContext(ctx, `SELECT `+entryColumns+` FROM `+revisions+` ORDER BY r.revision DESC`, c.UserID, id)
+	if err != nil {
+		return nil, fmt.Errorf("notes: history: %w", err)
+	}
+	defer rows.Close()
+
+	out := []entry{}
+
+	for rows.Next() {
+		e, err := scanEntry(rows)
+		if err != nil {
+			return nil, fmt.Errorf("notes: history: %w", err)
+		}
+
+		out = append(out, e)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("notes: history: %w", err)
+	}
+
+	// Every note has its first revision, so a history with none is of no note of the caller's.
+	if len(out) == 0 {
+		return nil, fmt.Errorf("note %d: %w", id, store.ErrNotFound)
+	}
+
+	return out, nil
+}
+
+// revision gives the revision rev of the caller's note with the id, in full.
+func (n notes) revision(ctx context.Context, id, rev int64) (version, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	slugs, _, err := n.places(ctx, c.UserID)
+	if err != nil {
+		return version{}, err
+	}
+
+	var (
+		v    version
+		area int64
+		tags string
+	)
+
+	v.entry, err = scanEntry(n.Store.QueryRowContext(ctx, `SELECT `+entryColumns+`, r.title, r.body, r.kind, r.area_id, r.inbox, r.tags
+		FROM `+revisions+` AND r.revision = ?`, c.UserID, id, rev), &v.Title, &v.Body, &v.Kind, &area, &v.Inbox, &tags)
+	if errors.Is(err, sql.ErrNoRows) {
+		return version{}, fmt.Errorf("revision %d of note %d: %w", rev, id, store.ErrNotFound)
+	}
+
+	if err != nil {
+		return version{}, fmt.Errorf("notes: revision: %w", err)
+	}
+
+	slug, ok := slugs[area]
+	if !ok {
+		return version{}, fmt.Errorf("notes: revision %d of note %d is in no area of the caller", rev, id)
+	}
+
+	v.Area = slug
+
+	if err := json.Unmarshal([]byte(tags), &v.Tags); err != nil {
+		return version{}, fmt.Errorf("notes: revision: %w", err)
+	}
+
+	return v, nil
+}
+
+// restoreRevision gives the caller's note with the id the title, the body
+// and the tags of its revision rev, one revision on, which names rev. The
+// area, the kind and the inbox flag stay as they are. A note in the trash is
+// ErrConflict.
+func (n notes) restoreRevision(ctx context.Context, id, rev int64) (note, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	slugs, _, err := n.places(ctx, c.UserID)
+	if err != nil {
+		return note{}, err
+	}
+
+	var area int64
+
+	err = n.Store.Tx(ctx, func(tx *sql.Tx) error {
+		var (
+			trashed           bool
+			title, body, tags string
+		)
+
+		err := tx.QueryRowContext(ctx, `SELECT notes.area_id, notes.trashed_at IS NOT NULL, r.title, r.body, r.tags
+			FROM `+revisions+` AND r.revision = ?`, c.UserID, id, rev).Scan(&area, &trashed, &title, &body, &tags)
+
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return fmt.Errorf("revision %d of note %d: %w", rev, id, store.ErrNotFound)
+		case err != nil:
+			return fmt.Errorf("notes: restore: %w", err)
+		case trashed:
+			return errTrashed
+		}
+
+		var restored []string
+		if err := json.Unmarshal([]byte(tags), &restored); err != nil {
+			return fmt.Errorf("notes: restore: %w", err)
+		}
+
+		_, err = tx.ExecContext(ctx, `UPDATE notes SET title = ?, body = ?, revision = revision + 1, source = ?, changed_at = ?
+			WHERE user_id = ? AND id = ?`, title, body, c.Source, n.Now().UnixMilli(), c.UserID, id)
+		if err != nil {
+			return fmt.Errorf("notes: restore: %w", err)
+		}
+
+		return keep(ctx, tx, id, &restored, &rev)
+	})
+	if err != nil {
+		return note{}, err
+	}
+
+	n.Changed(ctx, module.Change{Module: name, Kind: "note", ID: id, Area: area})
 
 	return n.read(ctx, slugs, c.UserID, id)
 }
@@ -672,8 +847,9 @@ func (f *fields) apply(ch change, area, personal int64) {
 }
 
 // keep replaces the note's tags with tags, unless tags is nil, and writes
-// its revision as it now stands.
-func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string) error {
+// its revision as it now stands, restored from the revision from unless it
+// is nil.
+func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, from *int64) error {
 	if tags != nil {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM note_tags WHERE note_id = ?`, id); err != nil {
 			return fmt.Errorf("notes: tags: %w", err)
@@ -686,7 +862,7 @@ func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string) error {
 		}
 	}
 
-	if _, err := tx.ExecContext(ctx, snapshot, id); err != nil {
+	if _, err := tx.ExecContext(ctx, snapshot, id, from); err != nil {
 		return fmt.Errorf("notes: revision: %w", err)
 	}
 

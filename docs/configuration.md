@@ -68,7 +68,7 @@ the binary has. A module that is off serves nothing and keeps what it holds, so
 switched on again it has it all back.
 
 `[modules.notes]` is the notes module: notes and ideas in the areas, with their
-tags, the inbox of captures that wait to be filed, and the trash.
+tags and history, the inbox of captures that wait to be filed, and the trash.
 
 | Key | Default | Meaning |
 | --- | --- | --- |

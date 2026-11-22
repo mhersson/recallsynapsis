@@ -337,6 +337,9 @@ func TestAModuleSwitchedOffKeepsItsNotes(t *testing.T) {
 			{http.MethodPost, path(made[0]) + "/restore", ""},
 			{http.MethodDelete, path(made[0]), ""},
 			{http.MethodDelete, "/api/notes/trash", ""},
+			{http.MethodGet, path(made[0]) + "/revisions", ""},
+			{http.MethodGet, path(made[0]) + "/revisions/1", ""},
+			{http.MethodPost, path(made[0]) + "/revisions/1/restore", ""},
 		} {
 			code, got := f.do(t, r.method, r.target, r.body, f.laptop)
 			refused(t, http.StatusNotFound, code, got)
@@ -867,6 +870,120 @@ func TestOnlyASessionDeletesFromTheTrash(t *testing.T) {
 	assert.NotEqual(t, last["id"], f.create(t, `{"title":"Next"}`, f.laptop)["id"], "the id of a note deleted for good is never given again")
 }
 
+// history gives each revision of note as its history lists it, the newest first, as "revision source restored_from".
+func (f *fixture) history(t *testing.T, note object, auth string) []string {
+	t.Helper()
+
+	code, got := f.do(t, http.MethodGet, path(note)+"/revisions", "", auth)
+	require.Equal(t, http.StatusOK, code, got)
+
+	out := []string{}
+
+	for _, r := range got["revisions"].([]any) {
+		r := r.(object)
+		assert.Empty(t, r["said"])
+		out = append(out, fmt.Sprintf("%v %v %v", r["revision"], r["source"], r["restored_from"]))
+	}
+
+	return out
+}
+
+func TestEveryChangeIsKeptInTheHistory(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	made := f.create(t, `{"title":"Seeds","body":"Tomatoes","area":"garden","tags":["spring","beds"]}`, f.laptop)
+	f.change(t, made, `{"revision":1,"title":"Seedlings","tags":["summer"]}`, f.desk)
+	f.change(t, made, `{"append":"Beans"}`, f.laptop)
+	changed := f.change(t, made, `{"revision":3,"kind":"idea","inbox":true}`, f.desk)
+
+	assert.Equal(t, []string{"4 desk <nil>", "3 laptop <nil>", "2 desk <nil>", "1 laptop <nil>"}, f.history(t, made, f.phone))
+
+	code, got := f.do(t, http.MethodGet, path(made)+"/revisions/1", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	assert.Equal(t, object{
+		"revision": float64(1), "at": made["created_at"], "source": "laptop", "said": "", "restored_from": nil,
+		"title": "Seeds", "body": "Tomatoes", "kind": "note", "area": "garden", "inbox": false, "tags": []any{"beds", "spring"},
+	}, got)
+
+	code, got = f.do(t, http.MethodGet, path(made)+"/revisions/4", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	assert.Equal(t, changed["changed_at"], got["at"])
+	assert.Equal(t, object{"title": "Seedlings", "body": "Tomatoes\n\nBeans", "kind": "idea", "area": "personal", "inbox": true},
+		object{"title": got["title"], "body": got["body"], "kind": got["kind"], "area": got["area"], "inbox": got["inbox"]})
+
+	code, restored := f.do(t, http.MethodPost, path(made)+"/revisions/1/restore", "", f.laptop)
+	require.Equal(t, http.StatusOK, code, restored)
+	assert.InDelta(t, 5, restored["revision"], 0)
+	assert.Equal(t, "laptop", restored["source"])
+	assert.Equal(t, "Seeds", restored["title"])
+	assert.Equal(t, "Tomatoes", restored["body"])
+	assert.Equal(t, []any{"beds", "spring"}, restored["tags"])
+	assert.Equal(t, "idea", restored["kind"], "the kind stays as it is")
+	assert.Equal(t, "personal", restored["area"], "and the area")
+	assert.Equal(t, true, restored["inbox"], "and the inbox flag")
+	assert.NotEqual(t, changed["changed_at"], restored["changed_at"])
+	assert.Equal(t, restored, f.read(t, made, f.phone))
+
+	history := f.history(t, made, f.phone)
+	assert.Equal(t, []string{"5 laptop 1", "4 desk <nil>", "3 laptop <nil>", "2 desk <nil>", "1 laptop <nil>"}, history,
+		"a restore is a revision of its own, which names the one it brought back")
+
+	code, got = f.do(t, http.MethodGet, path(made)+"/revisions", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	assert.Equal(t, []any{
+		object{"revision": float64(5), "at": restored["changed_at"], "source": "laptop", "said": "", "restored_from": float64(1)},
+		object{"revision": float64(4), "at": changed["changed_at"], "source": "desk", "said": "", "restored_from": nil},
+	}, got["revisions"].([]any)[:2], "a revision as the history lists it")
+
+	code, got = f.do(t, http.MethodGet, path(made)+"/revisions/5", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	assert.InDelta(t, 1, got["restored_from"], 0)
+	assert.Equal(t, []any{"beds", "spring"}, got["tags"])
+
+	code, got = f.do(t, http.MethodGet, "/api/notes/tags", "", f.phone)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, object{"tags": []any{object{"tag": "beds", "count": float64(1)}, object{"tag": "spring", "count": float64(1)}}}, got)
+
+	for _, target := range []string{"/revisions/9", "/revisions/0", "/revisions/one", "/revisions/9/restore", "/revisions/one/restore"} {
+		method := http.MethodGet
+		if strings.HasSuffix(target, "/restore") {
+			method = http.MethodPost
+		}
+
+		code, got = f.do(t, method, path(made)+target, "", f.laptop)
+		refused(t, http.StatusNotFound, code, got)
+	}
+
+	for _, target := range []string{"/revisions", "/revisions/1"} {
+		code, got = f.do(t, http.MethodGet, "/api/notes/9999"+target, "", f.laptop)
+		refused(t, http.StatusNotFound, code, got)
+
+		code, got = f.do(t, http.MethodGet, path(made)+target, "", f.grace)
+		refused(t, http.StatusNotFound, code, got)
+	}
+
+	code, got = f.do(t, http.MethodPost, path(made)+"/revisions/1/restore", "", f.grace)
+	refused(t, http.StatusNotFound, code, got)
+
+	code, got = f.do(t, http.MethodPost, path(made)+"/revisions/1/restore", "", f.phone)
+	refused(t, http.StatusForbidden, code, got)
+
+	trashed := f.trash(t, made, "/trash", f.laptop)
+	assert.Equal(t, history, f.history(t, made, f.phone), "a trashed note's history is still read")
+
+	code, got = f.do(t, http.MethodGet, path(made)+"/revisions/2", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	assert.Equal(t, "Seedlings", got["title"])
+
+	code, got = f.do(t, http.MethodPost, path(made)+"/revisions/2/restore", "", f.laptop)
+	refused(t, http.StatusConflict, code, got)
+	assert.Equal(t, trashed, f.read(t, made, f.phone), "a trashed note cannot be restored to a revision")
+
+	assert.Equal(t, restored, f.trash(t, made, "/restore", f.laptop))
+	assert.Equal(t, history, f.history(t, made, f.phone), "restored from the trash, it keeps its history")
+}
+
 func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	t.Parallel()
 
@@ -934,6 +1051,10 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 
 	expect(f.change(t, made, `{"revision":1,"inbox":true}`, f.laptop), "personal")
 	expect(f.change(t, made, `{"append":"Sow in March"}`, f.desk), "personal")
+
+	code, got = f.do(t, http.MethodPost, path(made)+"/revisions/1/restore", "", f.laptop)
+	require.Equal(t, http.StatusOK, code, got)
+	expect(got, "personal")
 
 	expect(f.trash(t, made, "/trash", f.laptop), "personal")
 	f.trash(t, made, "/trash", f.laptop)

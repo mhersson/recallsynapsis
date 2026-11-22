@@ -158,6 +158,54 @@ func (n notes) serveEmpty(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (n notes) serveHistory(w http.ResponseWriter, r *http.Request) error {
+	id, err := noteID(r)
+	if err != nil {
+		return err
+	}
+
+	out, err := n.history(r.Context(), id)
+	if err != nil {
+		return err
+	}
+
+	module.Reply(w, http.StatusOK, map[string][]entry{"revisions": out})
+
+	return nil
+}
+
+func (n notes) serveRevision(w http.ResponseWriter, r *http.Request) error {
+	id, rev, err := revisionID(r)
+	if err != nil {
+		return err
+	}
+
+	out, err := n.revision(r.Context(), id, rev)
+	if err != nil {
+		return err
+	}
+
+	module.Reply(w, http.StatusOK, out)
+
+	return nil
+}
+
+func (n notes) serveRestoreRevision(w http.ResponseWriter, r *http.Request) error {
+	id, rev, err := revisionID(r)
+	if err != nil {
+		return err
+	}
+
+	out, err := n.restoreRevision(r.Context(), id, rev)
+	if err != nil {
+		return err
+	}
+
+	module.Reply(w, http.StatusOK, out)
+
+	return nil
+}
+
 // noteID reads the id in the path; one that is not a number names no note.
 func noteID(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -166,4 +214,20 @@ func noteID(r *http.Request) (int64, error) {
 	}
 
 	return id, nil
+}
+
+// revisionID reads the note's id and the revision's number in the path; a
+// revision that is not a number names none.
+func revisionID(r *http.Request) (int64, int64, error) {
+	id, err := noteID(r)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	rev, err := strconv.ParseInt(r.PathValue("n"), 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("revision %q: %w", r.PathValue("n"), store.ErrNotFound)
+	}
+
+	return id, rev, nil
 }
