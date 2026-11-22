@@ -1,0 +1,7 @@
+.git
+bin/
+docs/
+.worktrees/
+.superpowers/
+web/node_modules/
+web/dist/app/
