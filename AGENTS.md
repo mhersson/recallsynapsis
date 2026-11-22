@@ -61,6 +61,27 @@ The owner's words, which bind every change:
   `govulncheck`, and on a pull request `make scan-commits` against its base.
   Dependabot bumps the Go modules and the pinned actions every week.
 
+## Looking at the web app
+
+After a change to `web/`, look at the screen before you finish.
+
+- Run `make web-install` once, then start Vite in `web/` on a loopback port in
+  the background and record its pid:
+  `./node_modules/.bin/vite --host 127.0.0.1 --port 5197 --strictPort > /tmp/vite.log 2>&1 & echo $!`.
+  Started through `npx`, the pid would be npm's, and stopping it would leave
+  Vite running.
+- Take the shot from `web/` with headless Firefox, which opens no window:
+  `node shoot.mjs 1280 900 "http://127.0.0.1:5197/harness.html?palette=copper&theme=dark" /tmp/shot.png`.
+  Use `390 844` for a phone.
+- `web/harness.html` shows the app on the fixed data of
+  `web/src/dev/fixtures.ts`. Its `palette` is `copper` or `catppuccin`, its
+  `theme` is `dark` or `light`, and its `path` picks the route, for example
+  `path=/settings`. `click=TEXT` clicks the first button, link or summary
+  whose text starts with TEXT; `login=wrong` refuses a sign-in and
+  `login=wait` makes it wait; `lapsed=1` ends the access to the page.
+- Read the PNG and say what you see. Fix what looks wrong and shoot again.
+- Stop Vite by the pid you recorded, never by port or name.
+
 ## Layout
 
 Every package states its one responsibility in its package comment, and
