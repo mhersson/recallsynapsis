@@ -111,7 +111,9 @@ Every package states its one responsibility in its package comment, and
   `users`, `sessions` and `api_tokens`.
 - `internal/config`: reads the configuration file strictly: an unknown key, a
   wrong type or an unusable value is refused with the key named. It keeps
-  each `[modules.NAME]` table as read.
+  each `[modules.NAME]` table as read, and decodes one as strictly for its
+  module: `enabled`, and the rest into the module's own settings. A module
+  with no table is off.
 - `internal/core`: keeps the areas: each user's one personal area, which
   keeps its name and is never archived, and their projects, each with a name
   unique in any case and a slug made from it. It finds one of a user's areas
