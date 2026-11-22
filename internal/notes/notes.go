@@ -1,8 +1,10 @@
 // Package notes keeps each user's notes and ideas: each in one of the user's
 // areas, with its tags, the inbox flag of a capture that waits to be filed,
 // and its history: a revision written by every change, any of which can be
-// restored. A note in the trash is kept unchanged until it is restored or
-// deleted for good. It owns the tables notes, note_tags and note_revisions.
+// restored. It searches them through an index of their title, body and tags.
+// A note in the trash is found by no search, and kept unchanged until it is
+// restored or deleted for good. It owns the tables notes, note_tags,
+// note_revisions and notes_fts.
 package notes
 
 import (
@@ -22,9 +24,10 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
-// migrations make the module's whole schema in one version. A note's id is
-// AUTOINCREMENT, so a note deleted for good never gives its id to another.
-// Nothing here writes said or links: they wait empty.
+// migrations make the module's schema. A note's id is AUTOINCREMENT, so a
+// note deleted for good never gives its id to another. Nothing writes said or
+// links: they wait empty. The index keeps no copy of the text, which a hit
+// reads from the note, and its trigrams let a word find part of a compound.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE notes (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,6 +68,15 @@ CREATE TABLE note_revisions (
 	links         TEXT NOT NULL DEFAULT '[]',
 	PRIMARY KEY (note_id, revision)
 );
+`}, {Version: 2, SQL: `
+CREATE VIRTUAL TABLE notes_fts USING fts5 (title, body, tags, tokenize = 'trigram', content = '', contentless_delete = 1);
+
+INSERT INTO notes_fts (rowid, title, body, tags)
+	SELECT id, title, body, coalesce((SELECT group_concat(tag, ' ') FROM note_tags WHERE note_id = notes.id), '') FROM notes;
+
+CREATE TRIGGER notes_fts_delete AFTER DELETE ON notes BEGIN
+	DELETE FROM notes_fts WHERE rowid = old.id;
+END;
 `}}
 
 const (
@@ -95,6 +107,7 @@ func New(d module.Deps) module.Module {
 	return module.Module{
 		Name:       name,
 		Migrations: migrations,
+		Search:     n.search,
 		Routes: []module.Route{
 			{Pattern: "GET /api/notes", Access: module.Read, Serve: n.serveList},
 			{Pattern: "POST /api/notes", Access: module.Write, Serve: n.serveCreate},
@@ -231,6 +244,15 @@ const snapshot = `INSERT INTO note_revisions (note_id, revision, at, source, res
 	SELECT id, revision, changed_at, source, ?2, title, body, kind, area_id, inbox,
 		(SELECT json_group_array(tag ORDER BY tag) FROM note_tags WHERE note_id = ?1)
 	FROM notes WHERE id = ?1`
+
+const (
+	// index writes the note ?1 into the search index as it now stands.
+	index = `REPLACE INTO notes_fts (rowid, title, body, tags)
+		SELECT id, title, body, coalesce((SELECT group_concat(tag, ' ') FROM note_tags WHERE note_id = ?1), '') FROM notes WHERE id = ?1`
+	// purge rewrites the search index whole. A delete only marks a note's
+	// rows in it, whose text a backup would copy until a merge drops them.
+	purge = `INSERT INTO notes_fts (notes_fts) VALUES ('optimize')`
+)
 
 const (
 	// entryColumns are an entry's, in the order scanEntry reads them.
@@ -756,8 +778,9 @@ func (n notes) trash(ctx context.Context, id int64, trashed bool) (note, error) 
 	return n.read(ctx, slugs, c.UserID, id)
 }
 
-// remove deletes the caller's note with the id for good, with its tags and
-// its revisions. A note outside the trash is ErrConflict.
+// remove deletes the caller's note with the id for good, with its tags, its
+// revisions and its text in the search index. A note outside the trash is
+// ErrConflict.
 func (n notes) remove(ctx context.Context, id int64) error {
 	c, _ := module.CallerFrom(ctx)
 
@@ -782,6 +805,10 @@ func (n notes) remove(ctx context.Context, id int64) error {
 			return fmt.Errorf("notes: delete: %w", err)
 		}
 
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("notes: delete: %w", err)
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -793,12 +820,23 @@ func (n notes) remove(ctx context.Context, id int64) error {
 	return nil
 }
 
-// empty deletes every note in the caller's trash for good.
+// empty deletes every note in the caller's trash for good, as remove does.
 func (n notes) empty(ctx context.Context) error {
 	c, _ := module.CallerFrom(ctx)
 
-	if _, err := n.Store.ExecContext(ctx, `DELETE FROM notes WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
-		return fmt.Errorf("notes: empty the trash: %w", err)
+	err := n.Store.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
+			return fmt.Errorf("notes: empty the trash: %w", err)
+		}
+
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("notes: empty the trash: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	// One change for them all, since a stream that falls behind is ended.
@@ -847,8 +885,8 @@ func (f *fields) apply(ch change, area, personal int64) {
 }
 
 // keep replaces the note's tags with tags, unless tags is nil, and writes
-// its revision as it now stands, restored from the revision from unless it
-// is nil.
+// it into the search index and its revision as it now stands, restored from
+// the revision from unless it is nil.
 func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, from *int64) error {
 	if tags != nil {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM note_tags WHERE note_id = ?`, id); err != nil {
@@ -860,6 +898,10 @@ func keep(ctx context.Context, tx *sql.Tx, id int64, tags *[]string, from *int64
 				return fmt.Errorf("notes: tags: %w", err)
 			}
 		}
+	}
+
+	if _, err := tx.ExecContext(ctx, index, id); err != nil {
+		return fmt.Errorf("notes: index: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, snapshot, id, from); err != nil {

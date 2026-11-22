@@ -11,11 +11,12 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   configuration. This build has one, notes: notes and ideas in the areas,
   with their tags and history, an inbox of captures that wait to be filed,
   and a trash. The web app has Capture, and the Inbox, where captures are
-  filed; the rest is reached through the REST API alone. Notes does not
-  search, so search finds nothing.
+  filed; the rest is reached through the REST API alone. Notes has no MCP
+  tool of its own.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
-  `search`, asks every module switched on. The MCP tool `list_areas` lists the
-  areas.
+  `search`, asks every module switched on. Notes finds the notes that hold
+  every word given, in their title, body or tags, and part of a word is
+  enough. The MCP tool `list_areas` lists the areas.
 - It backs itself up every night, into a directory you name.
 
 ## What it needs

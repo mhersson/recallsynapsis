@@ -65,6 +65,16 @@ type fixture struct {
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 
+	f := newDatabase(t)
+	f.load(t, object{"enabled": true})
+
+	return f
+}
+
+// newDatabase is the fixture before it serves, with no migration of notes applied.
+func newDatabase(t *testing.T) *fixture {
+	t.Helper()
+
 	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "recallsynapsis.db"), slices.Concat(auth.Migrations, core.Migrations))
 	require.NoError(t, err)
 
@@ -100,8 +110,6 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, err)
 
 	f.areas["garden"], f.areas["personal"] = garden.ID, personal.ID
-
-	f.load(t, object{"enabled": true})
 
 	return f
 }
