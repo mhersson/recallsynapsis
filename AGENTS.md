@@ -47,7 +47,12 @@ The owner's words, which bind every change:
   `web/`, with the Node of `.nvmrc`); `make web-build` builds the app into
   `web/dist/app`; `make web-check` lints, tests and builds it. Run
   `make web-check` when `web/` changes.
-- `make test`, `make test-race`: the tests, the second with the race detector.
+- `make test`, `make test-race`: the tests, the second with the race detector,
+  at `GOMAXPROCS=4` unless `GOMAXPROCS` is given on the command line or in the
+  environment, since every sign-in in a test is a memory-hard argon2 verify
+  and Go otherwise runs as many packages, and tests in each, at once as there
+  are cores. A bare `go test ./...` is not capped, and on a machine with many
+  cores it can exhaust the memory.
 - `make vet`, `make lint`, `make fmt`, `make fmt-check`, `make tidy-check`: the
   static checks and the formatter (`golangci-lint fmt`: gofumpt and goimports).
 - `make scan`: fail on an em-dash in any tracked or untracked, unignored text

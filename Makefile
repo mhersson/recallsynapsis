@@ -25,6 +25,7 @@ help:
 	@echo "  size         count the non-test Go lines"
 	@echo "  check        build-go, fmt-check, vet, lint, test-race, tidy-check, scan, size"
 	@echo "VERSION=x.y.z on a build target stamps the version recallsynapsis prints."
+	@echo "test and test-race run at GOMAXPROCS=4 unless GOMAXPROCS is given."
 
 web-install:
 	cd web && npm ci
@@ -44,6 +45,10 @@ build-go:
 
 install: web-build
 	CGO_ENABLED=0 go install -trimpath -ldflags='$(LDFLAGS)' ./cmd/recallsynapsis
+
+# Go runs as many packages, and tests in each, at once as there are cores, and
+# each test sign-in is a memory-hard argon2 verify; many cores exhaust memory.
+test test-race: export GOMAXPROCS ?= 4
 
 test:
 	go test ./...
