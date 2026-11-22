@@ -188,6 +188,7 @@ func TestTheSettings(t *testing.T) {
 	`})
 
 	assert.Equal(t, []string{"wal"}, column(t, s, `PRAGMA journal_mode`))
+	assert.Equal(t, []string{"2"}, column(t, s, `PRAGMA temp_store`), "MEMORY")
 
 	_, err := s.ExecContext(t.Context(), `INSERT INTO child (parent) VALUES (1)`)
 	require.NoError(t, err)

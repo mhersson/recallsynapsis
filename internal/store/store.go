@@ -32,14 +32,17 @@ type Store struct {
 // dsn builds a file: URI by concatenation because url.URL puts a relative
 // path in the authority, which the driver rejects. _txlock=immediate makes
 // every transaction take the write lock up front, so read-then-write
-// sequences hold across processes.
+// sequences hold across processes. temp_store(MEMORY) because a read-only
+// root, as a container may run with, leaves SQLite no directory for its
+// temporary files.
 func dsn(path string) string {
 	return "file:" + path +
 		"?_txlock=immediate" +
 		"&_pragma=journal_mode(WAL)" +
 		"&_pragma=synchronous(NORMAL)" +
 		"&_pragma=busy_timeout(5000)" +
-		"&_pragma=foreign_keys(1)"
+		"&_pragma=foreign_keys(1)" +
+		"&_pragma=temp_store(MEMORY)"
 }
 
 // Open opens the database at path, whose directory must exist, and applies
