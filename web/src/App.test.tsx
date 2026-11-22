@@ -6,16 +6,18 @@ import type { Session } from './api/types.ts'
 import App from './App.tsx'
 import { FakeEventSource, fakeServer, json, narrow, redirected } from './test-server.ts'
 
-// A stand-in module, on while the session names it. Its page shows the signed-in user's name.
-// The factory is hoisted above the imports, so it makes its elements without JSX.
+// Stand-in modules, each on while the session names it: plain adds nothing, and things has a home and a page that shows
+// the signed-in user's name. The factory is hoisted above the imports, so it makes its elements without JSX.
 vi.mock('./modules/registry.ts', async () => {
   const { createElement } = await import('react')
   const { useSession } = await import('./session.ts')
   const Things = () => createElement('h1', null, useSession().user.name)
   return {
     modules: [
+      { name: 'plain', nav: [], tabs: [], more: [], routes: [] },
       {
         name: 'things',
+        home: '/things',
         nav: [{ to: '/things', label: 'Things', icon: null }],
         tabs: [{ to: '/things', label: 'Things', icon: null }],
         more: [{ to: '/odds', label: 'Odds', note: 'Odd things', icon: null }],
@@ -124,7 +126,7 @@ test('a path that is no page goes to the Projects list', async () => {
   server().state.signedIn = true
   await show('/no/such/page')
   expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
-  expect(here).toBe('/')
+  expect(here).toBe('/projects')
 })
 
 test('a redirect to another origin asks for a reload', async () => {
@@ -167,16 +169,16 @@ test('with no module on, the side bar holds Search, the areas and Settings, and 
   narrow(false)
   signedIn([])
   await show('/things')
-  expect(links()).toEqual(['/search', '/', '/areas/new', '/areas/1', '/areas/2', '/settings'])
-  expect(here).toBe('/')
-  expect(current()).toEqual(['/'])
+  expect(links()).toEqual(['/search', '/projects', '/areas/new', '/areas/1', '/areas/2', '/settings'])
+  expect(here).toBe('/projects')
+  expect(current()).toEqual(['/projects'])
 })
 
 test('with a module on, the shell shows its entries and its pages, which read the session', async () => {
   narrow(false)
   signedIn(['things'])
   await show('/things')
-  expect(links()).toEqual(['/things', '/search', '/', '/areas/new', '/areas/1', '/areas/2', '/settings'])
+  expect(links()).toEqual(['/things', '/search', '/projects', '/areas/new', '/areas/1', '/areas/2', '/settings'])
   expect(current()).toEqual(['/things'])
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(session.user.name)
 })
@@ -185,17 +187,17 @@ test('a phone has the tabs of the modules that are on, then Projects and More', 
   narrow(true)
   signedIn([])
   const none = await show()
-  expect(links()).toEqual(['/', '/more'])
+  expect(links()).toEqual(['/projects', '/more'])
   none.unmount()
 
   signedIn(['things'])
   await show()
-  expect(links()).toEqual(['/things', '/', '/more'])
+  expect(links()).toEqual(['/things', '/projects', '/more'])
 })
 
 test.each([
-  ['/', '/'],
-  ['/areas/2', '/'],
+  ['/projects', '/projects'],
+  ['/areas/2', '/projects'],
   ['/more', '/more'],
   ['/search', '/more'],
   ['/settings', '/more'],
@@ -246,7 +248,24 @@ test('a module switched off while the page is open leaves the shell once the str
   s.modules = []
   await act(async () => es.fail())
   expect(links()).not.toContain('/things')
-  expect(here).toBe('/')
+  expect(here).toBe('/projects')
+})
+
+test.each([
+  [[], '/projects'],
+  [['plain'], '/projects'],
+  [['plain', 'things'], '/things'],
+])('with the modules %j on, a person lands on %s', async (on, landing) => {
+  signedIn(on)
+  await show('/')
+  expect(here).toBe(landing)
+})
+
+test('the Areas heading of the side bar stays current while a project is made', async () => {
+  narrow(false)
+  signedIn([])
+  await show('/areas/new')
+  expect(current()).toEqual(['/projects'])
 })
 
 test('the side bar says whether the stream is live', async () => {

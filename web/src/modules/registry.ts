@@ -6,6 +6,8 @@ export type Entry = { to: string; label: string; icon: ReactNode }
 // What a module adds to the web app; the shell shows it only while GET /api/session names it.
 export type Module = {
   name: string
+  // The page a person lands on, when this is the first enabled module that names one; else they land on the Projects list.
+  home?: string
   // In the side bar, above Search.
   nav: Entry[]
   // On a phone, before Projects and More.

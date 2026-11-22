@@ -4,7 +4,7 @@ import { MoreIcon, ProjectsIcon } from './icons.tsx'
 import './PhoneTabs.css'
 
 const core: Entry[] = [
-  { to: '/', label: 'Projects', icon: <ProjectsIcon /> },
+  { to: '/projects', label: 'Projects', icon: <ProjectsIcon /> },
   { to: '/more', label: 'More', icon: <MoreIcon /> },
 ]
 
@@ -12,7 +12,7 @@ export default function PhoneTabs({ modules }: { modules: Module[] }) {
   const { pathname } = useLocation()
   // A project keeps Projects current, and a page reached through More keeps More current.
   const also: Record<string, string[]> = {
-    '/': ['/areas'],
+    '/projects': ['/areas'],
     '/more': ['/search', '/settings', ...modules.flatMap((m) => m.more.map((r) => r.to))],
   }
   const current = (to: string) => [to, ...(also[to] ?? [])].some((p) => pathname === p || pathname.startsWith(p + '/'))
