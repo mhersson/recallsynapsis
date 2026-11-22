@@ -10,11 +10,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mhersson/recallsynapsis/internal/api"
 	"github.com/mhersson/recallsynapsis/internal/auth"
-	"github.com/mhersson/recallsynapsis/internal/core"
+	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/web"
 )
 
@@ -50,7 +51,8 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 		return errors.New("serve takes no arguments; name the data directory with --data-dir")
 	}
 
-	dir, cfg, st, err := openData(ctx, *dirFlag, *configFlag)
+	// Nothing streams the changes to open pages, so no change is heard.
+	d, err := openData(ctx, *dirFlag, *configFlag, func(module.Change) {})
 	if err != nil {
 		return err
 	}
@@ -58,22 +60,21 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 	log := slog.New(slog.NewTextHandler(stderr, nil))
 	slog.SetDefault(log)
 
-	// The store closes last, once every request has ended or been cut.
+	// The store closes last, once every request and every job has ended or been cut.
 	defer func() {
-		if err := st.Close(); err != nil {
+		if err := d.store.Close(); err != nil {
 			log.Warn("the database did not close cleanly", "err", err)
 		}
 	}()
 
-	signin := auth.New(st, time.Now)
+	signin := auth.New(d.store, time.Now)
 
-	owner, err := signin.EnsureUser(ctx, cfg.Owner)
+	owner, err := signin.EnsureUser(ctx, d.cfg.Owner)
 	if err != nil {
 		return err
 	}
 
-	areas := core.New(st)
-	if err := areas.EnsurePersonal(ctx, owner); err != nil {
+	if err := d.areas.EnsurePersonal(ctx, owner); err != nil {
 		return err
 	}
 
@@ -91,19 +92,59 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	// Sign-in answers a missing password as a wrong one, so the operator learns of it here.
 	if !has {
-		log.Warn("the owner has no password and cannot sign in; set one with recallsynapsis password", "owner", cfg.Owner)
+		log.Warn("the owner has no password and cannot sign in; set one with recallsynapsis password", "owner", d.cfg.Owner)
 	}
 
-	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Listen)
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", d.cfg.Listen)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 
-	log.Info("listening", "address", ln.Addr().String(), "public_url", cfg.PublicURL, "data_dir", dir, "version", version)
+	log.Info("listening", "address", ln.Addr().String(), "public_url", d.cfg.PublicURL, "data_dir", d.dir, "version", version)
 
-	h := api.New(api.Deps{Auth: signin, Core: areas, Version: version, PublicURL: cfg.PublicURL, Timezone: cfg.Timezone})
+	h := api.New(api.Deps{Auth: signin, Core: d.areas, Version: version, PublicURL: d.cfg.PublicURL, Timezone: d.cfg.Timezone})
+
+	// A signal cancels the jobs in flight as the requests get their grace.
+	stop := runJobs(ctx, d.modules.On(), log)
+	defer stop()
 
 	return serve(ctx, ln, logRequests(web.Handler(h), log), shutdownGrace, log)
+}
+
+// runJobs runs each job of ms on its tick until ctx ends or stop is called,
+// which cancels the runs in flight and waits for them. A run's error is
+// logged, and the next tick runs all the same.
+func runJobs(ctx context.Context, ms []module.Module, log *slog.Logger) (stop func()) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	var wg sync.WaitGroup
+
+	for _, m := range ms {
+		for _, j := range m.Jobs {
+			wg.Go(func() {
+				tick := time.NewTicker(j.Every)
+				defer tick.Stop()
+
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-tick.C:
+					}
+
+					// A run the stop cut short did not fail.
+					if err := j.Run(ctx); err != nil && ctx.Err() == nil {
+						log.Error("job failed", "module", m.Name, "job", j.Name, "err", err)
+					}
+				}
+			})
+		}
+	}
+
+	return func() {
+		cancel()
+		wg.Wait()
+	}
 }
 
 // serve serves h on ln until ctx ends, then gives the open requests grace to

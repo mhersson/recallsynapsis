@@ -232,6 +232,7 @@ func TestServeAnswersAndStopsOnASignal(t *testing.T) {
 
 	assert.Equal(t, 0, within(t, done, "serve did not stop on the signal"), stderr.String())
 	assert.Less(t, time.Since(signalled), shutdownGrace)
+	assert.NotContains(t, stderr.String(), "job=tick", "the job of a module with no table never runs")
 	// SQLite removes the write-ahead log when the last connection closes cleanly.
 	assert.NoFileExists(t, filepath.Join(dir, "recallsynapsis.db-wal"))
 }

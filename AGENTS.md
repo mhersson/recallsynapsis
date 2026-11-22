@@ -96,7 +96,11 @@ Every package states its one responsibility in its package comment, and
 
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
-  verb registers itself from an `init` in its own file.
+  verb registers itself from an `init` in its own file. `datadir.go` holds
+  `modules`, the list of the binary's feature modules, empty but for the fake
+  the tests add, and every verb that opens the database builds them all, so
+  every module's migrations run whether it is on or not. `serve` runs the
+  jobs of the modules switched on, and stops them before the store closes.
 - `internal/api`: the REST API under `/api/`, served from one route table.
   Every refusal and every path no route matches is answered as
   `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
