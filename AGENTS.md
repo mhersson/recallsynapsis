@@ -104,13 +104,20 @@ Every package states its one responsibility in its package comment, and
   before the store closes.
 - `internal/api`: the REST API under `/api/`, served from one route table,
   with the routes of the modules switched on beside the core's. Every refusal
-  and every path no route matches is answered as `{"error": "one line"}`; a
-  path with `.`, `..` or `//` is first redirected to its clean form. Request
-  bodies are decoded strictly. Each route declares its access, `open`, `read`,
-  `write` or `owner`, and one check admits a bearer token, else the session
-  cookie, refuses a cookie request that changes something without the
-  `X-Recallsynapsis-CSRF` header, and puts the `module.Caller` in the
-  request's context.
+  of a route and every path no route matches is answered as
+  `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
+  to its clean form. Request bodies are decoded strictly. Each route declares
+  its access, `open`, `read`, `write` or `owner`, and one check admits a
+  bearer token, else the session cookie, refuses a cookie request that
+  changes something without the `X-Recallsynapsis-CSRF` header, and puts the
+  `module.Caller` in the request's context. At `/mcp` it serves MCP over
+  streamable HTTP, stateless, with JSON responses and tools only: the core's
+  `list_areas` and `search`, each calling what its REST route calls, and the
+  tools of the modules switched on; two tools of one name stop the start. The
+  SDK's bearer check admits an API token alone, so a session cookie is no
+  authority there, and one guard refuses a call the token's access does not
+  cover before the tool runs, puts the token's `module.Caller` in the tool's
+  context, and gives an error as the line REST would answer.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables
@@ -130,12 +137,13 @@ Every package states its one responsibility in its package comment, and
   its name and is never archived, and their projects, each with a name unique
   in any case and a slug made from it. It finds one of a user's areas by its
   id, its slug or its name. It builds the feature modules the binary lists: it
-  decodes each one's table, refuses a table no module has and a module route
-  that is open, and applies every module's migrations, on or off, after auth's
-  and its own. Over the modules switched on it searches, grouping the hits by
-  module, giving each its area's slug and failing on a hit outside the
-  caller's areas, resolves a reference, unavailable rather than an error when
-  no module switched on has the item, and finds what links to one. It owns the
+  decodes each one's table, refuses a table no module has, a module route
+  that is open and a module tool that asks for neither read nor write, and
+  applies every module's migrations, on or off, after auth's and its own.
+  Over the modules switched on it searches, grouping the hits by module,
+  giving each its area's slug and failing on a hit outside the caller's
+  areas, resolves a reference, unavailable rather than an error when no
+  module switched on has the item, and finds what links to one. It owns the
   table `areas`.
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
@@ -146,7 +154,8 @@ Every package states its one responsibility in its package comment, and
   SDK. Beside it: the `Caller` an authorised request carries in its context,
   with the user, the source of the request and whether it may write; the
   access levels a route or a tool declares; and the refusal, the JSON reply
-  and the strict decoding of a body that every route uses.
+  and the strict decoding of a body that every route uses, with the 1 MiB
+  cap on a body that `/mcp` keeps too.
   Depguard rules in `.golangci.yaml` let a module package's code import
   `module` and `store` and no other package of this binary, let nothing but
   `api` and `cmd` import a module, and let only tests import the fake; tests
@@ -155,8 +164,8 @@ Every package states its one responsibility in its package comment, and
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
 - `internal/testkit`: `fake`, a feature module as small as the tests of what
-  serves modules need: a table, a route that adds to it, a search of it, and
-  a job that fails on every tick. Only tests register it.
+  serves modules need: a table, a route and a write tool that add to it, a
+  search of it, and a job that fails on every tick. Only tests register it.
 - `web`: the web app's npm package, with its sources in `web/src`, and the Go
   package that embeds its build from `web/dist/app` and serves it in front of
   the API. A binary built without the app serves the committed

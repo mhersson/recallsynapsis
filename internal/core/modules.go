@@ -28,8 +28,8 @@ type Group struct {
 // LoadModules builds each module of list with d, which it completes with the
 // store, the area lookup, Resolve, LinksTo and Notify, decodes the module's
 // table of cfg, and applies every module's migrations, on or off, after
-// auth's and core's. A table no module of list has is refused, and so is an
-// open module route.
+// auth's and core's. A table no module of list has is refused, and so are an
+// open module route and a module tool that asks for neither read nor write.
 func (c *Service) LoadModules(ctx context.Context, list []func(module.Deps) module.Module, cfg *config.Config, d module.Deps) (*Modules, error) {
 	ms := &Modules{areas: c}
 	d.Store, d.FindArea = c.store, c.Find
@@ -53,6 +53,14 @@ func (c *Service) LoadModules(ctx context.Context, list []func(module.Deps) modu
 		for _, rt := range m.Routes {
 			if rt.Access == module.Open {
 				return nil, fmt.Errorf("module %s: the route %s is open; a module route asks for read, write or owner", m.Name, rt.Pattern)
+			}
+		}
+
+		// Only an API token reaches a tool: open would let a token that may only read
+		// call a tool that writes, and owner would let none call it.
+		for _, t := range m.Tools {
+			if t.Access != module.Read && t.Access != module.Write {
+				return nil, fmt.Errorf("module %s: the tool %s asks for neither read nor write, the access an API token has", m.Name, t.Name)
 			}
 		}
 
