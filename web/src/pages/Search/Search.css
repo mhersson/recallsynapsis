@@ -4,40 +4,6 @@
   margin: 16px 0 0;
 }
 
-.search-field {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  background: var(--bg0);
-  border: 1px solid var(--bg3);
-  border-radius: 6px;
-  color: var(--grey1);
-}
-
-.search-field:focus-within {
-  outline: 2px solid var(--aqua);
-  outline-offset: 2px;
-}
-
-.search-field input {
-  flex: 1;
-  min-width: 0;
-  appearance: none;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--fg);
-  font-size: 16px;
-  padding: 9px 0;
-}
-
-.search-field input::placeholder {
-  color: var(--grey0);
-}
-
 .search-top select {
   background: var(--bg0);
   color: var(--fg);

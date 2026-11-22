@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, NOTES, OLDER, SECRET, SESSION, TOKENS, listNotes, note, searchNotes, tagsOf } from './fixtures.ts'
+import { AREAS, HEALTH, NOTES, OLDER, SECRET, SESSION, TOKENS, full, listNotes, note, refs, searchNotes, tagsOf } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -79,7 +79,7 @@ const moved = new Set<number>()
 function answerNotes(method: string, url: URL, body: Record<string, unknown>): Response {
   const told = (n: Note) => {
     tell({ module: 'notes', kind: 'note', id: n.id, area: areas.find((a) => a.slug === n.area)?.id ?? 0 })
-    return n
+    return full(notes, n)
   }
   const changed = (n: Note) => told(Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() }))
   if (url.pathname === '/api/notes' && method === 'GET') return json(listNotes(notes, url.searchParams))
@@ -98,7 +98,7 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>): R
   const [, id, trash] = /^\/api\/notes\/(\d+)(\/trash)?$/.exec(url.pathname) ?? []
   const n = notes.find((x) => x.id === Number(id))
   if (!n) return json({ error: 'not found' }, 404)
-  if (method === 'GET') return json(n)
+  if (method === 'GET') return json(full(notes, n))
   if (method === 'POST' && trash) return json(told(Object.assign(n, { trashed_at: new Date().toISOString() })))
   if (method !== 'PATCH') return json({ error: 'not found' }, 404)
   if (n.trashed_at) return json({ error: 'the note is in the trash, and is restored before it is changed: conflict' }, 409)
@@ -109,6 +109,7 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>): R
   }
   if (body.revision !== n.revision) return json({ error: `note ${n.id} is at revision ${n.revision}, and the change was made from ${body.revision}: conflict` }, 409)
   const { revision: _, ...change } = body
+  if (Array.isArray(change.links)) change.links = refs(...(change.links as string[]))
   // A change of area, kind or tags files a capture, unless it puts it in the inbox.
   if (['area', 'kind', 'tags'].some((k) => k in change) && !('inbox' in change)) n.inbox = false
   return json(changed(Object.assign(n, change)))

@@ -97,7 +97,8 @@ export default function Search() {
                 <i className={it ? `mk ${it.mark}` : 'mk'} />
                 <span className="hit">
                   <span className="t1">{h.title}</span>
-                  {h.snippet && <span className="t3">{h.snippet}</span>}
+                  {/* A short note with no title is its own snippet. */}
+                  {h.snippet && h.snippet !== h.title && <span className="t3">{h.snippet}</span>}
                   <span className="t2">
                     <span>{name((a) => a.slug === h.area)}</span>
                     <span>{h.kind}</span>

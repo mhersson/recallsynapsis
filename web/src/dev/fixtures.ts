@@ -1,5 +1,5 @@
 import type { Area, Hit, Session, Token } from '../api/types.ts'
-import type { Kind, List, Note, Row } from '../modules/notes/api.ts'
+import type { Kind, Linked, List, Note, Row } from '../modules/notes/api.ts'
 
 // What the API serves, in its shapes; the harness answers from it. Times are counted back from when the page loads.
 const before = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
@@ -62,6 +62,23 @@ export const note = (id: number, minutes: number, n: Partial<Note>): Note => ({
 // A note as a list gives it.
 export const row = ({ body: _, said: __, links: ___, linked_from: ____, ...r }: Note): Row => r
 
+// Links as a note keeps them, by reference alone; full resolves them.
+export const refs = (...to: string[]): Linked[] => to.map((ref) => ({ ref, kind: '', state: '', title: '', available: false }))
+
+// What a note goes by in a hit and in a link: its title, or the first line of its body.
+const label = (n: Note) => n.title || n.body.split('\n')[0].slice(0, 80)
+
+// GET /api/notes/{id} from notes: n with its links as the core resolves them, unavailable once their note is in the
+// trash or gone, and the notes outside the trash that link to it.
+export function full(notes: Note[], n: Note): Note {
+  const item = (ref: string): Linked => {
+    const t = notes.find((x) => x.ref === ref && !x.trashed_at)
+    return t ? { ref, kind: t.kind, state: t.inbox ? 'inbox' : 'filed', title: label(t), available: true } : refs(ref)[0]
+  }
+  const from = notes.filter((x) => !x.trashed_at && x.links.some((l) => l.ref === n.ref))
+  return { ...n, links: n.links.map((l) => item(l.ref)), linked_from: from.map((x) => item(x.ref)) }
+}
+
 // GET /api/notes/{id} for each note: the captures that wait in the inbox, then filed notes and ideas. A list gives the
 // first 200 characters of the body as the excerpt.
 export const NOTES: Note[] = [
@@ -79,13 +96,21 @@ export const NOTES: Note[] = [
     said: 'Legg inn at jeg må bestille EU-kontroll før desember.',
   }),
   note(116, 3 * 60, { inbox: true, body: 'Let the idea bank bring up ideas nobody has touched for 90 days.' }),
-  note(40, 13 * 60, { inbox: true, source: 'aim', title: 'Sjekk backupjobben på NAS-en i helgen', body: 'Den feilet to netter på rad forrige uke.' }),
+  note(40, 13 * 60, {
+    inbox: true,
+    source: 'aim',
+    title: 'Sjekk backupjobben på NAS-en i helgen',
+    body: 'Den feilet to netter på rad forrige uke.',
+    links: refs('notes:12'),
+  }),
   note(115, 26 * 60, { inbox: true, source: 'aim', body: 'The capture cap should count characters after trimming.' }),
   note(12, 2 * 60, {
     area: 'recallsynapsis',
     tags: ['approval', 'portal'],
     revision: 3,
     title: 'Approval belongs to the client',
+    // notes:37 was deleted for good, so its link leads nowhere.
+    links: refs('notes:18', 'notes:44', 'notes:37'),
     body: `Portal marks each tool as free or as needing a tap. Recall Synapsis only has to split its tools by risk.
 
 ## What follows
@@ -106,7 +131,14 @@ export const NOTES: Note[] = [
     body: 'So a search for port finds garasjeport too.',
   }),
   note(22, 26 * 60, { tags: ['garage'], title: 'Garage shelving layout', body: 'Left wall 240 cm, right wall 185 cm up to the window.' }),
-  note(25, 27 * 60, { area: 'aim', kind: 'idea', tags: ['agents'], title: 'A context pack when an agent session starts', body: 'What the project is, what was done last, and what waits.' }),
+  note(25, 27 * 60, {
+    area: 'aim',
+    kind: 'idea',
+    tags: ['agents'],
+    title: 'A context pack when an agent session starts',
+    body: 'What the project is, what was done last, and what waits.',
+    links: refs('notes:12'),
+  }),
   note(18, 2 * 24 * 60, { area: 'recallsynapsis', tags: ['push'], title: 'Push is switched per module', body: 'Each module says whether it may push, and the owner switches it.' }),
   note(27, 3 * 24 * 60, { area: 'cavu', kind: 'idea', title: 'A read-only status page for the kitchen tablet', body: 'What runs, what waits, and nothing to press.' }),
   note(21, 4 * 24 * 60, { tags: ['hytte'], title: 'Pakkeliste til hytteturen', body: 'Sovepose, hodelykt, ved og fyrstikker.' }),
@@ -170,7 +202,7 @@ export function searchNotes(notes: Note[], q: string, area: string | null): Hit[
     .map((n) => ({
       ref: n.ref,
       kind: n.kind,
-      title: n.title || n.body.split('\n')[0].slice(0, 80),
+      title: label(n),
       snippet: n.body,
       area: n.area,
       state: n.inbox ? 'inbox' : 'filed',

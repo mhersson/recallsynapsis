@@ -9,6 +9,7 @@ import { ago } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { from, mark, nameOf, useNotes, type Kind, type Note } from './api.ts'
 import { Place } from './Filing.tsx'
+import Links from './Links.tsx'
 import TagField from './TagField.tsx'
 
 type Props = { id: number; areas: Area[]; onGone: () => void; onChanged?: () => void }
@@ -36,11 +37,12 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
   const [draft, setDraft] = useState<Draft>()
   const [sending, setSending] = useState(false)
   const [refused, setRefused] = useState('')
+  // A note read, or a change's answer, that left the server before the note shown would show the note as it was.
+  const show = (n: Note) => setNote((x) => (x && x.revision > n.revision ? x : n))
   const read = () =>
     api<Note>('GET', `/notes/${id}`).then(
       (n) => {
-        // An answer that left the server before a change made here would show the note as it was.
-        setNote((x) => (x && x.revision > n.revision ? x : n))
+        show(n)
         return n
       },
       (e: unknown) => void setFailed(message(e)),
@@ -69,17 +71,18 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
       )
     )
 
+  // Sends a change and shows the note it answers. A refusal reads the note again and gives the server's line, which the
+  // page shows where the change was asked for.
   async function send(method: string, path: string, body?: unknown) {
     setRefused('')
     setSending(true)
     try {
-      setNote(await api<Note>(method, path, body))
+      show(await api<Note>(method, path, body))
       onChanged?.()
-      return true
+      return ''
     } catch (e) {
-      setRefused(message(e))
       void read()
-      return false
+      return message(e)
     } finally {
       setSending(false)
     }
@@ -92,7 +95,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
     setRefused('')
     setSending(true)
     try {
-      setNote(await api<Note>('PATCH', `/notes/${id}`, { revision, ...change }))
+      show(await api<Note>('PATCH', `/notes/${id}`, { revision, ...change }))
       setDraft(undefined)
       onChanged?.()
     } catch (e) {
@@ -217,7 +220,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
       <button className="btn" disabled={sending} onClick={() => setDraft({ from: note, title: note.title, body: note.body, area: note.area, kind: note.kind, tags: note.tags })}>
         Edit
       </button>
-      <button className="btn danger" disabled={sending} onClick={() => void send('POST', `/notes/${id}/trash`).then((ok) => ok && onGone())}>
+      <button className="btn danger" disabled={sending} onClick={() => void send('POST', `/notes/${id}/trash`).then((line) => (line ? setRefused(line) : onGone()))}>
         Trash
       </button>
     </>
@@ -259,8 +262,11 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
           ))
         ) : (
           // A tag added or removed here is a change of the note, which files a capture.
-          <TagField tags={note.tags} waiting={sending} onChange={(tags) => void send('PATCH', `/notes/${id}`, { revision: note.revision, tags })} />
+          <TagField tags={note.tags} waiting={sending} onChange={(tags) => void send('PATCH', `/notes/${id}`, { revision: note.revision, tags }).then(setRefused)} />
         )}
+      </div>
+      <div className="sects">
+        <Links note={note} areas={areas} trashed={trashed} sending={sending} onLinks={(links) => send('PATCH', `/notes/${id}`, { revision: note.revision, links })} />
       </div>
       {narrow && acts && <div className="acts stack note-foot">{acts}</div>}
     </div>
