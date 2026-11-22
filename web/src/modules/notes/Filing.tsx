@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
 import { Markdown } from '../../components/Markdown.tsx'
 import Seg from '../../components/Seg.tsx'
 import { ago } from '../../components/time.ts'
+import { back } from '../../components/useClose.ts'
 import { from, kinds, type Kind, type Note } from './api.ts'
 import TagField from './TagField.tsx'
 
@@ -77,7 +79,14 @@ export default function Filing({ note, areas, narrow, onDone }: Props) {
         <button className="btn primary" disabled={sending} onClick={() => void send('PATCH', `/notes/${note.id}`, { revision: note.revision, area, kind, tags, inbox: false })}>
           File
         </button>
-        {!narrow && <span className="spacer" />}
+        {!narrow && (
+          <>
+            <Link className="btn" to={`/notes/${note.id}`} state={back}>
+              Open
+            </Link>
+            <span className="spacer" />
+          </>
+        )}
         <button className="btn danger" disabled={sending} onClick={() => void send('POST', `/notes/${note.id}/trash`)}>
           Trash
         </button>

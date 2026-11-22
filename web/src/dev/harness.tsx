@@ -1,7 +1,7 @@
 // Development only: shows any route on fixed data, with no server. Vite builds index.html alone.
 import { useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router'
+import { RouterProvider, createMemoryRouter } from 'react-router'
 import '../theme/tokens.css'
 import '../theme/base.css'
 import App from '../App.tsx'
@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, HITS, NOTES, SECRET, SESSION, TOKENS, note, row } from './fixtures.ts'
+import { AREAS, HEALTH, NOTES, OLDER, SECRET, SESSION, TOKENS, listNotes, note, searchNotes, tagsOf } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -18,11 +18,12 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
 // What the page changes is kept until it reloads. empty=1 starts with the personal area alone, no token and no note,
-// modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
+// many=1 adds older notes, so a list holds more than it shows, modules=a,b switches those modules on, and backup=old or
+// backup=none ages or drops the last backup.
 const empty = query.get('empty') === '1'
 const areas = empty ? AREAS.filter((a) => a.kind === 'personal') : AREAS
 const tokens = empty ? [] : TOKENS
-const notes = empty ? [] : NOTES
+const notes = empty ? [] : query.get('many') === '1' ? [...NOTES, ...OLDER] : NOTES
 const backups: Record<string, string | null> = { old: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(), none: null }
 const session = {
   ...SESSION,
@@ -64,14 +65,15 @@ function answer(method: string, url: URL, body: Record<string, unknown>): Respon
   if (path === '/api/session') return json(session)
   if (path === '/api/tokens') return json({ tokens })
   if (path === '/api/search') {
-    const q = url.searchParams.get('q')!.toLowerCase()
-    const area = url.searchParams.get('area')
-    const hits = HITS.filter((h) => (h.title + h.snippet).toLowerCase().includes(q) && (!area || h.area === area))
+    const hits = searchNotes(notes, url.searchParams.get('q')!, url.searchParams.get('area'))
     return json({ groups: hits.length ? [{ module: 'notes', hits }] : [] })
   }
   if (path === '/api/areas') return json({ areas: areas.filter((a) => url.searchParams.get('archived') === 'true' || !a.archived) })
   return json({ error: 'not found' }, 404)
 }
+
+// save=moved refuses the first save of each note's text, as a client had saved the note three minutes before.
+const moved = new Set<number>()
 
 // The notes routes, as the server answers them, telling the stream of every write.
 function answerNotes(method: string, url: URL, body: Record<string, unknown>): Response {
@@ -80,11 +82,8 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>): R
     return n
   }
   const changed = (n: Note) => told(Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() }))
-  if (url.pathname === '/api/notes' && method === 'GET') {
-    const inbox = url.searchParams.get('inbox')
-    const found = notes.filter((n) => !n.trashed_at && (inbox === null || String(n.inbox) === inbox)).sort((a, b) => b.changed_at.localeCompare(a.changed_at))
-    return json({ notes: found.slice(0, Number(url.searchParams.get('limit')) || 50).map(row), total: found.length })
-  }
+  if (url.pathname === '/api/notes' && method === 'GET') return json(listNotes(notes, url.searchParams))
+  if (url.pathname === '/api/notes/tags' && method === 'GET') return json(tagsOf(notes))
   if (url.pathname === '/api/notes' && method === 'POST') {
     const n = note(Math.max(0, ...notes.map((x) => x.id)) + 1, 0, {
       revision: 0,
@@ -103,8 +102,15 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>): R
   if (method === 'POST' && trash) return json(told(Object.assign(n, { trashed_at: new Date().toISOString() })))
   if (method !== 'PATCH') return json({ error: 'not found' }, 404)
   if (n.trashed_at) return json({ error: 'the note is in the trash, and is restored before it is changed: conflict' }, 409)
+  if (query.get('save') === 'moved' && 'body' in body && !moved.has(n.id)) {
+    moved.add(n.id)
+    const at = new Date(Date.now() - 3 * 60_000).toISOString()
+    told(Object.assign(n, { revision: n.revision + 1, source: 'portal', changed_at: at, body: n.body + '\n\nPortal reads the marks from its own configuration.' }))
+  }
   if (body.revision !== n.revision) return json({ error: `note ${n.id} is at revision ${n.revision}, and the change was made from ${body.revision}: conflict` }, 409)
   const { revision: _, ...change } = body
+  // A change of area, kind or tags files a capture, unless it puts it in the inbox.
+  if (['area', 'kind', 'tags'].some((k) => k in change) && !('inbox' in change)) n.inbox = false
   return json(changed(Object.assign(n, change)))
 }
 
@@ -157,6 +163,7 @@ export function Apply() {
 
 // click=TEXT clicks the first button, link or summary whose text starts with TEXT, and type=TEXT types TEXT into the
 // field that has the focus. Each waits until the page shows what it needs, and given more than once they run in order.
+// end=1 then scrolls the page to its end.
 function step(kind: string, text: string): boolean {
   if (kind === 'type') {
     const field = document.activeElement
@@ -178,11 +185,27 @@ void (async () => {
       if (step(kind, text)) break
     }
   }
+  if (query.get('end') !== '1') return
+  await new Promise((r) => setTimeout(r, 300))
+  const main = document.querySelector('main')
+  main?.scrollTo(0, main.scrollHeight)
 })()
 
 createRoot(document.getElementById('root')!).render(
-  <MemoryRouter initialEntries={[query.get('path') ?? '/']}>
-    <Apply />
-    <App />
-  </MemoryRouter>,
+  <RouterProvider
+    router={createMemoryRouter(
+      [
+        {
+          path: '*',
+          element: (
+            <>
+              <Apply />
+              <App />
+            </>
+          ),
+        },
+      ],
+      { initialEntries: [query.get('path') ?? '/'] },
+    )}
+  />,
 )

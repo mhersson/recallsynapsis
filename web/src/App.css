@@ -148,6 +148,17 @@
   align-self: center;
 }
 
+/* A row that is itself a link to its item; the item open beside a list is current. */
+a.row {
+  color: var(--fg);
+}
+
+a.row:hover,
+a.row[aria-current] {
+  background: var(--bg1);
+  text-decoration: none;
+}
+
 .t1 {
   display: block;
   font-weight: 500;

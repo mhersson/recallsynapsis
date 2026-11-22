@@ -1,5 +1,5 @@
 import type { Area, Session } from '../../api/types.ts'
-import { note, row } from '../../dev/fixtures.ts'
+import { listNotes, note, tagsOf } from '../../dev/fixtures.ts'
 import { fakeServer, json, type Call } from '../../test-server.ts'
 import type { Note } from './api.ts'
 
@@ -11,21 +11,20 @@ export const areas: Area[] = [
 // A capture that waits in the inbox, made minutes ago.
 export const capture = (id: number, minutes: number, n: Partial<Note> = {}) => note(id, minutes, { inbox: true, body: `capture ${id}`, ...n })
 
-// A server with the given modules on that keeps the notes it is given and lists the inbox from them, the most recently
-// changed first; answer, when given, answers first.
-export function notesServer(notes: Note[], answer: (c: Call) => Response | undefined = () => undefined, modules = ['notes']) {
+// A server with the given modules on that keeps the notes it is given, and lists them and their tags as the server
+// does; answer, when given, answers first, or late with a promise.
+export function notesServer(notes: Note[], answer: (c: Call) => Response | Promise<Response> | undefined = () => undefined, modules = ['notes']) {
   const session: Session = { user: { name: 'ada' }, modules, version: '1.2.3', timezone: 'UTC', last_backup: null }
   return fakeServer((c) => {
     const a = answer(c)
     if (a) return a
     if (c.path === '/api/session') return json(session)
-    if (c.path === '/api/areas') return json({ areas })
+    if (c.path === '/api/areas' || c.path === '/api/areas?archived=true') return json({ areas })
+    if (c.method !== 'GET') return
     const url = new URL(c.path, 'http://here')
-    if (c.method === 'GET' && url.pathname === '/api/notes' && url.searchParams.get('inbox') === 'true') {
-      const inbox = notes.filter((n) => n.inbox && !n.trashed_at).sort((a, b) => b.changed_at.localeCompare(a.changed_at))
-      return json({ notes: inbox.slice(0, Number(url.searchParams.get('limit')) || 50).map(row), total: inbox.length })
-    }
+    if (url.pathname === '/api/notes') return json(listNotes(notes, url.searchParams))
+    if (url.pathname === '/api/notes/tags') return json(tagsOf(notes))
     const n = notes.find((x) => url.pathname === `/api/notes/${x.id}`)
-    if (c.method === 'GET' && n) return json(n)
+    if (n) return json(n)
   })
 }

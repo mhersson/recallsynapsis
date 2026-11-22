@@ -1,7 +1,7 @@
-import { cloneElement, useId, type ReactElement } from 'react'
+import { cloneElement, useId, type ReactElement, type ReactNode } from 'react'
 import './Field.css'
 
-type Props = { label: string; children: ReactElement<{ id?: string }> }
+type Props = { label: ReactNode; children: ReactElement<{ id?: string }> }
 
 export default function Field({ label, children }: Props) {
   const id = useId()

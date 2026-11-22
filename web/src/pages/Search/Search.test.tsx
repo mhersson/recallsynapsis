@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import type { Area, Group, Session } from '../../api/types.ts'
+import { notes } from '../../modules/notes/index.tsx'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, fakeServer, json, narrow, type Call } from '../../test-server.ts'
 
@@ -12,7 +13,7 @@ afterEach(() => {
 const session = (modules: string[]): Session => ({ user: { name: 'ada' }, modules, version: '1.2.3', timezone: 'UTC', last_backup: null })
 const area = (id: number, slug: string, archived = false): Area => ({ id, kind: 'project', name: slug.toUpperCase(), slug, description: '', archived })
 const areas = [area(1, 'personal'), area(3, 'cavu'), area(6, 'homelander', true)]
-const hit = (ref: string, state: string) => ({ ref, kind: 'note', title: ref, snippet: '', area: 'cavu', state, changed_at: '2026-11-22T06:00:00Z' })
+const hit = (ref: string, state: string, kind = 'note') => ({ ref, kind, title: ref, snippet: '', area: 'cavu', state, changed_at: '2026-11-22T06:00:00Z' })
 
 // A server with the notes module on unless told otherwise, whose search answers find(q, area).
 function server(find: (q: string, area: string | null) => Group[], modules = ['notes']) {
@@ -32,7 +33,7 @@ const main = () => within(screen.getByRole('main'))
 const type = (text: string) => fireEvent.change(main().getByRole('searchbox'), { target: { value: text } })
 const pause = () => act(() => vi.advanceTimersByTimeAsync(250))
 
-test('typing asks once it pauses, and the hits show grouped by module, each with its state', async () => {
+test('typing asks once it pauses, and the hits show grouped by module', async () => {
   narrow(false)
   const calls = server(() => [
     { module: 'notes', hits: [hit('notes:1', 'inbox'), hit('notes:2', 'filed')] },
@@ -50,9 +51,45 @@ test('typing asks once it pauses, and the hits show grouped by module, each with
   const groups = main().getAllByRole('heading', { level: 2 })
   expect(groups.map((g) => g.textContent)).toEqual(['notes', 'tasks'])
   const first = groups[0].parentElement!
-  expect(within(first).getByText('notes:1').parentElement).toHaveTextContent('inbox')
   expect(within(first).getByText('notes:1').parentElement).toHaveTextContent('CAVU')
-  expect(within(first).getByText('notes:2').parentElement).toHaveTextContent('filed')
+})
+
+test('a hit says its state as the module it names words it, and a hit of a module that gives no item says the state as it came', async () => {
+  narrow(false)
+  server(() => [
+    { module: 'notes', hits: [hit('notes:1', 'inbox'), hit('notes:2', 'filed')] },
+    { module: 'tasks', hits: [hit('tasks:5', 'open')] },
+  ])
+  await open('/search?q=gar')
+  await pause()
+  const details = [...screen.getByRole('main').querySelectorAll('.row .t2')].map((d) => [...d.children].map((s) => s.textContent))
+  const inbox = notes.item!('notes:1', 'note', 'inbox').state
+  expect(inbox).toBeTruthy()
+  expect(details).toEqual([
+    ['CAVU', 'note', inbox, expect.any(String)],
+    ['CAVU', 'note', expect.any(String)],
+    ['CAVU', 'note', 'open', expect.any(String)],
+  ])
+})
+
+test('a hit is a link to its item with its mark, as the module it names gives them, and a hit of a module that gives none is no link', async () => {
+  narrow(false)
+  server(() => [
+    { module: 'notes', hits: [hit('notes:1', 'inbox'), hit('notes:2', 'filed'), hit('notes:3', 'filed', 'idea')] },
+    { module: 'tasks', hits: [hit('tasks:5', 'open')] },
+  ])
+  const { where } = await open('/search?q=gar')
+  await pause()
+  const rows = [...screen.getByRole('main').querySelectorAll('.row')]
+  expect(rows.map((r) => [r.getAttribute('href'), r.querySelector('.mk')!.className])).toEqual([
+    ['/notes/1', 'mk wait'],
+    ['/notes/2', 'mk m-note'],
+    ['/notes/3', 'mk m-idea'],
+    [null, 'mk'],
+  ])
+  fireEvent.click(rows[2])
+  await pause()
+  expect(where()).toBe('/notes/3')
 })
 
 test('the area dropdown offers the areas that are not archived, and narrows the search to one', async () => {
