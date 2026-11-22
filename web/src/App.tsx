@@ -12,6 +12,7 @@ import Placeholder from './pages/Placeholder.tsx'
 import AreaPage from './pages/Projects/AreaPage.tsx'
 import Projects from './pages/Projects/Projects.tsx'
 import Search from './pages/Search/Search.tsx'
+import Settings from './pages/Settings/Settings.tsx'
 import { SessionContext, enabled } from './session.ts'
 import './App.css'
 
@@ -38,7 +39,7 @@ function Frame() {
             <Route path="/areas/new" element={<Projects making />} />
             <Route path="/areas/:id" element={<AreaPage />} />
             <Route path="/search" element={<Search />} />
-            <Route path="/settings" element={<Placeholder title="Settings" />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/more" element={<Placeholder title="More" />} />
             {on.flatMap((m) => m.routes).map((r) => (
               <Route key={r.path} path={r.path} element={r.element} />

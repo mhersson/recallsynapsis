@@ -66,15 +66,6 @@
   text-transform: capitalize;
 }
 
-.mk {
-  width: 8px;
-  height: 8px;
-  margin-top: 7px;
-  border-radius: 2px;
-  flex: none;
-  background: var(--grey0);
-}
-
 .hit {
   flex: 1;
   min-width: 0;

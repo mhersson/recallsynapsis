@@ -145,6 +145,20 @@
   font-size: 13px;
 }
 
+/* A small square that marks what a row is; yellow marks what waits on the owner. */
+.mk {
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: 2px;
+  flex: none;
+  background: var(--grey0);
+}
+
+.mk.wait {
+  background: var(--wait-yellow);
+}
+
 .ghd {
   font-size: 12.5px;
   font-weight: 400;

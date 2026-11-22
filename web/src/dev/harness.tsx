@@ -8,18 +8,25 @@ import App from '../App.tsx'
 import { api } from '../api/client.ts'
 import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
-import type { Area } from '../api/types.ts'
-import { AREAS, HEALTH, HITS, SESSION } from './fixtures.ts'
+import type { Area, Token } from '../api/types.ts'
+import { AREAS, HEALTH, HITS, SECRET, SESSION, TOKENS } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
-// What the page changes is kept until it reloads. empty=1 starts with the personal area alone, and modules=a,b switches
-// those modules on.
-const areas = query.get('empty') === '1' ? AREAS.filter((a) => a.kind === 'personal') : AREAS
-const session = { ...SESSION, modules: query.get('modules')?.split(',') ?? SESSION.modules }
+// What the page changes is kept until it reloads. empty=1 starts with the personal area alone and no token,
+// modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
+const empty = query.get('empty') === '1'
+const areas = empty ? AREAS.filter((a) => a.kind === 'personal') : AREAS
+const tokens = empty ? [] : TOKENS
+const backups: Record<string, string | null> = { old: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(), none: null }
+const session = {
+  ...SESSION,
+  modules: query.get('modules')?.split(',') ?? SESSION.modules,
+  last_backup: (query.get('backup') ?? '') in backups ? backups[query.get('backup')!] : SESSION.last_backup,
+}
 
 // login=wrong refuses every sign-in, and login=wait makes it wait 28 seconds.
 function answer(method: string, url: URL, body: Record<string, unknown>): Response {
@@ -37,11 +44,22 @@ function answer(method: string, url: URL, body: Record<string, unknown>): Respon
     areas.push(a)
     return json(a, 201)
   }
+  if (method === 'POST' && path === '/api/tokens') {
+    const t: Token = { id: Math.max(0, ...tokens.map((x) => x.id)) + 1, name: String(body.name), access: body.access === 'write' ? 'write' : 'read', created_at: new Date().toISOString(), last_used_at: null }
+    tokens.push(t)
+    return json({ ...t, token: SECRET }, 201)
+  }
+  const token = tokens.findIndex((t) => path === `/api/tokens/${t.id}`)
+  if (method === 'DELETE' && token >= 0) {
+    tokens.splice(token, 1)
+    return new Response(null, { status: 204 })
+  }
   const area = areas.find((a) => path === `/api/areas/${a.id}`)
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
   if (method !== 'GET') return json({ error: 'not found' }, 404)
   if (path === '/api/health') return json(HEALTH)
   if (path === '/api/session') return json(session)
+  if (path === '/api/tokens') return json({ tokens })
   if (path === '/api/search') {
     const q = url.searchParams.get('q')!.toLowerCase()
     const area = url.searchParams.get('area')

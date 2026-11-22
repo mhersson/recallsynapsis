@@ -65,11 +65,19 @@ export function fakeServer(answer: (c: Call) => Response | Promise<Response> | u
   return calls
 }
 
+// A phone's width while matches is true; the function it returns changes the width, as turning a phone does.
 export function narrow(matches: boolean) {
+  const listeners = new Set<() => void>()
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches,
+    get matches() {
+      return matches
+    },
     media: query,
-    addEventListener: () => {},
-    removeEventListener: () => {},
+    addEventListener: (_: string, l: () => void) => listeners.add(l),
+    removeEventListener: (_: string, l: () => void) => listeners.delete(l),
   }))
+  return (next: boolean) => {
+    matches = next
+    listeners.forEach((l) => l())
+  }
 }
