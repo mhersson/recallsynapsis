@@ -25,46 +25,6 @@ export const AREAS: Area[] = [
   },
 ]
 
-// What GET /api/search finds, as a module named notes would answer.
-export const HITS: Hit[] = [
-  {
-    ref: 'notes:12',
-    kind: 'note',
-    title: 'Approval belongs to the client',
-    snippet: 'Portal asks before a tool writes; the server never waits for a person.',
-    area: 'recallsynapsis',
-    state: 'filed',
-    changed_at: before(2 * 60),
-  },
-  {
-    ref: 'notes:40',
-    kind: 'note',
-    title: 'Restore drill: prove a backup restores every month',
-    snippet: 'Start a server on last night’s backup and open the inbox.',
-    area: 'personal',
-    state: 'inbox',
-    changed_at: before(13 * 60),
-  },
-  {
-    ref: 'notes:31',
-    kind: 'idea',
-    title: 'Trigram search for Norwegian compound words',
-    snippet: 'So backup finds backupjobben and garasjeport finds port.',
-    area: 'recallsynapsis',
-    state: 'filed',
-    changed_at: before(2 * 24 * 60),
-  },
-  {
-    ref: 'notes:7',
-    kind: 'note',
-    title: 'The backup job retries once',
-    snippet: 'A failed backup is logged and the next night runs as usual.',
-    area: 'cavu',
-    state: 'filed',
-    changed_at: before(5 * 24 * 60),
-  },
-]
-
 // GET /api/tokens, oldest first.
 export const TOKENS: Token[] = [
   { id: 4, name: 'old-shortcut', access: 'read', created_at: '2026-10-12T18:00:00Z', last_used_at: null },
@@ -119,12 +79,7 @@ export const NOTES: Note[] = [
     said: 'Legg inn at jeg må bestille EU-kontroll før desember.',
   }),
   note(116, 3 * 60, { inbox: true, body: 'Let the idea bank bring up ideas nobody has touched for 90 days.' }),
-  note(40, 13 * 60, {
-    inbox: true,
-    source: 'aim',
-    title: 'Restore drill: prove a backup restores every month',
-    body: 'Start a server on last night’s backup and open the inbox.',
-  }),
+  note(40, 13 * 60, { inbox: true, source: 'aim', title: 'Sjekk backupjobben på NAS-en i helgen', body: 'Den feilet to netter på rad forrige uke.' }),
   note(115, 26 * 60, { inbox: true, source: 'aim', body: 'The capture cap should count characters after trimming.' }),
   note(12, 2 * 60, {
     area: 'recallsynapsis',
@@ -148,14 +103,26 @@ export const NOTES: Note[] = [
     kind: 'idea',
     tags: ['search'],
     title: 'Trigram search for Norwegian compound words',
-    body: 'So backup finds backupjobben and garasjeport finds port.',
+    body: 'So a search for port finds garasjeport too.',
   }),
   note(22, 26 * 60, { tags: ['garage'], title: 'Garage shelving layout', body: 'Left wall 240 cm, right wall 185 cm up to the window.' }),
   note(25, 27 * 60, { area: 'aim', kind: 'idea', tags: ['agents'], title: 'A context pack when an agent session starts', body: 'What the project is, what was done last, and what waits.' }),
   note(18, 2 * 24 * 60, { area: 'recallsynapsis', tags: ['push'], title: 'Push is switched per module', body: 'Each module says whether it may push, and the owner switches it.' }),
   note(27, 3 * 24 * 60, { area: 'cavu', kind: 'idea', title: 'A read-only status page for the kitchen tablet', body: 'What runs, what waits, and nothing to press.' }),
   note(21, 4 * 24 * 60, { tags: ['hytte'], title: 'Pakkeliste til hytteturen', body: 'Sovepose, hodelykt, ved og fyrstikker.' }),
+  note(9, 2 * 24 * 60 + 30, {
+    tags: ['homelab'],
+    title: 'Backup directory on the NAS',
+    body: 'The nightly snapshot goes to a share on the NAS, never to the data volume itself.',
+  }),
   note(7, 5 * 24 * 60, { area: 'cavu', title: 'The backup job retries once', body: 'A failed backup is logged and the next night runs as usual.' }),
+  note(44, 7 * 24 * 60, {
+    area: 'recallsynapsis',
+    kind: 'idea',
+    tags: ['backup'],
+    title: 'Restore drill: prove a backup restores every month',
+    body: 'Start a server on last night’s backup and open the inbox.',
+  }),
   note(15, 8 * 24 * 60, { area: 'portal', tags: ['approval'], title: 'Marks are set per tool, never by the service', body: 'The service cannot vouch for itself.' }),
 ]
 
@@ -192,4 +159,21 @@ export function tagsOf(notes: Note[]) {
   const count = new Map<string, number>()
   for (const t of notes.filter((n) => !n.trashed_at).flatMap((n) => n.tags)) count.set(t, (count.get(t) ?? 0) + 1)
   return { tags: [...count].sort(([a], [b]) => a.localeCompare(b)).map(([tag, count]) => ({ tag, count })) }
+}
+
+// GET /api/search from notes, as the notes module answers it: every note outside the trash whose title or body holds q,
+// in any case, and in the area asked for, if one is.
+export function searchNotes(notes: Note[], q: string, area: string | null): Hit[] {
+  const has = (n: Note) => (n.title + '\n' + n.body).toLowerCase().includes(q.toLowerCase())
+  return notes
+    .filter((n) => !n.trashed_at && has(n) && (!area || n.area === area))
+    .map((n) => ({
+      ref: n.ref,
+      kind: n.kind,
+      title: n.title || n.body.split('\n')[0].slice(0, 80),
+      snippet: n.body,
+      area: n.area,
+      state: n.inbox ? 'inbox' : 'filed',
+      changed_at: n.changed_at,
+    }))
 }

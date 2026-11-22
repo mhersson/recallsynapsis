@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, HITS, NOTES, OLDER, SECRET, SESSION, TOKENS, listNotes, note, tagsOf } from './fixtures.ts'
+import { AREAS, HEALTH, NOTES, OLDER, SECRET, SESSION, TOKENS, listNotes, note, searchNotes, tagsOf } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -65,9 +65,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>): Respon
   if (path === '/api/session') return json(session)
   if (path === '/api/tokens') return json({ tokens })
   if (path === '/api/search') {
-    const q = url.searchParams.get('q')!.toLowerCase()
-    const area = url.searchParams.get('area')
-    const hits = HITS.filter((h) => (h.title + h.snippet).toLowerCase().includes(q) && (!area || h.area === area))
+    const hits = searchNotes(notes, url.searchParams.get('q')!, url.searchParams.get('area'))
     return json({ groups: hits.length ? [{ module: 'notes', hits }] : [] })
   }
   if (path === '/api/areas') return json({ areas: areas.filter((a) => url.searchParams.get('archived') === 'true' || !a.archived) })

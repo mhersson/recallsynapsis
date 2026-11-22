@@ -6,8 +6,9 @@ import type { Area, Group } from '../../api/types.ts'
 import PageHead from '../../components/PageHead.tsx'
 import { SearchIcon } from '../../components/icons.tsx'
 import { ago } from '../../components/time.ts'
+import { back } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { useSession } from '../../session.ts'
+import { useItem, useSession } from '../../session.ts'
 import './Search.css'
 
 // What a search answered, with the question it answered, which the page names while a newer one is typed.
@@ -17,6 +18,7 @@ type Result = { q: string; area: string; groups: Group[] }
 export default function Search() {
   const narrow = useNarrow()
   const none = useSession().modules.length === 0
+  const item = useItem()
   const [params, setParams] = useSearchParams()
   const [q, setQ] = useState(params.get('q') ?? '')
   // Spaces around the words would be searched for as part of them.
@@ -86,21 +88,35 @@ export default function Search() {
       <section key={g.module}>
         <h2 className="ghd hits-head">{g.module}</h2>
         <div className="list">
-          {g.hits.map((h) => (
-            <div key={h.ref} className="row">
-              <i className="mk" />
-              <div className="hit">
-                <span className="t1">{h.title}</span>
-                {h.snippet && <span className="t3">{h.snippet}</span>}
-                <span className="t2">
-                  <span>{name((a) => a.slug === h.area)}</span>
-                  <span>{h.kind}</span>
-                  <span>{h.state}</span>
-                  <span>{ago(h.changed_at)}</span>
+          {g.hits.map((h) => {
+            const it = item(h.ref, h.kind, h.state)
+            // Once a module gives the item, its words replace the raw state, and none hides it.
+            const state = it ? it.state : h.state
+            const inner = (
+              <>
+                <i className={it ? `mk ${it.mark}` : 'mk'} />
+                <span className="hit">
+                  <span className="t1">{h.title}</span>
+                  {h.snippet && <span className="t3">{h.snippet}</span>}
+                  <span className="t2">
+                    <span>{name((a) => a.slug === h.area)}</span>
+                    <span>{h.kind}</span>
+                    {state && <span>{state}</span>}
+                    <span>{ago(h.changed_at)}</span>
+                  </span>
                 </span>
+              </>
+            )
+            return it ? (
+              <Link key={h.ref} className="row" to={it.to} state={back}>
+                {inner}
+              </Link>
+            ) : (
+              <div key={h.ref} className="row">
+                {inner}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
     ))
