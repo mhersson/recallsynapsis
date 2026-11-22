@@ -63,6 +63,9 @@ Every package states its one responsibility in its package comment, and
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
   verb registers itself from an `init` in its own file.
+- `internal/config`: reads the configuration file strictly: an unknown key, a
+  wrong type or an unusable value is refused with the key named. It keeps
+  each `[modules.NAME]` table as read.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
