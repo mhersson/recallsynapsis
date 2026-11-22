@@ -25,7 +25,7 @@ type Refusal struct {
 
 func (e *Refusal) Error() string { return e.Text }
 
-// MaxBody is the most of a request body the server reads, 1 MiB.
+// MaxBody is the most of a JSON body the server reads, 1 MiB.
 const MaxBody = 1 << 20
 
 // Reply answers v as JSON with status.

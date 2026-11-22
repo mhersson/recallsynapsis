@@ -28,8 +28,9 @@ type Group struct {
 // LoadModules builds each module of list with d, which it completes with the
 // store, the area lookups, Resolve, LinksTo and Notify, decodes the module's
 // table of cfg, and applies every module's migrations, on or off, after
-// auth's and core's. A table no module of list has is refused, and so are an
-// open module route and a module tool that asks for neither read nor write.
+// auth's and core's. A table no module of list has is refused, and so are,
+// on or off, settings their own check refuses, an open module route and a
+// module tool that asks for neither read nor write.
 func (c *Service) LoadModules(ctx context.Context, list []func(module.Deps) module.Module, cfg *config.Config, d module.Deps) (*Modules, error) {
 	ms := &Modules{areas: c}
 	d.Store, d.FindArea = c.store, c.Find
@@ -48,6 +49,12 @@ func (c *Service) LoadModules(ctx context.Context, list []func(module.Deps) modu
 		on, err := cfg.Module(m.Name, m.Settings)
 		if err != nil {
 			return nil, err
+		}
+
+		if s, ok := m.Settings.(interface{ Check() error }); ok {
+			if err := s.Check(); err != nil {
+				return nil, fmt.Errorf("key modules.%s.%w", m.Name, err)
+			}
 		}
 
 		// Left out, Access is Open, which would serve the route to anyone.

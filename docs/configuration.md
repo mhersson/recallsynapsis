@@ -27,6 +27,8 @@ The directory holds:
 | --- | --- |
 | `recallsynapsis.toml` | the settings, read unless `--config` names another file |
 | `recallsynapsis.db` | the database, with its `-wal` and `-shm` files beside it while it is open |
+| `files/` | the contents of the attached files, each kept once and named by its SHA-256, and removed when the last attachment that names it goes |
+| `tmp/` | an upload while it arrives, renamed into `files/` once it is whole, so it must be on the file system `files/` is on; a file left here by a crash can be removed while the server is stopped |
 
 The settings are read before the directory is made, so on a first start either
 make the directory with mode 700 and write `recallsynapsis.toml` in it, or name
@@ -68,14 +70,16 @@ the binary has. A module that is off serves nothing and keeps what it holds, so
 switched on again it has it all back.
 
 `[modules.notes]` is the notes module: notes and ideas in the areas, with their
-tags, links and history, the inbox of captures that wait to be filed, and the
-trash.
+tags, links, attached files and history, the inbox of captures that wait to be
+filed, and the trash.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `false` | whether notes is on |
+| `file_max_mib` | `15` | the largest file that can be attached, in MiB, at least 1; checked whether notes is on or not |
 
-A whole file, with `listen`, `backup.at` and `backup.keep` at their defaults:
+A whole file, with `listen`, `backup.at`, `backup.keep` and `file_max_mib` at
+their defaults:
 
 ```toml
 listen     = "127.0.0.1:7119"
@@ -89,5 +93,6 @@ at   = "03:00"
 keep = 14
 
 [modules.notes]
-enabled = true
+enabled      = true
+file_max_mib = 15
 ```

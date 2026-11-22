@@ -179,6 +179,41 @@ func TestLoadModulesRefusesATableItCannotUse(t *testing.T) {
 	}
 }
 
+// sized is settings with a check: a size of at least 1.
+type sized struct {
+	Size int `toml:"size"`
+}
+
+func (s *sized) Check() error {
+	if s.Size < 1 {
+		return fmt.Errorf("size: %d is not at least 1", s.Size)
+	}
+
+	return nil
+}
+
+func TestLoadModulesRunsTheCheckOfItsSettings(t *testing.T) {
+	t.Parallel()
+
+	checked := []func(module.Deps) module.Module{func(module.Deps) module.Module {
+		return module.Module{Name: "checked", Settings: &sized{Size: 1}, Migrations: []store.Migration{
+			{Version: 1, SQL: "CREATE TABLE checked_items (id INTEGER PRIMARY KEY)"},
+		}}
+	}}
+
+	f := newFixture(t)
+
+	for _, tables := range []map[string]table{{"checked": {"enabled": true, "size": int64(0)}}, {"checked": {"size": int64(0)}}} {
+		_, err := f.svc.LoadModules(t.Context(), checked, &config.Config{Modules: tables}, module.Deps{})
+		require.Error(t, err, "on or off")
+		assert.Contains(t, err.Error(), "modules.checked.size")
+		assert.Empty(t, f.tables(t), "a refused start migrates no module")
+	}
+
+	f.load(t, checked, nil)
+	assert.Equal(t, []string{"checked"}, names(f.load(t, checked, map[string]table{"checked": {"enabled": true, "size": int64(2)}})))
+}
+
 func TestLoadModulesRefusesAnOpenModuleRoute(t *testing.T) {
 	t.Parallel()
 

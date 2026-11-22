@@ -2,6 +2,7 @@ package notes_test
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -133,13 +134,16 @@ func (f *fixture) load(t *testing.T, table object) {
 	f.h = api.New(api.Deps{Auth: f.auth, Core: f.core, Modules: ms, PublicURL: "https://recall.example.org", Hub: f.hub})
 }
 
-// signIn gives ada's session, as do takes it.
-func (f *fixture) signIn(t *testing.T) string {
+// signIn gives the session of the user named name, as do takes it.
+func (f *fixture) signIn(t *testing.T, name string) string {
 	t.Helper()
 
-	require.NoError(t, f.auth.SetPasswordHash(t.Context(), f.ada, passwordHash()))
+	var id int64
+	require.NoError(t, f.store.QueryRowContext(t.Context(), `SELECT id FROM users WHERE name = ?`, name).Scan(&id))
+	require.NoError(t, f.auth.SetPasswordHash(t.Context(), id, passwordHash()))
 
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/login", strings.NewReader(`{"name":"ada","password":"`+password+`"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/login",
+		strings.NewReader(`{"name":"`+name+`","password":"`+password+`"}`))
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
@@ -150,12 +154,22 @@ func (f *fixture) signIn(t *testing.T) string {
 	return "Cookie " + cookies[0].Name + "=" + cookies[0].Value
 }
 
-// do serves one request and decodes its answer, nil for a 204. auth is the
-// Authorization header of a token, or a session as signIn gives it.
-func (f *fixture) do(t *testing.T, method, target, body, auth string) (int, object) {
+// send serves one request of body, with the Content-Type kind unless it is
+// empty, and gives what it answered, as serve does.
+func (f *fixture) send(t *testing.T, method, target string, body []byte, kind, auth string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequestWithContext(t.Context(), method, target, strings.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), method, target, bytes.NewReader(body))
+	if kind != "" {
+		req.Header.Set("Content-Type", kind)
+	}
+
+	return f.serve(req, auth)
+}
+
+// serve serves req with auth, the Authorization header of a token or a
+// session as signIn gives it, and gives what it answered.
+func (f *fixture) serve(req *http.Request, auth string) *httptest.ResponseRecorder {
 	if cookie, ok := strings.CutPrefix(auth, "Cookie "); ok {
 		req.Header.Set("Cookie", cookie)
 		req.Header.Set("X-Recallsynapsis-CSRF", "1")
@@ -166,6 +180,14 @@ func (f *fixture) do(t *testing.T, method, target, body, auth string) (int, obje
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, req)
 
+	return rec
+}
+
+// do serves one request as send does and decodes its answer, nil for a 204.
+func (f *fixture) do(t *testing.T, method, target, body, auth string) (int, object) {
+	t.Helper()
+
+	rec := f.send(t, method, target, []byte(body), "", auth)
 	if rec.Code == http.StatusNoContent {
 		assert.Empty(t, rec.Body.String())
 
@@ -348,6 +370,10 @@ func TestAModuleSwitchedOffKeepsItsNotes(t *testing.T) {
 			{http.MethodGet, path(made[0]) + "/revisions", ""},
 			{http.MethodGet, path(made[0]) + "/revisions/1", ""},
 			{http.MethodPost, path(made[0]) + "/revisions/1/restore", ""},
+			{http.MethodGet, "/api/notes/limits", ""},
+			{http.MethodPost, path(made[0]) + "/files?name=seeds.txt", "Tomatoes"},
+			{http.MethodGet, path(made[0]) + "/files/1", ""},
+			{http.MethodDelete, path(made[0]) + "/files/1", ""},
 		} {
 			code, got := f.do(t, r.method, r.target, r.body, f.laptop)
 			refused(t, http.StatusNotFound, code, got)
@@ -802,7 +828,7 @@ func TestOnlyASessionDeletesFromTheTrash(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	session := f.signIn(t)
+	session := f.signIn(t, "ada")
 
 	seeds := f.change(t, f.create(t, `{"title":"Seeds","tags":["spring"]}`, f.laptop), `{"revision":1,"body":"Tomatoes"}`, f.laptop)
 	beds := f.create(t, `{"title":"Beds","area":"garden","tags":["spring"]}`, f.laptop)
@@ -1073,11 +1099,18 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	expect(f.trash(t, made, "/restore", f.laptop), "personal")
 	expect(f.trash(t, made, "/trash", f.laptop), "personal")
 
-	session := f.signIn(t)
+	session := f.signIn(t, "ada")
 
 	code, got = f.do(t, http.MethodDelete, path(made), "", session)
 	require.Equal(t, http.StatusNoContent, code, got)
 	expect(made, "personal")
+
+	attached := f.attach(t, beds, "beds.txt", "text/plain", []byte("Two by four"), session)
+	expect(beds, "garden")
+
+	code, got = f.do(t, http.MethodDelete, filePath(beds, attached), "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+	expect(beds, "garden")
 
 	expect(f.trash(t, beds, "/trash", f.laptop), "garden")
 

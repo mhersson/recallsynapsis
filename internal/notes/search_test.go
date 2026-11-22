@@ -183,7 +183,7 @@ func TestSearchFollowsEveryWrite(t *testing.T) {
 	assert.Equal(t, []string{"Frø"}, f.found(t, "vår", f.phone))
 	assert.Equal(t, []string{}, f.found(t, "agurk", f.phone))
 
-	session := f.signIn(t)
+	session := f.signIn(t, "ada")
 	secret := f.trash(t, f.create(t, `{"title":"Kode","body":"qxjqxj"}`, f.laptop), "/trash", f.laptop)
 	indexed := f.count(t, "notes_fts")
 	require.True(t, f.indexes(t, "qxj"), "the index holds the text of a trashed note")

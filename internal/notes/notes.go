@@ -1,11 +1,12 @@
 // Package notes keeps each user's notes and ideas: each in one of the user's
 // areas, with its tags, its links to the items of any module, the inbox flag
-// of a capture that waits to be filed, and its history: a revision written by
-// every change, any of which can be restored. It searches them through an
-// index of their title, body and tags. A note in the trash is found by no
-// search and no link, and kept unchanged until it is restored or deleted for
-// good. It owns the tables notes, note_tags, note_revisions, note_links and
-// notes_fts.
+// of a capture that waits to be filed, its attached files, and its history: a
+// revision written by every change, any of which can be restored. It searches
+// them through an index of their title, body and tags. A note in the trash is
+// found by no search and no link, and kept unchanged until it is restored or
+// deleted for good. It owns the tables notes, note_tags, note_revisions,
+// note_links, notes_fts and note_files, and keeps the contents of the files
+// under files/ in the data directory, once each, by their SHA-256.
 package notes
 
 import (
@@ -17,6 +18,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -29,7 +31,9 @@ import (
 // note deleted for good never gives its id to another, and a link to it never
 // leads to another note. Nothing writes said: it waits empty. The index keeps
 // no copy of the text, which a hit reads from the note, and its trigrams let
-// a word find part of a compound.
+// a word find part of a compound. An attachment's id is AUTOINCREMENT too:
+// the browser keeps a file by its address for good, so an id never comes to
+// name another file.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE notes (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,6 +91,19 @@ CREATE TABLE note_links (
 );
 
 CREATE INDEX note_links_ref ON note_links (ref);
+`}, {Version: 3, SQL: `
+CREATE TABLE note_files (
+	id      INTEGER PRIMARY KEY AUTOINCREMENT,
+	note_id INTEGER NOT NULL REFERENCES notes (id) ON DELETE CASCADE,
+	name    TEXT NOT NULL,
+	type    TEXT NOT NULL,
+	size    INTEGER NOT NULL,
+	sha256  TEXT NOT NULL
+);
+
+CREATE INDEX note_files_note ON note_files (note_id);
+
+CREATE INDEX note_files_sha256 ON note_files (sha256);
 `}}
 
 const (
@@ -109,14 +126,20 @@ var (
 
 type notes struct {
 	module.Deps
+	settings *settings
+	// files is held from putting an upload's contents in files/ to the commit
+	// that names them, and from removing attachments to removing the contents
+	// they leave unnamed.
+	files *sync.Mutex
 }
 
 // New builds the notes module.
 func New(d module.Deps) module.Module {
-	n := notes{d}
+	n := notes{Deps: d, settings: &settings{FileMaxMiB: 15}, files: new(sync.Mutex)}
 
 	return module.Module{
 		Name:       name,
+		Settings:   n.settings,
 		Migrations: migrations,
 		Search:     n.search,
 		Resolve:    n.resolve,
@@ -125,6 +148,7 @@ func New(d module.Deps) module.Module {
 			{Pattern: "GET /api/notes", Access: module.Read, Serve: n.serveList},
 			{Pattern: "POST /api/notes", Access: module.Write, Serve: n.serveCreate},
 			{Pattern: "GET /api/notes/tags", Access: module.Read, Serve: n.serveTags},
+			{Pattern: "GET /api/notes/limits", Access: module.Read, Serve: n.serveLimits},
 			{Pattern: "GET /api/notes/{id}", Access: module.Read, Serve: n.serveGet},
 			{Pattern: "PATCH /api/notes/{id}", Access: module.Write, Serve: n.serveChange},
 			{Pattern: "POST /api/notes/{id}/trash", Access: module.Write, Serve: n.serveTrash(true)},
@@ -132,8 +156,11 @@ func New(d module.Deps) module.Module {
 			{Pattern: "DELETE /api/notes/{id}", Access: module.Owner, Serve: n.serveDelete},
 			{Pattern: "DELETE /api/notes/trash", Access: module.Owner, Serve: n.serveEmpty},
 			{Pattern: "GET /api/notes/{id}/revisions", Access: module.Read, Serve: n.serveHistory},
-			{Pattern: "GET /api/notes/{id}/revisions/{n}", Access: module.Read, Serve: n.serveRevision},
-			{Pattern: "POST /api/notes/{id}/revisions/{n}/restore", Access: module.Write, Serve: n.serveRestoreRevision},
+			{Pattern: "GET /api/notes/{id}/revisions/{revision}", Access: module.Read, Serve: n.serveRevision},
+			{Pattern: "POST /api/notes/{id}/revisions/{revision}/restore", Access: module.Write, Serve: n.serveRestoreRevision},
+			{Pattern: "POST /api/notes/{id}/files", Access: module.Owner, Serve: n.serveAttach},
+			{Pattern: "GET /api/notes/{id}/files/{file}", Access: module.Owner, Serve: n.serveFile},
+			{Pattern: "DELETE /api/notes/{id}/files/{file}", Access: module.Owner, Serve: n.serveDetach},
 		},
 	}
 }
@@ -148,6 +175,7 @@ type row struct {
 	Excerpt   string     `json:"excerpt"` // the first 200 characters of the body
 	Inbox     bool       `json:"inbox"`
 	Tags      []string   `json:"tags"`
+	FileCount int        `json:"file_count"`
 	Revision  int64      `json:"revision"`
 	Source    string     `json:"source"` // that of the last change
 	CreatedAt time.Time  `json:"created_at"`
@@ -155,12 +183,13 @@ type row struct {
 	TrashedAt *time.Time `json:"trashed_at"` // null unless the note is in the trash
 }
 
-// note is a note in full, with its links and the items that link to it.
+// note is a note in full, with its links, the items that link to it and its files.
 type note struct {
 	row
 	Body       string        `json:"body"`
 	Links      []module.Item `json:"links"`
 	LinkedFrom []module.Item `json:"linked_from"`
+	Files      []file        `json:"files"` // in the order they were attached
 }
 
 // entry is a revision as the history lists it.
@@ -253,7 +282,8 @@ func (f fields) check() error {
 
 // columns are a row's, in the order scanRow reads them.
 const columns = `id, area_id, kind, title, substr(body, 1, 200), inbox, revision, source, created_at, changed_at, trashed_at,
-	coalesce((SELECT group_concat(tag, ' ' ORDER BY tag) FROM note_tags WHERE note_id = notes.id), '')`
+	coalesce((SELECT group_concat(tag, ' ' ORDER BY tag) FROM note_tags WHERE note_id = notes.id), ''),
+	(SELECT count(*) FROM note_files WHERE note_id = notes.id)`
 
 // snapshot writes the revision of the note ?1 as it now stands, restored from
 // the revision ?2 or from none when it is null.
@@ -295,7 +325,7 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 
 	err := sc.Scan(append([]any{
 		&r.ID, &area, &r.Kind, &r.Title, &r.Excerpt, &r.Inbox, &r.Revision, &r.Source,
-		&created, &changed, &trashed, &tags,
+		&created, &changed, &trashed, &tags, &r.FileCount,
 	}, extra...)...)
 	if err != nil {
 		return row{}, err
@@ -373,13 +403,13 @@ func (n notes) get(ctx context.Context, id int64) (note, error) {
 // that link to it each as the core resolves it for the caller.
 func (n notes) read(ctx context.Context, slugs map[int64]string, userID, id int64) (note, error) {
 	var (
-		out   note
-		links string
-		err   error
+		out          note
+		links, files string
+		err          error
 	)
 
-	out.row, err = scanRow(n.Store.QueryRowContext(ctx, `SELECT `+columns+`, body, `+linkList+` FROM notes WHERE user_id = ? AND id = ?`,
-		userID, id), slugs, &out.Body, &links)
+	out.row, err = scanRow(n.Store.QueryRowContext(ctx, `SELECT `+columns+`, body, `+linkList+`, `+fileList+` FROM notes WHERE user_id = ? AND id = ?`,
+		userID, id), slugs, &out.Body, &links, &files)
 	if errors.Is(err, sql.ErrNoRows) {
 		return note{}, fmt.Errorf("note %d: %w", id, store.ErrNotFound)
 	}
@@ -390,6 +420,10 @@ func (n notes) read(ctx context.Context, slugs map[int64]string, userID, id int6
 
 	var refs []module.Ref
 	if err := json.Unmarshal([]byte(links), &refs); err != nil {
+		return note{}, fmt.Errorf("notes: read: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(files), &out.Files); err != nil {
 		return note{}, fmt.Errorf("notes: read: %w", err)
 	}
 
@@ -916,14 +950,14 @@ func (n notes) trash(ctx context.Context, id int64, trashed bool) (note, error) 
 }
 
 // remove deletes the caller's note with the id for good, with its tags, its
-// links, its revisions and its text in the search index. A note outside the
-// trash is ErrConflict.
+// links, its revisions, its text in the search index and its files, and the
+// contents no other attachment names. A note outside the trash is ErrConflict.
 func (n notes) remove(ctx context.Context, id int64) error {
 	c, _ := module.CallerFrom(ctx)
 
 	var area int64
 
-	err := n.Store.Tx(ctx, func(tx *sql.Tx) error {
+	err := n.drop(ctx, `SELECT json_group_array(DISTINCT sha256) FROM note_files WHERE note_id = ?`, []any{id}, func(tx *sql.Tx) error {
 		var trashed bool
 
 		err := tx.QueryRowContext(ctx, `SELECT area_id, trashed_at IS NOT NULL FROM notes WHERE user_id = ? AND id = ?`,
@@ -961,7 +995,8 @@ func (n notes) remove(ctx context.Context, id int64) error {
 func (n notes) empty(ctx context.Context) error {
 	c, _ := module.CallerFrom(ctx)
 
-	err := n.Store.Tx(ctx, func(tx *sql.Tx) error {
+	err := n.drop(ctx, `SELECT json_group_array(DISTINCT sha256) FROM note_files JOIN notes ON notes.id = note_id
+		WHERE user_id = ? AND trashed_at IS NOT NULL`, []any{c.UserID}, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
 			return fmt.Errorf("notes: empty the trash: %w", err)
 		}
