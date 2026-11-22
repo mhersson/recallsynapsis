@@ -218,8 +218,13 @@ Every package states its one responsibility in its package comment, and
   declared as, and is served with `nosniff`, a `sandbox` content policy and to
   its own origin alone: inline as its type only when it is a PNG, JPEG, GIF or
   WebP image, else as a download of `application/octet-stream`, so no page loads
-  one as a script or a style. It owns the tables `notes`, `note_tags`,
-  `note_revisions`, `note_links`, `notes_fts` and `note_files`.
+  one as a script or a style. Its MCP tools, `create_note`, `list_notes`,
+  `get_note`, `update_note` and `trash_note`, each call what a REST route calls,
+  find no note in the trash, and refuse a text over `capture_max_chars`
+  characters, which REST does not cap. `create_note` files a capture in the area
+  it names, an idea that names none in the personal area and any other in the
+  inbox, and keeps its `said` on the first revision. It owns the tables `notes`,
+  `note_tags`, `note_revisions`, `note_links`, `notes_fts` and `note_files`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.

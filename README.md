@@ -8,13 +8,16 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
 - The owner signs in with a name and a password. AI clients and scripts use API
   tokens made in Settings, each with read or write access.
 - What it keeps comes from feature modules, each switched on in the
-  configuration. This build has one, notes: notes and ideas in the areas,
-  with their tags, links, attached files and history, an inbox of captures
-  that wait to be filed, and a trash. In the web app, Capture saves a
-  thought and the Inbox files it; Notes lists the filed notes, each read,
-  edited, tagged and trashed on its page; the idea bank lists every filed
-  idea by area; and an area's page shows its notes and ideas. The rest is
-  reached through the REST API alone. Notes has no MCP tool of its own.
+  configuration. This build has one, notes: notes and ideas in the areas, with
+  their tags, links, attached files and history, an inbox of captures that wait
+  to be filed, and a trash. In the web app, Capture saves a thought and the
+  Inbox files it; Notes lists the filed notes, each read, edited, tagged and
+  trashed on its page; the idea bank lists every filed idea by area; and an
+  area's page shows its notes and ideas. The rest is reached through the REST
+  API. An AI client saves, lists, reads, changes and trashes notes through the
+  MCP tools `create_note`, `list_notes`, `get_note`, `update_note` and
+  `trash_note`, and what it saves without naming an area or calling it an idea
+  waits in the inbox.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and part of a word is

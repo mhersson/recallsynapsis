@@ -76,10 +76,11 @@ filed, and the trash.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `false` | whether notes is on |
+| `capture_max_chars` | `4000` | the longest text an MCP tool of notes keeps, in characters, at least 1: `text` and `said` of `create_note`, and `body` and `append` of `update_note`, each on its own; REST, and so the web app, has no such cap; checked whether notes is on or not |
 | `file_max_mib` | `15` | the largest file that can be attached, in MiB, at least 1; checked whether notes is on or not |
 
-A whole file, with `listen`, `backup.at`, `backup.keep` and `file_max_mib` at
-their defaults:
+A whole file, with `listen`, `backup.at`, `backup.keep`, `capture_max_chars`
+and `file_max_mib` at their defaults:
 
 ```toml
 listen     = "127.0.0.1:7119"
@@ -93,6 +94,7 @@ at   = "03:00"
 keep = 14
 
 [modules.notes]
-enabled      = true
-file_max_mib = 15
+enabled           = true
+capture_max_chars = 4000
+file_max_mib      = 15
 ```

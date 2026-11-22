@@ -28,20 +28,6 @@ const maxName = 255
 // inline are the types a file is shown as in the page; any other is a download.
 var inline = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
 
-// settings are the module's keys of [modules.notes] beside enabled.
-type settings struct {
-	FileMaxMiB int64 `toml:"file_max_mib"`
-}
-
-// Check refuses a cap on a file under 1 MiB.
-func (s *settings) Check() error {
-	if s.FileMaxMiB < 1 {
-		return fmt.Errorf("file_max_mib: %d is not at least 1", s.FileMaxMiB)
-	}
-
-	return nil
-}
-
 // file is an attachment as a note gives it.
 type file struct {
 	ID   int64  `json:"id"`
@@ -297,7 +283,7 @@ func changeable(ctx context.Context, q querier, userID, id int64) (int64, error)
 	case errors.Is(err, sql.ErrNoRows):
 		return 0, fmt.Errorf("note %d: %w", id, store.ErrNotFound)
 	case err != nil:
-		return 0, fmt.Errorf("notes: files: %w", err)
+		return 0, fmt.Errorf("notes: note %d: %w", id, err)
 	case trashed:
 		return 0, errTrashed
 	}

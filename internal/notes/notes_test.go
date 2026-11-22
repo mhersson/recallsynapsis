@@ -393,6 +393,21 @@ func TestAModuleSwitchedOffKeepsItsNotes(t *testing.T) {
 	}
 }
 
+func TestACapUnderOneStopsTheStart(t *testing.T) {
+	t.Parallel()
+
+	f := newDatabase(t)
+
+	for _, key := range []string{"capture_max_chars", "file_max_mib"} {
+		for _, table := range []object{{"enabled": true, key: int64(0)}, {key: int64(0)}} {
+			_, err := f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{notes.New},
+				&config.Config{Modules: map[string]map[string]any{"notes": table}}, module.Deps{Dir: f.tempDir})
+			require.Error(t, err, "on or off")
+			assert.Contains(t, err.Error(), "modules.notes."+key)
+		}
+	}
+}
+
 func TestAChangeIsMadeFromTheNotesRevision(t *testing.T) {
 	t.Parallel()
 
@@ -1145,4 +1160,6 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	code, got = f.do(t, http.MethodDelete, "/api/notes/trash", "", session)
 	require.Equal(t, http.StatusNoContent, code, got)
 	assert.JSONEq(t, `{"module":"notes","kind":"trash","id":0,"area":0}`, strings.TrimPrefix(next(), "data: "), "emptying tells once")
+
+	expect(use(t, f.client(t, f.laptop), "create_note", object{"text": "Sow in March"}), "personal")
 }
