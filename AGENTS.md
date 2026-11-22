@@ -121,24 +121,25 @@ Every package states its one responsibility in its package comment, and
 - `internal/api`: the REST API under `/api/`, served from one route table,
   with the routes of the modules switched on beside the core's. Every refusal
   of a route and every path no route matches is answered as
-  `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
-  to its clean form. Request bodies are decoded strictly. Each route declares
-  its access, `open`, `read`, `write` or `owner`, and one check admits a
-  bearer token, else the session cookie, refuses a cookie request that
-  changes something without the `X-Recallsynapsis-CSRF` header, and puts the
-  `module.Caller` in the request's context. At `GET /api/events` one hub,
-  which the area routes and the modules' `Deps.Changed` tell, streams each
-  change to the open streams of the user whose change it is, and keeps none.
-  A stream ends when it falls behind, rather than hold up a writer, when the
-  server stops, and after an hour, so its access is checked again when it is
-  opened again. At `/mcp` it serves MCP over streamable HTTP, stateless, with
-  JSON responses and tools only: the core's `list_areas` and `search`, each
-  calling what its REST route calls, and the tools of the modules switched
-  on; two tools of one name stop the start. The SDK's bearer check admits an
-  API token alone, so a session cookie is no authority there, and one guard
-  refuses a call the token's access does not cover before the tool runs, puts
-  the token's `module.Caller` in the tool's context, and gives an error as the
-  line REST would answer.
+  `{"error": "one line"}`, save what `http.ServeContent` refuses itself as it
+  serves a note's file, such as a range it cannot serve; a path with `.`, `..`
+  or `//` is first redirected to its clean form. A JSON body is decoded
+  strictly. Each route declares its access, `open`, `read`, `write` or
+  `owner`, and one check admits a bearer token, else the session cookie,
+  refuses a cookie request that changes something without the
+  `X-Recallsynapsis-CSRF` header, and puts the `module.Caller` in the
+  request's context. At `GET /api/events` one hub, which the area routes and
+  the modules' `Deps.Changed` tell, streams each change to the open streams of
+  the user whose change it is, and keeps none. A stream ends when it falls
+  behind, rather than hold up a writer, when the server stops, and after an
+  hour, so its access is checked again when it is opened again. At `/mcp` it
+  serves MCP over streamable HTTP, stateless, with JSON responses and tools
+  only: the core's `list_areas` and `search`, each calling what its REST route
+  calls, and the tools of the modules switched on; two tools of one name stop
+  the start. The SDK's bearer check admits an API token alone, so a session
+  cookie is no authority there, and one guard refuses a call the token's
+  access does not cover before the tool runs, puts the token's `module.Caller`
+  in the tool's context, and gives an error as the line REST would answer.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables
@@ -177,8 +178,8 @@ Every package states its one responsibility in its package comment, and
   SDK. Beside it: the `Caller` an authorised request carries in its context,
   with the user, the source of the request and whether it may write; the
   access levels a route or a tool declares; and the refusal, the JSON reply
-  and the strict decoding of a body that every route uses, with the 1 MiB
-  cap on a body that `/mcp` keeps too.
+  and the strict decoding of a JSON body that every route taking one uses,
+  with the 1 MiB cap on a body that `/mcp` keeps too.
   Depguard rules in `.golangci.yaml` let a module package's code import
   `module` and `store` and no other package of this binary, let nothing but
   `api` and `cmd` import a module, and let only tests import the fake; tests
@@ -203,8 +204,18 @@ Every package states its one responsibility in its package comment, and
   nothing of the note is left there. A note in the trash is in no list but the
   trash's, is found by no search, counts for no tag and cannot be changed.
   Trashing and restoring it write no revision, and only the session cookie
-  deletes it for good, alone or by emptying the trash. It owns the tables
-  `notes`, `note_tags`, `note_revisions`, `note_links` and `notes_fts`.
+  deletes it for good, alone or by emptying the trash. A note's files, at most
+  `file_max_mib` each, are attached, read and removed with the session cookie
+  alone, and attaching and removing one write no revision. An upload is
+  written under `tmp/`, hashed as it arrives, and renamed into `files/` under
+  its SHA-256, so `files/` holds only whole contents, each once, shared by
+  every user; the contents go once the last attachment that names them is
+  removed or deleted with its note for good. A file keeps the type it was
+  declared as, and is served with `nosniff`, a `sandbox` content policy and to
+  its own origin alone: inline as its type only when it is a PNG, JPEG, GIF or
+  WebP image, else as a download of `application/octet-stream`, so no page
+  loads one as a script or a style. It owns the tables `notes`, `note_tags`,
+  `note_revisions`, `note_links`, `notes_fts` and `note_files`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.

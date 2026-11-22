@@ -1,7 +1,8 @@
 // Package module is what the core and its feature modules share: the
 // contract a feature module fulfils and what it is built with, the caller of
 // a request, the access a route or a tool asks of it, and the refusal, the
-// reply and the strict decoding of a body that every route uses.
+// reply and the strict decoding of a JSON body that every route taking one
+// uses.
 package module
 
 import (

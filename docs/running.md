@@ -94,7 +94,8 @@ The token starts with `recall_` and is shown once, as it is made: only its hash
 is kept. A client sends it as `Authorization: Bearer TOKEN`, to `/mcp` or to
 `/api/`. Settings lists each token with its access, when it was made and when it
 was last used. Revoking one refuses it from its next request. No token can list,
-make or revoke tokens, or delete a note for good: only a signed-in session can.
+make or revoke tokens, delete a note for good, or attach, read or remove a
+note's file: only a signed-in session can.
 
 ## From the image
 
@@ -207,6 +208,14 @@ request timeout shorter than an hour, or an idle timeout shorter than 15
 seconds, ends the stream early. The page then opens it again and reads afresh
 what it shows, so an early end costs a reload of that, not data.
 
+### Uploads
+
+A file is attached as the whole body of one request, of up to `file_max_mib`.
+A proxy in front must pass a body that large: nginx's `client_max_body_size` is
+1 MiB unless set, and nginx answers a larger file with its own 413 before it
+reaches the server. The server sets no timeout on reading a body, so a slow
+upload from a phone is not cut, but a proxy in front may set one.
+
 ### The sign-in limiter
 
 Wrong sign-ins are counted by the name and the connection's address; no
@@ -259,9 +268,11 @@ answers.
 - `recallsynapsis-YYYYMMDD.db`: a snapshot of the whole database, taken while
   the server serves, named by its day in `timezone`. A second backup the same
   day replaces that day's snapshot. The newest `keep` snapshots are kept.
-- `files/`: the files the data directory's `files/` holds, once a module
-  stores files there. A backup copies only those the backup lacks, and never
-  removes one, so this one `files/` serves every snapshot.
+- `files/`: the contents of the attached files that the data directory's
+  `files/` holds. A backup copies only those the backup lacks, and never
+  removes one, so this one `files/` serves every snapshot, and the contents
+  of an attachment removed since stay here. An upload under `tmp/` is never
+  copied.
 
 A snapshot appears only once it and the files are written in whole. A backup
 that fails before then is logged and changes no snapshot, and the next night's
@@ -313,7 +324,9 @@ is its own.
    ```
 
 4. When the backup has `files/`, move the data directory's own out of the way
-   and copy the backup's in.
+   and copy the backup's in. It holds the contents of attachments removed
+   since the snapshot too, which nothing removes again; they take room and
+   nothing else.
 
    ```sh
    [ -d files ] && mv files replaced/

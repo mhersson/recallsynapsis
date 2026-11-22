@@ -34,7 +34,7 @@ func TestALinkShowsWhatItNames(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	session := f.signIn(t)
+	session := f.signIn(t, "ada")
 
 	beds := f.create(t, `{"title":"Beds","area":"garden"}`, f.laptop)
 	idea := f.create(t, `{"body":"  Plant more\nin May","kind":"idea","inbox":true}`, f.laptop)
