@@ -36,7 +36,7 @@ func runWithInput(stdin string, args ...string) (code int, stdout, stderr string
 func openSite(t *testing.T, dir string) http.Handler {
 	t.Helper()
 
-	st, err := store.Open(t.Context(), filepath.Join(dir, "recallsynapsis.db"), auth.Migrations)
+	st, err := store.Open(t.Context(), filepath.Join(dir, "recallsynapsis.db"), migrations)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = st.Close() })

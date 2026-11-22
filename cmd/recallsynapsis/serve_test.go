@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/core"
+	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
 const validConfig = "listen = \"127.0.0.1:0\"\npublic_url = \"https://recall.example.org\"\nowner = \"ada\"\n"
@@ -446,4 +448,40 @@ func TestAStartWarnsWhileTheOwnerHasNoPassword(t *testing.T) {
 
 	_, _, stderr = runVerb("serve", "--data-dir", dir, "--config", config)
 	assert.NotContains(t, stderr, "level=WARN")
+}
+
+// Not parallel: serve replaces the default logger.
+func TestAStartMakesTheOwnersPersonalArea(t *testing.T) {
+	keepDefaultLogger(t)
+
+	dir := filepath.Join(t.TempDir(), "data")
+	config := writeConfig(t, t.TempDir(), unbindable)
+
+	personal := func(owner string) []core.Area {
+		st, err := store.Open(t.Context(), filepath.Join(dir, "recallsynapsis.db"), migrations)
+		require.NoError(t, err)
+
+		defer st.Close()
+
+		id, err := auth.New(st, time.Now).EnsureUser(t.Context(), owner)
+		require.NoError(t, err)
+
+		list, err := core.New(st).Areas(t.Context(), id, true)
+		require.NoError(t, err)
+
+		return list
+	}
+
+	runVerb("serve", "--data-dir", dir, "--config", config)
+
+	made := personal("ada")
+	require.Len(t, made, 1)
+	assert.Equal(t, "personal", made[0].Kind)
+
+	// The owner renamed keeps the area, and no start makes a second.
+	writeConfig(t, filepath.Dir(config), strings.Replace(unbindable, `"ada"`, `"grace"`, 1))
+	runVerb("serve", "--data-dir", dir, "--config", config)
+	runVerb("serve", "--data-dir", dir, "--config", config)
+
+	assert.Equal(t, made, personal("grace"))
 }

@@ -7,11 +7,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
 	"github.com/mhersson/recallsynapsis/internal/config"
+	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
+
+// migrations are every package's, auth's first: core's areas belong to its users.
+var migrations = slices.Concat(auth.Migrations, core.Migrations)
 
 // dataFlags adds --data-dir and --config to flags.
 func dataFlags(flags *flag.FlagSet) (dirFlag, configFlag *string) {
@@ -36,7 +41,7 @@ func openData(ctx context.Context, dirFlag, configFlag string) (string, *config.
 		return "", nil, nil, err
 	}
 
-	st, err := store.Open(ctx, filepath.Join(dir, "recallsynapsis.db"), auth.Migrations)
+	st, err := store.Open(ctx, filepath.Join(dir, "recallsynapsis.db"), migrations)
 	if err != nil {
 		return "", nil, nil, err
 	}

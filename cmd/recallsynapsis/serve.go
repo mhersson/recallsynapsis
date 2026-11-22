@@ -14,6 +14,7 @@ import (
 
 	"github.com/mhersson/recallsynapsis/internal/api"
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/web"
 )
 
@@ -68,6 +69,11 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	owner, err := signin.EnsureUser(ctx, cfg.Owner)
 	if err != nil {
+		return err
+	}
+
+	areas := core.New(st)
+	if err := areas.EnsurePersonal(ctx, owner); err != nil {
 		return err
 	}
 
