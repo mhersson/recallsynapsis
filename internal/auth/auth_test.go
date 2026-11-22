@@ -2,9 +2,9 @@ package auth
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -129,28 +129,28 @@ func TestAUserWithNoPasswordCannotSignIn(t *testing.T) {
 	}
 }
 
-// Not parallel: it measures time.
-func TestAWrongNameTakesAsLongAsAWrongPassword(t *testing.T) {
+// Not parallel: it reads what the whole process allocates.
+func TestAWrongNameCostsWhatAWrongPasswordDoes(t *testing.T) {
 	f := newFixture(t)
 
-	// The fastest of three, each from its own address so the limiter stays out of it.
-	took := func(name string) time.Duration {
-		best := time.Hour
+	// Each verify allocates argon2's memory afresh, so the bytes a sign-in
+	// allocates count its verifies, and unlike its time no load moves them.
+	verify := uint64(argonMemory) * 1024
 
-		for i := range 3 {
-			start := time.Now()
-			_, err := f.login(t, name, "wrong horse battery", fmt.Sprintf("192.0.2.%d", i))
-			best = min(best, time.Since(start))
+	for _, name := range []string{"ada", "grace"} {
+		var before, after runtime.MemStats
 
-			require.ErrorIs(t, err, ErrBadLogin)
-		}
+		runtime.ReadMemStats(&before)
 
-		return best
+		_, err := f.login(t, name, "wrong horse battery", "192.0.2.1")
+
+		runtime.ReadMemStats(&after)
+		require.ErrorIs(t, err, ErrBadLogin)
+
+		got := after.TotalAlloc - before.TotalAlloc
+		assert.GreaterOrEqual(t, got, verify, "%s is answered without the verify", name)
+		assert.Less(t, got, 2*verify, "%s is answered with more than one verify", name)
 	}
-
-	wrongPassword, wrongName := took("ada"), took("grace")
-	assert.Greater(t, wrongName, wrongPassword/2, "a wrong name is answered without the verify")
-	assert.Less(t, wrongName, wrongPassword*2)
 }
 
 func TestTheThirdFailureStartsTheWait(t *testing.T) {
