@@ -17,8 +17,12 @@ import (
 // Module is what a feature module offers. Everything in it but its
 // migrations is gated by the enabled key of its [modules.NAME] table.
 type Module struct {
-	Name       string            // the key under [modules], and the owner of its migrations
-	Settings   any               // nil, or a pointer to its settings with their defaults; its table is decoded into them once it is built
+	Name string // the key under [modules], and the owner of its migrations
+	// Settings is nil, or a pointer to the module's settings with their
+	// defaults, which its table is decoded into once it is built. A Check()
+	// error method on them runs then, on or off; its error begins with the
+	// key, as "size: 0 is not at least 1", and stops the start.
+	Settings   any
 	Migrations []store.Migration // its own tables, applied whether it is on or not; their Owner is its Name
 	Routes     []Route
 	Tools      []Tool

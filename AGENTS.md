@@ -158,9 +158,10 @@ Every package states its one responsibility in its package comment, and
   its name and is never archived, and their projects, each with a name unique
   in any case and a slug made from it. It finds one of a user's areas by its
   id, its slug or its name. It builds the feature modules the binary lists: it
-  decodes each one's table, refuses a table no module has, a module route
-  that is open and a module tool that asks for neither read nor write, and
-  applies every module's migrations, on or off, after auth's and its own.
+  decodes each one's table and checks its settings, on or off, refuses a
+  table no module has, a module route that is open and a module tool that
+  asks for neither read nor write, and applies every module's migrations, on
+  or off, after auth's and its own.
   Over the modules switched on it searches, grouping the hits by module,
   giving each its area's slug and failing on a hit outside the caller's
   areas, resolves a reference, unavailable rather than an error when no
@@ -168,9 +169,10 @@ Every package states its one responsibility in its package comment, and
   table `areas`.
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
-  settings, migrations, routes, MCP tools, jobs, and optionally its search,
-  an item as a link shows it, and what links to a reference; the `Deps` it is
-  built with; and the shapes they exchange, among them the `Area`.
+  settings and their check, migrations, routes, MCP tools, jobs, and
+  optionally its search, an item as a link shows it, and what links to a
+  reference; the `Deps` it is built with; and the shapes they exchange, among
+  them the `Area`.
   `NewTool` makes a tool from a typed function, so no module touches the MCP
   SDK. Beside it: the `Caller` an authorised request carries in its context,
   with the user, the source of the request and whether it may write; the
