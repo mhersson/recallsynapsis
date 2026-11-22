@@ -60,7 +60,8 @@ The owner's words, which bind every change:
 - CI (`.github/workflows/ci.yaml`) runs the gates of `make check`,
   `govulncheck`, `make web-check` and `npm audit`, and on a pull request
   `make scan-commits` against its base. Dependabot bumps the Go modules, the
-  web app's npm packages and the pinned actions every week.
+  web app's npm packages, the pinned actions and the image's base images
+  every week.
 
 ## Looking at the web app
 
@@ -179,3 +180,6 @@ Every package states its one responsibility in its package comment, and
   `web/dist/placeholder.html` in its place. Each module of the web app is one
   folder under `web/src/modules/`, listed in `web/src/modules/registry.ts`.
 - `scripts/`: the scans and the line count that `make` runs.
+- `Dockerfile`: Node builds the web app, Go builds the binary with it
+  embedded, and a distroless static image runs it as user 65532. Every base
+  image is pinned by digest. `--build-arg VERSION=x.y.z` stamps the version.
