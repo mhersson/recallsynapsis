@@ -95,6 +95,10 @@ Every package states its one responsibility in its package comment, and
   Every refusal and every path no route matches is answered as
   `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
   to its clean form. Request bodies are decoded strictly.
+- `internal/auth`: signs a user in with a name and an argon2id password,
+  slows wrong ones by the name's digest and the address, and keeps the
+  sessions and API tokens, both stored only as hashes. It owns the tables
+  `users`, `sessions` and `api_tokens`.
 - `internal/config`: reads the configuration file strictly: an unknown key, a
   wrong type or an unusable value is refused with the key named. It keeps
   each `[modules.NAME]` table as read.
