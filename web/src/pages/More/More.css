@@ -1,0 +1,27 @@
+.list.more {
+  margin-top: 12px;
+}
+
+.mrow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--bg2);
+  color: var(--fg);
+}
+
+.mrow:hover {
+  text-decoration: none;
+}
+
+.mrow .ic {
+  margin-top: 3px;
+  color: var(--grey1);
+}
+
+.mrow-note {
+  display: block;
+  color: var(--grey1);
+  font-size: 12.5px;
+}

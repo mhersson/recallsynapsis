@@ -8,7 +8,7 @@ import PhoneTabs from './components/PhoneTabs.tsx'
 import SideBar from './components/SideBar.tsx'
 import { useNarrow } from './components/useNarrow.ts'
 import Login from './pages/Login/Login.tsx'
-import Placeholder from './pages/Placeholder.tsx'
+import More from './pages/More/More.tsx'
 import AreaPage from './pages/Projects/AreaPage.tsx'
 import Projects from './pages/Projects/Projects.tsx'
 import Search from './pages/Search/Search.tsx'
@@ -40,7 +40,7 @@ function Frame() {
             <Route path="/areas/:id" element={<AreaPage />} />
             <Route path="/search" element={<Search />} />
             <Route path="/settings" element={<Settings />} />
-            <Route path="/more" element={<Placeholder title="More" />} />
+            <Route path="/more" element={<More />} />
             {on.flatMap((m) => m.routes).map((r) => (
               <Route key={r.path} path={r.path} element={r.element} />
             ))}
