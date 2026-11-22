@@ -155,9 +155,10 @@ type filter struct {
 	limit int // defaultLimit when 0
 }
 
+// page is what a list gives: its notes, and how many it was asked for in all.
 type page struct {
 	Notes []row `json:"notes"`
-	More  bool  `json:"more"`
+	Total int   `json:"total"`
 }
 
 type tagCount struct {
@@ -281,7 +282,7 @@ func (n notes) read(ctx context.Context, slugs map[int64]string, userID, id int6
 }
 
 // list gives the caller's notes that f asks for, the most recently changed
-// first, and whether there are more.
+// first, and how many there are in all.
 func (n notes) list(ctx context.Context, f filter) (page, error) {
 	c, _ := module.CallerFrom(ctx)
 
@@ -320,10 +321,11 @@ func (n notes) list(ctx context.Context, f filter) (page, error) {
 		return page{}, err
 	}
 
-	rows, err := n.Store.QueryContext(ctx, `SELECT `+columns+` FROM notes
+	// The window counts every row the query matches, before the limit cuts them.
+	rows, err := n.Store.QueryContext(ctx, `SELECT `+columns+`, count(*) OVER () FROM notes
 		WHERE user_id = ?1 AND ?2 IN (0, area_id) AND ?3 IN ('', kind) AND (?4 IS NULL OR inbox = ?4)
 			AND (?5 = '' OR EXISTS (SELECT 1 FROM note_tags WHERE note_id = notes.id AND tag = ?5))
-		ORDER BY changed_at DESC, id DESC LIMIT ?6`, c.UserID, area, f.kind, f.inbox, f.tag, f.limit+1)
+		ORDER BY changed_at DESC, id DESC LIMIT ?6`, c.UserID, area, f.kind, f.inbox, f.tag, f.limit)
 	if err != nil {
 		return page{}, fmt.Errorf("notes: list: %w", err)
 	}
@@ -332,7 +334,7 @@ func (n notes) list(ctx context.Context, f filter) (page, error) {
 	out := page{Notes: []row{}}
 
 	for rows.Next() {
-		r, err := scanRow(rows, slugs)
+		r, err := scanRow(rows, slugs, &out.Total)
 		if err != nil {
 			return page{}, fmt.Errorf("notes: list: %w", err)
 		}
@@ -342,10 +344,6 @@ func (n notes) list(ctx context.Context, f filter) (page, error) {
 
 	if err := rows.Err(); err != nil {
 		return page{}, fmt.Errorf("notes: list: %w", err)
-	}
-
-	if len(out.Notes) > f.limit {
-		out.Notes, out.More = out.Notes[:f.limit], true
 	}
 
 	return out, nil

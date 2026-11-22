@@ -148,8 +148,8 @@ func (f *fixture) change(t *testing.T, note object, body, auth string) object {
 	return got
 }
 
-// titles are the titles of the notes a list answers, in its order.
-func (f *fixture) titles(t *testing.T, query, auth string) ([]string, bool) {
+// titles are the titles of the notes a list answers, in its order, and its total.
+func (f *fixture) titles(t *testing.T, query, auth string) ([]string, int) {
 	t.Helper()
 
 	code, got := f.do(t, http.MethodGet, "/api/notes"+query, "", auth)
@@ -160,7 +160,7 @@ func (f *fixture) titles(t *testing.T, query, auth string) ([]string, bool) {
 		out = append(out, n.(object)["title"].(string))
 	}
 
-	return out, got["more"].(bool)
+	return out, int(got["total"].(float64))
 }
 
 func path(note object) string {
@@ -473,18 +473,22 @@ func TestTheListFilters(t *testing.T) {
 		{"?inbox=false&kind=idea&tag=spring", []string{"D"}},
 		{"?area=personal&inbox=true&kind=idea", []string{}},
 	} {
-		got, more := f.titles(t, tt.query, f.phone)
+		got, total := f.titles(t, tt.query, f.phone)
 		assert.Equal(t, tt.want, got, tt.query)
-		assert.False(t, more, tt.query)
+		assert.Equal(t, len(tt.want), total, tt.query)
 	}
 
-	got, more := f.titles(t, "?limit=2", f.phone)
+	got, total := f.titles(t, "?limit=2", f.phone)
 	assert.Equal(t, []string{"D", "C"}, got)
-	assert.True(t, more, "it says when there are more")
+	assert.Equal(t, 4, total, "the total counts every note asked for, whatever the limit")
 
-	got, more = f.titles(t, "?limit=4", f.phone)
+	got, total = f.titles(t, "?area=garden&limit=1", f.phone)
+	assert.Equal(t, []string{"C"}, got)
+	assert.Equal(t, 2, total)
+
+	got, total = f.titles(t, "?limit=4", f.phone)
 	assert.Len(t, got, 4)
-	assert.False(t, more)
+	assert.Equal(t, 4, total)
 
 	f.change(t, b, `{"revision":1,"body":"Sow in March"}`, f.laptop)
 
@@ -518,13 +522,13 @@ func TestTheListGivesAtMostFiftyUnlessAsked(t *testing.T) {
 		f.create(t, fmt.Sprintf(`{"title":"%d"}`, i), f.laptop)
 	}
 
-	got, more := f.titles(t, "", f.phone)
+	got, total := f.titles(t, "", f.phone)
 	assert.Len(t, got, 50)
-	assert.True(t, more)
+	assert.Equal(t, 51, total)
 
-	got, more = f.titles(t, "?limit=500", f.phone)
+	got, total = f.titles(t, "?limit=500", f.phone)
 	assert.Len(t, got, 51)
-	assert.False(t, more)
+	assert.Equal(t, 51, total)
 }
 
 func TestTags(t *testing.T) {
@@ -582,8 +586,9 @@ func TestANoteOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
 	f := newFixture(t)
 	mine := f.create(t, `{"title":"Seeds","area":"garden","tags":["spring"]}`, f.laptop)
 
-	got, _ := f.titles(t, "", f.grace)
+	got, total := f.titles(t, "", f.grace)
 	assert.Equal(t, []string{}, got)
+	assert.Zero(t, total, "a total counts the caller's notes alone")
 
 	got, _ = f.titles(t, "?tag=spring", f.grace)
 	assert.Equal(t, []string{}, got)
@@ -621,8 +626,9 @@ func TestANoteOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
 	require.Equal(t, http.StatusOK, code)
 	assert.Equal(t, mine, answer, "her tries changed nothing")
 
-	got, _ = f.titles(t, "", f.laptop)
+	got, total = f.titles(t, "", f.laptop)
 	assert.Equal(t, []string{"Seeds"}, got)
+	assert.Equal(t, 1, total)
 
 	code, answer = f.do(t, http.MethodGet, path(theirs), "", f.laptop)
 	refused(t, http.StatusNotFound, code, answer)
