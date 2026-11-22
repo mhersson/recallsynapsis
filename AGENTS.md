@@ -187,7 +187,12 @@ Every package states its one responsibility in its package comment, and
   unless the same change puts it in the inbox, and a note in the inbox is in
   the personal area. A change names the revision it was made from and is
   refused once the note has moved on, unless it only appends, and every
-  change writes a revision with its source. It owns the tables `notes`,
+  change writes a revision with its source. Any revision can be read, and
+  restoring one writes a new one with its title, body and tags, leaving the
+  area, the kind and the inbox flag as they are. A note in the trash is in no
+  list but the trash's, counts for no tag and cannot be changed. Trashing and
+  restoring it write no revision, and only the session cookie deletes it for
+  good, alone or by emptying the trash. It owns the tables `notes`,
   `note_tags` and `note_revisions`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and

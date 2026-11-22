@@ -14,7 +14,7 @@ const (
 	Open  Access = iota // nothing
 	Read                // the session cookie or any token
 	Write               // the session cookie or a write token
-	Owner               // the session cookie alone, so no token makes or revokes a token
+	Owner               // the session cookie alone, so no token makes a token or deletes anything for good
 )
 
 // Refusal is a refusal that is the caller's: a status and one line saying why.
