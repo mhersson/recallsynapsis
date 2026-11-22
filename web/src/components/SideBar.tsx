@@ -3,15 +3,15 @@ import { Link, NavLink, useLocation } from 'react-router'
 import { api } from '../api/client.ts'
 import { touchesAreas, useStream } from '../api/stream.ts'
 import type { Area } from '../api/types.ts'
-import type { Module } from '../modules/registry.ts'
+import type { Action, Module } from '../modules/registry.ts'
 import { AddIcon, ProjectsIcon, SearchIcon, SettingsIcon } from './icons.tsx'
 import './SideBar.css'
 
-type Props = { modules: Module[]; live: boolean }
+type Props = { modules: Module[]; action?: Action; onAction: () => void; live: boolean }
 
 const item = ({ isActive }: { isActive: boolean }) => 'side-item' + (isActive ? ' on' : '')
 
-export default function SideBar({ modules, live }: Props) {
+export default function SideBar({ modules, action, onAction, live }: Props) {
   // The dialog that makes a project opens over the Projects list, which stays current.
   const { pathname } = useLocation()
   const projects = pathname === '/projects' || pathname === '/areas/new'
@@ -24,10 +24,21 @@ export default function SideBar({ modules, live }: Props) {
   return (
     <nav className="side">
       <span className="brand">Recall Synapsis</span>
+      {action && (
+        <button className="btn primary side-act" onClick={onAction}>
+          {action.icon}
+          {action.label}
+        </button>
+      )}
       {modules.flatMap((m) => m.nav).map((e) => (
         <NavLink key={e.to} to={e.to} className={item}>
           {e.icon}
           {e.label}
+          {e.count && (
+            <span className="cnt">
+              <e.count />
+            </span>
+          )}
         </NavLink>
       ))}
       <NavLink to="/search" className={item}>

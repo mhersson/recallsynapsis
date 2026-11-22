@@ -29,3 +29,15 @@
   background: var(--bg2);
   color: var(--fg);
 }
+
+.tabs .lbl {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tabs a.act {
+  background: var(--green);
+  color: var(--bg0);
+  font-weight: 600;
+}

@@ -1,23 +1,28 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Session } from './api/types.ts'
 import { open } from './test-app.tsx'
 import { FakeEventSource, fakeServer, json, narrow, redirected } from './test-server.ts'
 
-// Stand-in modules, each on while the session names it: plain adds nothing, and things has a home and a page that shows
-// the signed-in user's name. The factory is hoisted above the imports, so it makes its elements without JSX.
+// Stand-in modules, each on while the session names it: plain adds nothing, and things has a home, a page that shows
+// the signed-in user's name, an entry with a count of 7, and an action whose form is a button that tells the area it was
+// given and whether it is in a dialog, and closes it. The factory is hoisted above the imports, so it makes its elements without JSX.
 vi.mock('./modules/registry.ts', async () => {
   const { createElement } = await import('react')
   const { useSession } = await import('./session.ts')
   const Things = () => createElement('h1', null, useSession().user.name)
+  const Act = ({ area, dialog, onClose }: { area?: number; dialog?: boolean; onClose: () => void }) =>
+    createElement('button', { 'data-area': area ?? '', 'data-dialog': !!dialog, onClick: onClose })
+  const things = { to: '/things', label: 'Things', icon: null, count: () => 7 }
   return {
     modules: [
       { name: 'plain', nav: [], tabs: [], more: [], routes: [] },
       {
         name: 'things',
         home: '/things',
-        nav: [{ to: '/things', label: 'Things', icon: null }],
-        tabs: [{ to: '/things', label: 'Things', icon: null }],
+        action: { to: '/act', label: 'Act', icon: null, form: Act },
+        nav: [things],
+        tabs: [things],
         more: [{ to: '/odds', label: 'Odds', note: 'Odd things', icon: null }],
         routes: [
           { path: '/things', element: createElement(Things) },
@@ -167,7 +172,52 @@ test('with a module on, the shell shows its entries and its pages, which read th
   await show('/things')
   expect(links()).toEqual(['/things', '/search', '/projects', '/areas/new', '/areas/1', '/areas/2', '/settings'])
   expect(current()).toEqual(['/things'])
+  expect(nav()[0]).toHaveTextContent('7')
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(session.user.name)
+})
+
+test('the button of the side bar opens the action in a dialog over the page, given the area whose page is open', async () => {
+  narrow(false)
+  signedIn(['things'])
+  await show('/areas/2')
+  await userEvent.click(within(screen.getByRole('navigation')).getByRole('button'))
+  const form = within(screen.getByRole('dialog')).getByRole('button')
+  expect(form).toHaveAttribute('data-area', '2')
+  expect(form).toHaveAttribute('data-dialog', 'true')
+  await userEvent.click(form)
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(where()).toBe('/areas/2')
+
+  await userEvent.click(nav()[0])
+  await userEvent.click(within(screen.getByRole('navigation')).getByRole('button'))
+  expect(within(screen.getByRole('dialog')).getByRole('button')).toHaveAttribute('data-area', '')
+})
+
+test('on a phone the action is the centre tab, whose page is given the area whose page was open and closes back to it', async () => {
+  narrow(true)
+  signedIn(['things'])
+  await show('/areas/2')
+  expect(links()).toEqual(['/things', '/act?area=2', '/projects', '/more'])
+  expect(nav()[0]).toHaveTextContent('7')
+  await userEvent.click(nav()[1])
+  expect(where()).toBe('/act?area=2')
+  expect(current()).toEqual(['/act?area=2'])
+  // Pressed again, the tab keeps the page as it is.
+  await userEvent.click(nav()[1])
+  expect(where()).toBe('/act?area=2')
+  const form = within(screen.getByRole('main')).getByRole('button')
+  expect(form).toHaveAttribute('data-area', '2')
+  expect(form).toHaveAttribute('data-dialog', 'false')
+  await userEvent.click(form)
+  await waitFor(() => expect(where()).toBe('/areas/2'))
+})
+
+test('the action opened by its address closes to the landing page', async () => {
+  narrow(true)
+  signedIn(['things'])
+  await show('/act')
+  await userEvent.click(within(screen.getByRole('main')).getByRole('button'))
+  await waitFor(() => expect(where()).toBe('/things'))
 })
 
 test('a phone has the tabs of the modules that are on, then Projects and More', async () => {
@@ -179,7 +229,7 @@ test('a phone has the tabs of the modules that are on, then Projects and More', 
 
   signedIn(['things'])
   await show()
-  expect(links()).toEqual(['/things', '/projects', '/more'])
+  expect(links()).toEqual(['/things', '/act', '/projects', '/more'])
 })
 
 test.each([
