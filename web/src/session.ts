@@ -5,6 +5,12 @@ import { modules, type Item, type Module } from './modules/registry.ts'
 // The shell provides it once read, so every page below the shell has one.
 export const SessionContext = createContext<Session | null>(null)
 
+// The action of the modules switched on, which the shell opens for an area: in a dialog over the page on desktop, as its
+// page on a phone. Null when no module switched on has one.
+export const ActionContext = createContext<{ label: string; open: (area: number) => void } | null>(null)
+
+export const useAction = () => useContext(ActionContext)
+
 export function useSession(): Session {
   return useContext(SessionContext)!
 }

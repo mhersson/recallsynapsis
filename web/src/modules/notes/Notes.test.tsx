@@ -445,3 +445,49 @@ test('on a phone the idea bank is a row of More, and an idea opens as a page who
   await userEvent.click(await main().findByRole('link'))
   await waitFor(() => expect(where()).toBe('/ideas'))
 })
+
+test('a project lists its notes and its ideas, each leading to the list it was picked from, and Capture here opens Capture over the page with the project chosen', async () => {
+  narrow(false)
+  const calls = server([filed(1, 30, { area: 'garden' }), filed(2, 20, { area: 'garden', kind: 'idea' }), filed(3, 10)])
+  const { where } = await open('/areas/2')
+  expect(lists(calls).sort()).toEqual(['/api/notes?inbox=false&area=garden&kind=idea', '/api/notes?inbox=false&area=garden&kind=note'])
+  expect(rows().map((r) => r.getAttribute('href'))).toEqual(['/notes/1?area=garden&kind=note', '/ideas/2?area=garden'])
+
+  await userEvent.click(main().getAllByRole('button')[0])
+  expect(within(screen.getByRole('dialog')).getByRole('combobox')).toHaveValue('garden')
+  expect(where()).toBe('/areas/2')
+})
+
+test('on a phone Capture here opens the page of Capture with the project chosen', async () => {
+  narrow(true)
+  server([])
+  const { where } = await open('/areas/2')
+  await userEvent.click(within(screen.getByRole('main').querySelector<HTMLElement>('.area-foot')!).getAllByRole('button')[0])
+  await waitFor(() => expect(where()).toBe('/capture?area=2'))
+  await waitFor(() => expect(main().getByRole('combobox')).toHaveValue('garden'))
+})
+
+test('an archived project has no Capture here', async () => {
+  narrow(false)
+  notesServer([], (c) =>
+    c.path.startsWith('/api/areas?') ? json({ areas: [{ id: 2, kind: 'project', name: 'garden', slug: 'garden', description: '', archived: true }] }) : undefined,
+  )
+  await open('/areas/2')
+  expect(screen.getByRole('main').querySelectorAll('.page-head .btn')).toHaveLength(1)
+})
+
+test('an area whose notes cannot be read says why', async () => {
+  narrow(false)
+  server([], (c) => (c.path.startsWith('/api/notes?') ? json({ error: 'down' }, 502) : undefined))
+  await open('/areas/2')
+  expect(main().getByRole('alert')).toBeInTheDocument()
+})
+
+test('the personal area lists its notes and ideas, and has no Capture here', async () => {
+  narrow(false)
+  const calls = server([filed(1, 30)])
+  await open('/areas/1')
+  expect(lists(calls)).toHaveLength(2)
+  expect(rows().map((r) => r.getAttribute('href'))).toEqual(['/notes/1?area=personal&kind=note'])
+  expect(screen.getByRole('main').querySelectorAll('.page-head .btn')).toHaveLength(1)
+})

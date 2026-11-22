@@ -1,6 +1,7 @@
 import { AddIcon } from '../../components/icons.tsx'
 import type { Entry, Module } from '../registry.ts'
 import { mark } from './api.ts'
+import AreaNotes from './AreaNotes.tsx'
 import Capture from './Capture.tsx'
 import Inbox from './Inbox.tsx'
 import { IdeasIcon, InboxIcon, NotesIcon, Waiting } from './nav.tsx'
@@ -23,6 +24,7 @@ export const notes: Module = {
     { path: '/notes/:id?', element: <Notes key="notes" /> },
     { path: '/ideas/:id?', element: <Notes key="ideas" bank /> },
   ],
+  section: AreaNotes,
   // A reference is notes:ID, and a capture not yet filed is in the state inbox.
   item: (ref, kind, state) => ({
     to: `/notes/${ref.slice('notes:'.length)}`,

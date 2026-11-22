@@ -4,7 +4,7 @@ import { api, message } from '../../api/client.ts'
 import { touchesAreas, useStream } from '../../api/stream.ts'
 import type { Area } from '../../api/types.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { useModules, useSession } from '../../session.ts'
+import { useAction, useModules, useSession } from '../../session.ts'
 import AreaForm from './AreaForm.tsx'
 import './Projects.css'
 
@@ -18,6 +18,7 @@ function View({ id }: { id: number }) {
   const narrow = useNarrow()
   const { modules: names } = useSession()
   const modules = useModules()
+  const action = useAction()
   // undefined until read, null when there is no such area.
   const [area, setArea] = useState<Area | null>()
   const [editing, setEditing] = useState(false)
@@ -40,6 +41,12 @@ function View({ id }: { id: number }) {
     }
   }
 
+  // Only a project is chosen in advance: what is captured without an area waits in the inbox.
+  const here = action && area.kind === 'project' && !area.archived && (
+    <button className="btn" onClick={() => action.open(area.id)}>
+      {action.label} here
+    </button>
+  )
   const buttons = area.archived ? (
     <button className="btn" onClick={() => void archive(false)}>
       Restore
@@ -76,6 +83,7 @@ function View({ id }: { id: number }) {
         {!narrow && !editing && (
           <>
             <span className="spacer" />
+            {here}
             {buttons}
           </>
         )}
@@ -106,7 +114,12 @@ function View({ id }: { id: number }) {
         </>
       )}
       {!(narrow && editing) && holds}
-      {narrow && !editing && <div className="acts stack area-foot">{buttons}</div>}
+      {narrow && !editing && (
+        <div className="acts stack area-foot">
+          {here}
+          {buttons}
+        </div>
+      )}
     </div>
   )
 }

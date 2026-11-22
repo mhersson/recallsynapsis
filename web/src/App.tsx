@@ -8,7 +8,7 @@ import Dialog from './components/Dialog.tsx'
 import PageHead from './components/PageHead.tsx'
 import PhoneTabs from './components/PhoneTabs.tsx'
 import SideBar from './components/SideBar.tsx'
-import { useClose } from './components/useClose.ts'
+import { back, useClose } from './components/useClose.ts'
 import { useNarrow } from './components/useNarrow.ts'
 import type { Action } from './modules/registry.ts'
 import Login from './pages/Login/Login.tsx'
@@ -17,7 +17,7 @@ import AreaPage from './pages/Projects/AreaPage.tsx'
 import Projects from './pages/Projects/Projects.tsx'
 import Search from './pages/Search/Search.tsx'
 import Settings from './pages/Settings/Settings.tsx'
-import { SessionContext, enabled } from './session.ts'
+import { ActionContext, SessionContext, enabled } from './session.ts'
 import './App.css'
 
 // The page of a module's action, as a phone opens it.
@@ -34,6 +34,7 @@ function ActionPage({ action, home }: { action: Action; home: string }) {
 
 function Frame() {
   const narrow = useNarrow()
+  const navigate = useNavigate()
   const [session, setSession] = useState<Session | null>(null)
   const { live } = useEvents()
   const area = Number(useMatch('/areas/:id')?.params.id) || undefined
@@ -48,33 +49,39 @@ function Frame() {
   const on = enabled(session.modules)
   const home = on.find((m) => m.home)?.home ?? '/projects'
   const action = on.find((m) => m.action)?.action
+  const opener = action && {
+    label: action.label,
+    open: (at: number) => (narrow ? void navigate(`${action.to}?area=${at}`, { state: back }) : setActing({ area: at })),
+  }
 
   return (
     <SessionContext value={session}>
-      <div className={narrow ? 'frame narrow' : 'frame'}>
-        {!narrow && <SideBar modules={on} action={action} onAction={() => setActing({ area })} live={live} />}
-        <main className="main">
-          <Routes>
-            <Route path="/projects" element={<Projects />} />
-            <Route path="/areas/new" element={<Projects making />} />
-            <Route path="/areas/:id" element={<AreaPage />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/more" element={<More />} />
-            {on.flatMap((m) => m.routes).map((r) => (
-              <Route key={r.path} path={r.path} element={r.element} />
-            ))}
-            {action && <Route path={action.to} element={<ActionPage action={action} home={home} />} />}
-            <Route path="*" element={<Navigate to={home} replace />} />
-          </Routes>
-        </main>
-        {narrow && <PhoneTabs modules={on} action={action} area={area} />}
-        {acting && action && (
-          <Dialog title={action.label} onClose={() => setActing(undefined)}>
-            <action.form dialog area={acting.area} onClose={() => setActing(undefined)} />
-          </Dialog>
-        )}
-      </div>
+      <ActionContext value={opener ?? null}>
+        <div className={narrow ? 'frame narrow' : 'frame'}>
+          {!narrow && <SideBar modules={on} action={action} onAction={() => setActing({ area })} live={live} />}
+          <main className="main">
+            <Routes>
+              <Route path="/projects" element={<Projects />} />
+              <Route path="/areas/new" element={<Projects making />} />
+              <Route path="/areas/:id" element={<AreaPage />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/more" element={<More />} />
+              {on.flatMap((m) => m.routes).map((r) => (
+                <Route key={r.path} path={r.path} element={r.element} />
+              ))}
+              {action && <Route path={action.to} element={<ActionPage action={action} home={home} />} />}
+              <Route path="*" element={<Navigate to={home} replace />} />
+            </Routes>
+          </main>
+          {narrow && <PhoneTabs modules={on} action={action} area={area} />}
+          {acting && action && (
+            <Dialog title={action.label} onClose={() => setActing(undefined)}>
+              <action.form dialog area={acting.area} onClose={() => setActing(undefined)} />
+            </Dialog>
+          )}
+        </div>
+      </ActionContext>
     </SessionContext>
   )
 }
