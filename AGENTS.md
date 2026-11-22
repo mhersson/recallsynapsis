@@ -138,6 +138,9 @@ Every package states its one responsibility in its package comment, and
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
+- `internal/testkit`: `fake`, a feature module as small as the tests of what
+  serves modules need: a table, a route that adds to it, a search of it, and
+  a job that fails on every tick. Only tests register it.
 - `web`: the web app's npm package, with its sources in `web/src`, and the Go
   package that embeds its build from `web/dist/app` and serves it in front of
   the API. A binary built without the app serves the committed
