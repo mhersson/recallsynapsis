@@ -101,7 +101,7 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	log.Info("listening", "address", ln.Addr().String(), "public_url", cfg.PublicURL, "data_dir", dir, "version", version)
 
-	h := api.New(api.Deps{Auth: signin, Version: version, PublicURL: cfg.PublicURL, Timezone: cfg.Timezone})
+	h := api.New(api.Deps{Auth: signin, Core: areas, Version: version, PublicURL: cfg.PublicURL, Timezone: cfg.Timezone})
 
 	return serve(ctx, ln, logRequests(web.Handler(h), log), shutdownGrace, log)
 }

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -23,6 +24,7 @@ const maxBody = 1 << 20
 // Deps is what the handler works on.
 type Deps struct {
 	Auth      *auth.Service
+	Core      *core.Service
 	Version   string
 	PublicURL string // the configured public_url; the cookie is Secure when it is https
 	Timezone  string
@@ -50,6 +52,9 @@ var routes = []route{
 	{"POST /api/auth/login", open, (*server).login},
 	{"POST /api/auth/logout", read, (*server).logout},
 	{"GET /api/session", read, (*server).session},
+	{"GET /api/areas", read, (*server).areas},
+	{"POST /api/areas", write, (*server).createArea},
+	{"PATCH /api/areas/{id}", write, (*server).changeArea},
 	{"GET /api/tokens", owner, (*server).tokens},
 	{"POST /api/tokens", owner, (*server).createToken},
 	{"DELETE /api/tokens/{id}", owner, (*server).deleteToken},
