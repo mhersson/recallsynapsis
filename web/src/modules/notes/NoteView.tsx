@@ -5,12 +5,13 @@ import type { Area } from '../../api/types.ts'
 import Dialog from '../../components/Dialog.tsx'
 import Field from '../../components/Field.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
-import { ago } from '../../components/time.ts'
+import { ago, when } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { from, mark, nameOf, useNotes, type Kind, type Note } from './api.ts'
+import { from, mark, nameOf, useNotes, type Kind, type Note, type Version } from './api.ts'
 import { Place } from './Filing.tsx'
 import Files from './Files.tsx'
-import { AttachIcon } from './icons.tsx'
+import History, { RevisionView } from './History.tsx'
+import { AttachIcon, RestoreIcon } from './icons.tsx'
 import Links from './Links.tsx'
 import TagField from './TagField.tsx'
 import { size, useUploads } from './uploads.ts'
@@ -40,6 +41,9 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
   const [draft, setDraft] = useState<Draft>()
   const [sending, setSending] = useState(false)
   const [refused, setRefused] = useState('')
+  // The earlier revision being read, and the one a restore just brought back, as which revision and from when.
+  const [reading, setReading] = useState<number>()
+  const [restored, setRestored] = useState<{ from: number; at: string; as: number }>()
   // A note read, or a change's answer, that left the server before the note shown would show the note as it was. A file
   // changes no revision, so of the reads only the last one asked is shown.
   const show = (n: Note) => setNote((x) => (x && x.revision > n.revision ? x : n))
@@ -58,7 +62,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
   // At the note's level, so an upload goes on while the note is edited.
   const up = useUploads(id, read)
   // On desktop a file dropped on the note, or an image pasted anywhere, is attached to the note being read.
-  const attachable = !narrow && !draft && !!note && !note.trashed_at
+  const attachable = !narrow && !draft && !reading && !!note && !note.trashed_at
   const [over, setOver] = useState(false)
   const pasted = useEffectEvent((e: ClipboardEvent) => {
     // A paste in a dialog, such as Capture, is the dialog's. Cells copied from a spreadsheet come as text and as a picture
@@ -112,14 +116,16 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
       )
     )
 
-  // Sends a change and shows the note it answers. A refusal reads the note again and gives the server's line, which the
-  // page shows where the change was asked for.
-  async function send(method: string, path: string, body?: unknown) {
+  // Sends a change, shows the note it answers and gives it to done. A refusal reads the note again and gives the server's
+  // line, which the page shows where the change was asked for.
+  async function send(method: string, path: string, body?: unknown, done?: (n: Note) => void) {
     setRefused('')
     setSending(true)
     try {
-      show(await api<Note>(method, path, body))
+      const n = await api<Note>(method, path, body)
+      show(n)
       onChanged?.()
+      done?.(n)
       return ''
     } catch (e) {
       void read()
@@ -255,13 +261,28 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
     )
   }
 
+  if (reading)
+    return (
+      <RevisionView
+        note={note}
+        revision={reading}
+        onBack={() => setReading(undefined)}
+        onRestore={(v: Version) =>
+          send('POST', `/notes/${id}/revisions/${v.revision}/restore`, undefined, (n) => {
+            setReading(undefined)
+            setRestored({ from: v.revision, at: v.at, as: n.revision })
+          })
+        }
+      />
+    )
+
   const trashed = !!note.trashed_at
   const acts = !trashed && (
     <>
       <button className="btn" disabled={sending} onClick={() => setDraft({ from: note, title: note.title, body: note.body, area: note.area, kind: note.kind, tags: note.tags })}>
         Edit
       </button>
-      <button className="btn danger" disabled={sending} onClick={() => void send('POST', `/notes/${id}/trash`).then((line) => (line ? setRefused(line) : onGone()))}>
+      <button className="btn danger" disabled={sending} onClick={() => void send('POST', `/notes/${id}/trash`, undefined, onGone).then(setRefused)}>
         Trash
       </button>
     </>
@@ -290,6 +311,15 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
             Drop to attach it to this note
             <span>Any type{up.cap > 0 && `, at most ${size(up.cap)}`}.</span>
           </div>
+        </div>
+      )}
+      {restored?.as === note.revision && (
+        <div className="notice restored">
+          <div className="nt">
+            <RestoreIcon />
+            Restored revision {restored.from} as revision {restored.as}.
+          </div>
+          <p className="nd">The note reads as it did {when(restored.at)}. Every revision is kept, so this can be undone the same way.</p>
         </div>
       )}
       <div className="page-head">
@@ -333,6 +363,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
       <div className="sects">
         <Links note={note} areas={areas} trashed={trashed} sending={sending} onLinks={(links) => send('PATCH', `/notes/${id}`, { revision: note.revision, links })} />
         <Files note={note} trashed={trashed} up={up} onRemoved={() => void read()} />
+        <History note={note} fresh={restored?.as} onRead={setReading} />
       </div>
       {narrow && acts && <div className="acts stack note-foot">{acts}</div>}
     </div>

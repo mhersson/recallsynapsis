@@ -41,6 +41,12 @@ export type Note = Row & { body: string; said: string; links: Linked[]; linked_f
 
 export type List = { notes: Row[]; total: number }
 
+// A revision as the history lists it, the newest first: restored_from is the revision a restore brought back.
+export type Revision = { revision: number; at: string; source: string; said: string; restored_from: number | null }
+
+// A revision in full, its links as references.
+export type Version = Revision & { title: string; body: string; kind: Kind; area: string; inbox: boolean; tags: string[]; links: string[] }
+
 // Reads when the page mounts, when the stream opens again, on any change of a note and on any change of an area, whose
 // slug names the notes in it. A note moved between areas tells of its new area alone, so no change is passed over.
 export function useNotes(read: () => void) {

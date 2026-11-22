@@ -1,5 +1,5 @@
 import type { Area, Session } from '../../api/types.ts'
-import { full, listNotes, note, tagsOf } from '../../dev/fixtures.ts'
+import { full, history, listNotes, listed, note, tagsOf } from '../../dev/fixtures.ts'
 import { fakeServer, json, type Call } from '../../test-server.ts'
 import type { Note } from './api.ts'
 
@@ -12,7 +12,7 @@ export const areas: Area[] = [
 export const capture = (id: number, minutes: number, n: Partial<Note> = {}) => note(id, minutes, { inbox: true, body: `capture ${id}`, ...n })
 
 // A server with the given modules on that keeps the notes it is given, and lists them, their tags and each with its
-// links as the server does, with a cap of 15 MiB on a file; answer, when given, answers first, or late with a promise.
+// links and its history as the server does, with a cap of 15 MiB on a file; answer, when given, answers first, or late with a promise.
 export function notesServer(notes: Note[], answer: (c: Call) => Response | Promise<Response> | undefined = () => undefined, modules = ['notes']) {
   const session: Session = { user: { name: 'ada' }, modules, version: '1.2.3', timezone: 'UTC', last_backup: null }
   return fakeServer((c) => {
@@ -27,5 +27,7 @@ export function notesServer(notes: Note[], answer: (c: Call) => Response | Promi
     if (url.pathname === '/api/notes/limits') return json({ file_max_bytes: 15 << 20 })
     const n = notes.find((x) => url.pathname === `/api/notes/${x.id}`)
     if (n) return json(full(notes, n))
+    const h = notes.find((x) => url.pathname === `/api/notes/${x.id}/revisions`)
+    if (h) return json(listed(history(h)))
   })
 }

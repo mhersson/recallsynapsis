@@ -9,8 +9,8 @@ import { api } from '../api/client.ts'
 import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
-import type { Note } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, NOTES, OLDER, SECRET, SESSION, TOKENS, full, listNotes, note, refs, searchNotes, tagsOf } from './fixtures.ts'
+import type { Note, Version } from '../modules/notes/api.ts'
+import { AREAS, HEALTH, NOTES, OLDER, SECRET, SESSION, TOKENS, full, history, listNotes, listed, note, refs, searchNotes, tagsOf, version } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -75,6 +75,10 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
 // save=moved refuses the first save of each note's text, as a client had saved the note three minutes before.
 const moved = new Set<number>()
 
+// Each note's revisions, oldest first, from when the page first asks of the note.
+const versions = new Map<number, Version[]>()
+const historyOf = (n: Note) => versions.get(n.id) ?? versions.set(n.id, history(n)).get(n.id)!
+
 // The notes routes, as the server answers them, telling the stream of every write.
 // upload=wait holds every upload, so it stays under way.
 function answerNotes(method: string, url: URL, body: Record<string, unknown>, file?: Blob): Response | Promise<Response> {
@@ -82,7 +86,11 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
     tell({ module: 'notes', kind: 'note', id: n.id, area: areas.find((a) => a.slug === n.area)?.id ?? 0 })
     return full(notes, n)
   }
-  const changed = (n: Note) => told(Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() }))
+  const changed = (n: Note) => {
+    Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() })
+    versions.get(n.id)?.push(version(n, n.revision))
+    return told(n)
+  }
   if (url.pathname === '/api/notes' && method === 'GET') return json(listNotes(notes, url.searchParams))
   if (url.pathname === '/api/notes/tags' && method === 'GET') return json(tagsOf(notes))
   if (url.pathname === '/api/notes/limits' && method === 'GET') return json({ file_max_bytes: 15 << 20 })
@@ -97,9 +105,20 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
     notes.push(n)
     return json(changed(n), 201)
   }
-  const [, id, part, fileID] = /^\/api\/notes\/(\d+)(?:\/(trash|files)(?:\/(\d+))?)?$/.exec(url.pathname) ?? []
+  const [, id, part, sub, restore] = /^\/api\/notes\/(\d+)(?:\/(trash|files|revisions)(?:\/(\d+)(\/restore)?)?)?$/.exec(url.pathname) ?? []
   const n = notes.find((x) => x.id === Number(id))
   if (!n) return json({ error: 'not found' }, 404)
+  const revisions = historyOf(n)
+  if (part === 'revisions') {
+    const v = revisions.find((r) => r.revision === Number(sub))
+    if (!sub && method === 'GET') return json(listed(revisions))
+    if (!v) return json({ error: 'not found' }, 404)
+    if (method === 'GET' && !restore) return json(v)
+    if (n.trashed_at) return json({ error: 'the note is in the trash, and is restored before it is changed: conflict' }, 409)
+    const answer = changed(Object.assign(n, { title: v.title, body: v.body, tags: v.tags, links: refs(...v.links) }))
+    revisions[revisions.length - 1].restored_from = v.revision
+    return json(answer)
+  }
   if (part === 'files' && method === 'POST' && file) {
     if (query.get('upload') === 'wait') return new Promise(() => {})
     const f = { id: Math.max(0, ...notes.flatMap((x) => x.files.map((y) => y.id))) + 1, name: url.searchParams.get('name')!, type: file.type || 'application/octet-stream', size: file.size }
@@ -109,7 +128,7 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
     return json(f, 201)
   }
   if (part === 'files' && method === 'DELETE') {
-    n.files = n.files.filter((f) => f.id !== Number(fileID))
+    n.files = n.files.filter((f) => f.id !== Number(sub))
     n.file_count = n.files.length
     told(n)
     return new Response(null, { status: 204 })
@@ -124,7 +143,9 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
   if (query.get('save') === 'moved' && 'body' in body && !moved.has(n.id)) {
     moved.add(n.id)
     const at = new Date(Date.now() - 3 * 60_000).toISOString()
-    told(Object.assign(n, { revision: n.revision + 1, source: 'portal', changed_at: at, body: n.body + '\n\nPortal reads the marks from its own configuration.' }))
+    Object.assign(n, { revision: n.revision + 1, source: 'portal', changed_at: at, body: n.body + '\n\nPortal reads the marks from its own configuration.' })
+    revisions.push(version(n, n.revision))
+    told(n)
   }
   if (body.revision !== n.revision) return json({ error: `note ${n.id} is at revision ${n.revision}, and the change was made from ${body.revision}: conflict` }, 409)
   const { revision: _, ...change } = body

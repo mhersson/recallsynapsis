@@ -1,5 +1,5 @@
 import type { Area, Hit, Session, Token } from '../api/types.ts'
-import type { Kind, Linked, List, Note, Row } from '../modules/notes/api.ts'
+import type { Kind, Linked, List, Note, Row, Version } from '../modules/notes/api.ts'
 
 // What the API serves, in its shapes; the harness answers from it. Times are counted back from when the page loads.
 const before = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
@@ -110,6 +110,7 @@ export const NOTES: Note[] = [
     tags: ['approval', 'portal'],
     revision: 3,
     title: 'Approval belongs to the client',
+    said: 'Note that approving what an AI writes is the client’s job, not ours.',
     // notes:37 was deleted for good, so its link leads nowhere.
     links: refs('notes:18', 'notes:44', 'notes:37'),
     files: [
@@ -163,6 +164,44 @@ export const NOTES: Note[] = [
   }),
   note(15, 8 * 24 * 60, { area: 'portal', tags: ['approval'], title: 'Marks are set per tool, never by the service', body: 'The service cannot vouch for itself.' }),
 ]
+
+// Revision n of note as it is now, as GET /api/notes/{id}/revisions/{n} gives it; the first carries what was said.
+export const version = (n: Note, revision: number): Version => ({
+  revision,
+  at: revision === n.revision ? n.changed_at : n.created_at,
+  source: n.source,
+  said: revision === 1 ? n.said : '',
+  restored_from: null,
+  title: n.title,
+  body: n.body,
+  kind: n.kind,
+  area: n.area,
+  inbox: n.inbox,
+  tags: n.tags,
+  links: n.links.map((l) => l.ref),
+})
+
+// What a note's earlier revisions held where it was not what the note holds now, oldest first.
+const EARLIER: Record<number, Partial<Version>[]> = {
+  12: [
+    { at: before(3 * 24 * 60 + 200), source: 'portal', body: 'Portal marks each tool as free or as needing a tap.', tags: ['approval'], links: [] },
+    {
+      at: before(2 * 24 * 60 + 300),
+      source: 'aim',
+      body: 'Portal marks each tool as free or as needing a tap. Recall Synapsis only has to split its tools by risk.\n\n- capture, list and read tools can be free\n- knowledge changes always meet the Allow card',
+      tags: ['approval'],
+      links: ['notes:18'],
+    },
+  ],
+}
+
+// The revisions a note has, oldest first: each holds what the note holds now, but where EARLIER says otherwise.
+export const history = (n: Note): Version[] => Array.from({ length: n.revision }, (_, i) => ({ ...version(n, i + 1), ...EARLIER[n.id]?.[i] }))
+
+// GET /api/notes/{id}/revisions from a note's revisions, oldest first: each as the history lists it, the newest first.
+export const listed = (versions: Version[]) => ({
+  revisions: versions.map(({ revision, at, source, said, restored_from }) => ({ revision, at, source, said, restored_from })).reverse(),
+})
 
 // What many=1 adds: older notes, two days apart from ten days back, so a list holds more than it shows.
 const PAST: [Kind, string, string, string[]][] = [
