@@ -138,7 +138,6 @@ export default function Tokens({ made, setMade }: { made: Made | null; setMade: 
           <p className="note">Name it after the client. Every change it makes carries this name.</p>
         </div>
         <Choice
-          id="token-access"
           label="Access"
           options={accesses}
           value={form.access}

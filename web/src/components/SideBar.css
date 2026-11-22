@@ -14,6 +14,14 @@
   padding: 2px 10px 12px;
 }
 
+.side-act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
 .side a:hover {
   text-decoration: none;
 }
@@ -32,6 +40,10 @@
 .side-item > span {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.side-item > .cnt {
+  margin-left: auto;
 }
 
 .side-item.on {

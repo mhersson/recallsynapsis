@@ -1,4 +1,5 @@
 import type { Area, Hit, Session, Token } from '../api/types.ts'
+import type { Note, Row } from '../modules/notes/api.ts'
 
 // What the API serves, in its shapes; the harness answers from it. Times are counted back from when the page loads.
 const before = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
@@ -74,3 +75,68 @@ export const TOKENS: Token[] = [
 
 // What POST /api/tokens answers the one time it shows a token.
 export const SECRET = 'recall_tV3n9QkZp2Lw8xRb5HcM1yJf7sGd4aEu6oNqX0iTzKe'
+
+// A note of the personal area, changed minutes ago at its first revision, unless n says otherwise.
+export const note = (id: number, minutes: number, n: Partial<Note>): Note => ({
+  excerpt: (n.body ?? '').slice(0, 200),
+  id,
+  ref: `notes:${id}`,
+  area: 'personal',
+  kind: 'note',
+  title: '',
+  inbox: false,
+  tags: [],
+  file_count: 0,
+  revision: 1,
+  source: 'web',
+  created_at: before(minutes),
+  changed_at: before(minutes),
+  trashed_at: null,
+  body: '',
+  said: '',
+  ...n,
+})
+
+// A note as a list gives it.
+export const row = ({ body: _, said: __, ...r }: Note): Row => r
+
+// GET /api/notes/{id} for each note: the captures that wait in the inbox, then filed notes and ideas. A list gives the
+// first 200 characters of the body as the excerpt.
+export const NOTES: Note[] = [
+  note(118, 12, {
+    inbox: true,
+    tags: ['homelab', 'backup'],
+    source: 'portal',
+    body: 'Check whether Longhorn can back up to the NAS over NFS.',
+    said: 'Remind me to check if Longhorn can back up to the NAS.',
+  }),
+  note(117, 60, {
+    inbox: true,
+    source: 'portal',
+    body: 'Husk å bestille time til EU-kontroll for bilen før desember.',
+    said: 'Legg inn at jeg må bestille EU-kontroll før desember.',
+  }),
+  note(116, 3 * 60, { inbox: true, body: 'Let the idea bank bring up ideas nobody has touched for 90 days.' }),
+  note(40, 13 * 60, {
+    inbox: true,
+    source: 'aim',
+    title: 'Restore drill: prove a backup restores every month',
+    body: 'Start a server on last night’s backup and open the inbox.',
+  }),
+  note(115, 26 * 60, { inbox: true, source: 'aim', body: 'The capture cap should count characters after trimming.' }),
+  note(12, 2 * 60, {
+    area: 'recallsynapsis',
+    tags: ['approval', 'portal'],
+    revision: 3,
+    title: 'Approval belongs to the client',
+    body: 'Portal asks before a tool writes; the server never waits for a person.',
+  }),
+  note(31, 2 * 24 * 60, {
+    area: 'recallsynapsis',
+    kind: 'idea',
+    tags: ['search'],
+    title: 'Trigram search for Norwegian compound words',
+    body: 'So backup finds backupjobben and garasjeport finds port.',
+  }),
+  note(7, 5 * 24 * 60, { area: 'cavu', title: 'The backup job retries once', body: 'A failed backup is logged and the next night runs as usual.' }),
+]

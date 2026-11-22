@@ -65,8 +65,8 @@ export default function Settings() {
       title: 'This browser',
       body: (
         <>
-          <Choice id="look-palette" label="Palette" options={palettes} value={look.palette} onChange={(palette) => setLook({ ...look, palette })} />
-          <Choice id="look-theme" label="Theme" options={themes} value={look.theme} onChange={(theme) => setLook({ ...look, theme })} />
+          <Choice label="Palette" options={palettes} value={look.palette} onChange={(palette) => setLook({ ...look, palette })} />
+          <Choice label="Theme" options={themes} value={look.theme} onChange={(theme) => setLook({ ...look, theme })} />
           <p className="note">Applied at once. It holds for this browser only.</p>
         </>
       ),

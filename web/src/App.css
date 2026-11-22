@@ -83,11 +83,38 @@
   margin-top: 16px;
 }
 
+.empty b {
+  display: block;
+  color: var(--fg);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+/* A list and its open item, side by side on desktop. The item never gets less than half, so on a narrow window the
+   list gives way rather than the page scrolling sideways. */
+.panes {
+  display: grid;
+  grid-template-columns: minmax(0, 372px) minmax(50%, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.box {
+  background: var(--bg0);
+  border: 1px solid var(--bg2);
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+
 .acts {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.acts > .spacer {
+  flex: 1;
 }
 
 .list {
@@ -145,6 +172,17 @@
   font-size: 13px;
 }
 
+.tag {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--grey1);
+  border: 1px solid var(--bg3);
+  border-radius: 4px;
+  padding: 0 5px;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 /* A small square that marks what a row is; yellow marks what waits on the owner. */
 .mk {
   width: 8px;
@@ -157,6 +195,24 @@
 
 .mk.wait {
   background: var(--wait-yellow);
+}
+
+/* The count beside an entry of the navigation, in the yellow of what waits on the owner. */
+.cnt {
+  background: var(--wait-yellow);
+  color: var(--bg0);
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 17px;
+  min-width: 17px;
+  padding: 0 6px;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+.cnt:empty {
+  display: none;
 }
 
 .ghd {

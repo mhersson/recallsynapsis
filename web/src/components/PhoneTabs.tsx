@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router'
-import type { Entry, Module } from '../modules/registry.ts'
+import type { Action, Entry, Module } from '../modules/registry.ts'
 import { MoreIcon, ProjectsIcon } from './icons.tsx'
 import './PhoneTabs.css'
 
@@ -8,23 +8,36 @@ const core: Entry[] = [
   { to: '/more', label: 'More', icon: <MoreIcon /> },
 ]
 
-export default function PhoneTabs({ modules }: { modules: Module[] }) {
-  const { pathname } = useLocation()
+type Props = { modules: Module[]; action?: Action; area?: number }
+
+export default function PhoneTabs({ modules, action, area }: Props) {
+  const { pathname, search, state } = useLocation()
   // A project keeps Projects current, and a page reached through More keeps More current.
   const also: Record<string, string[]> = {
     '/projects': ['/areas'],
     '/more': ['/search', '/settings', ...modules.flatMap((m) => m.more.map((r) => r.to))],
   }
   const current = (to: string) => [to, ...(also[to] ?? [])].some((p) => pathname === p || pathname.startsWith(p + '/'))
-
-  return (
-    <nav className="tabs">
-      {[...modules.flatMap((m) => m.tabs), ...core].map((t) => (
-        <Link key={t.to} to={t.to} className={current(t.to) ? 'on' : undefined} aria-current={current(t.to) ? 'page' : undefined}>
-          {t.icon}
-          {t.label}
-        </Link>
-      ))}
-    </nav>
+  // The action's tab is green whether its page is open or not.
+  const tab = (t: Entry, to = t.to, carried?: unknown) => (
+    <Link key={t.to} to={to} state={carried} className={t === action ? 'act' : current(t.to) ? 'on' : undefined} aria-current={current(t.to) ? 'page' : undefined}>
+      {t.icon}
+      <span className="lbl">
+        {t.label}
+        {t.count && (
+          <span className="cnt">
+            <t.count />
+          </span>
+        )}
+      </span>
+    </Link>
   )
+
+  const tabs = [...modules.flatMap((m) => m.tabs), ...core].map((t) => tab(t))
+  if (action) {
+    // Pressed again on its own page, the action's tab leaves that page as it is; from elsewhere it tells the page to close back.
+    const here = current(action.to)
+    tabs.splice(Math.floor(tabs.length / 2), 0, tab(action, here ? pathname + search : area ? `${action.to}?area=${area}` : action.to, here ? state : { back: true }))
+  }
+  return <nav className="tabs">{tabs}</nav>
 }
