@@ -1,6 +1,7 @@
 // Package testkit is fake, a feature module as small as the tests of what
-// serves modules need: a table, a route that adds to it, a search of it, and
-// a job that fails on every tick so a test sees each run in the log.
+// serves modules need: a table, a route and a write tool that add to it, a
+// search of it, and a job that fails on every tick so a test sees each run
+// in the log.
 package testkit
 
 import (
@@ -32,7 +33,9 @@ CREATE TABLE fake_items (
 	title      TEXT NOT NULL,
 	changed_at INTEGER NOT NULL
 )`}},
-		Routes: []module.Route{{Pattern: "POST /api/fake/items", Access: module.Write, Serve: f.add}},
+		Routes: []module.Route{{Pattern: "POST /api/fake/items", Access: module.Write, Serve: f.serveAdd}},
+		Tools: []module.Tool{module.NewTool("add_item", "Add an item. title is its title; area is the slug or the name of the area it goes in.",
+			module.Write, f.add)},
 		Jobs: []module.Job{{Name: "tick", Every: 10 * time.Millisecond, Run: func(context.Context) error {
 			return errors.New("the fake's job ran")
 		}}},
@@ -40,36 +43,51 @@ CREATE TABLE fake_items (
 	}
 }
 
-// add stores an item {"title","area"} of the caller, its area a slug or a
-// name, and answers {"ref"}.
-func (f fake) add(w http.ResponseWriter, r *http.Request) error {
-	var in struct {
-		Title string `json:"title"`
-		Area  string `json:"area"`
-	}
+// item is an item to add: its title, and its area as a slug or a name.
+type item struct {
+	Title string `json:"title"`
+	Area  string `json:"area"`
+}
 
+type added struct {
+	Ref module.Ref `json:"ref"`
+}
+
+// serveAdd adds the item {"title","area"} and answers {"ref"}.
+func (f fake) serveAdd(w http.ResponseWriter, r *http.Request) error {
+	var in item
 	if err := module.Decode(w, r, &in); err != nil {
 		return err
 	}
 
-	c, _ := module.CallerFrom(r.Context())
-
-	a, err := f.FindArea(r.Context(), c.UserID, in.Area)
+	out, err := f.add(r.Context(), in)
 	if err != nil {
 		return err
 	}
 
-	var id int64
-
-	err = f.Store.QueryRowContext(r.Context(), `INSERT INTO fake_items (user_id, area_id, title, changed_at)
-		VALUES (?, ?, ?, ?) RETURNING id`, c.UserID, a.ID, in.Title, f.Now().UnixMilli()).Scan(&id)
-	if err != nil {
-		return fmt.Errorf("fake: add: %w", err)
-	}
-
-	module.Reply(w, http.StatusCreated, map[string]module.Ref{"ref": module.NewRef("fake", id)})
+	module.Reply(w, http.StatusCreated, out)
 
 	return nil
+}
+
+// add stores the item as the caller's.
+func (f fake) add(ctx context.Context, in item) (added, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	a, err := f.FindArea(ctx, c.UserID, in.Area)
+	if err != nil {
+		return added{}, err
+	}
+
+	var id int64
+
+	err = f.Store.QueryRowContext(ctx, `INSERT INTO fake_items (user_id, area_id, title, changed_at)
+		VALUES (?, ?, ?, ?) RETURNING id`, c.UserID, a.ID, in.Title, f.Now().UnixMilli()).Scan(&id)
+	if err != nil {
+		return added{}, fmt.Errorf("fake: add: %w", err)
+	}
+
+	return added{module.NewRef("fake", id)}, nil
 }
 
 // search finds the caller's items whose title holds the text, in any case.
