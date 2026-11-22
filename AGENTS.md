@@ -169,8 +169,8 @@ Every package states its one responsibility in its package comment, and
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
   settings, migrations, routes, MCP tools, jobs, and optionally its search,
-  the title of an item for a link and what links to a reference; the `Deps`
-  it is built with; and the shapes they exchange, among them the `Area`.
+  an item as a link shows it, and what links to a reference; the `Deps` it is
+  built with; and the shapes they exchange, among them the `Area`.
   `NewTool` makes a tool from a typed function, so no module touches the MCP
   SDK. Beside it: the `Caller` an authorised request carries in its context,
   with the user, the source of the request and whether it may write; the

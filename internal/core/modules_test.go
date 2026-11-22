@@ -35,7 +35,7 @@ func stub(name string, hits []module.Hit, items map[int64]string, links map[stri
 					return module.Item{}, fmt.Errorf("item %d: %w", id, store.ErrNotFound)
 				}
 
-				return module.Item{Title: title}, nil
+				return module.Item{Kind: "item", State: "kept", Title: title}, nil
 			},
 			LinksTo: func(_ context.Context, ref module.Ref) ([]module.Ref, error) {
 				return links[string(ref)], nil
@@ -148,7 +148,8 @@ func TestLoadModules(t *testing.T) {
 
 	it, err := got.Resolve(t.Context(), module.NewRef("plain", 1))
 	require.NoError(t, err)
-	assert.Equal(t, module.Item{Ref: "plain:1", Title: "Beds", Available: true}, it, "Resolve reaches the modules built after the one given it")
+	assert.Equal(t, module.Item{Ref: "plain:1", Kind: "item", State: "kept", Title: "Beds", Available: true}, it,
+		"Resolve reaches the modules built after the one given it")
 }
 
 func TestLoadModulesRefusesATableItCannotUse(t *testing.T) {
@@ -309,7 +310,7 @@ func TestResolveAndLinksTo(t *testing.T) {
 
 	it, err := ms.Resolve(t.Context(), target)
 	require.NoError(t, err)
-	assert.Equal(t, module.Item{Ref: target, Title: "Beds", Available: true}, it)
+	assert.Equal(t, module.Item{Ref: target, Kind: "item", State: "kept", Title: "Beds", Available: true}, it, "as the module gives it")
 
 	for _, ref := range []module.Ref{"off:1", "ghost:1", "alpha:9", "alpha", "alpha:x"} {
 		it, err := ms.Resolve(t.Context(), ref)
