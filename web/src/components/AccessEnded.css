@@ -1,0 +1,15 @@
+/* A band over every page, in the colour of a wait on the person. */
+.access-ended {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--bg-yellow);
+  border-bottom: 1px solid color-mix(in oklab, var(--wait-yellow) 45%, transparent);
+  font-size: 13px;
+}
+
+.access-ended p {
+  margin: 0;
+}

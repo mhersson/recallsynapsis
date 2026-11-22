@@ -1,0 +1,75 @@
+.frame {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.page {
+  padding: 22px 28px 44px;
+  min-width: 0;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.page.narrow {
+  max-width: 860px;
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.page-head h1 {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.page-head .spacer {
+  flex: 1;
+}
+
+.sub {
+  color: var(--grey2);
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
+/* The bar over a page outside the shell. */
+.brand-bar {
+  background: var(--bg0);
+  border-bottom: 1px solid var(--bg2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 20px;
+  color: var(--grey1);
+  font-size: 12px;
+}
+
+.brand-bar .brand {
+  color: var(--fg);
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding: 12px 16px 18px;
+  }
+
+  .page-head h1 {
+    font-size: 20px;
+  }
+}

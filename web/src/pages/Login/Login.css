@@ -1,0 +1,28 @@
+.login {
+  width: 100%;
+  max-width: 330px;
+  margin: 80px auto 60px;
+  padding: 0 16px;
+}
+
+.login h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  letter-spacing: -0.02em;
+}
+
+.login-error {
+  color: var(--red);
+  margin: 0 0 14px;
+}
+
+.login-submit {
+  width: 100%;
+  padding: 11px;
+  margin-bottom: 16px;
+}
+
+.login .sub {
+  font-size: 12.5px;
+}
