@@ -1,0 +1,39 @@
+version: "2"
+linters:
+  default: none
+  enable:
+  - errcheck
+  - govet
+  - ineffassign
+  - staticcheck
+  - unused
+  - containedctx
+  - gocritic
+  - godot
+  - gosec
+  - misspell
+  - modernize
+  - nakedret
+  - nlreturn
+  - noctx
+  - revive
+  - testifylint
+  - unconvert
+  - unparam
+  - whitespace
+  - wsl_v5
+  settings:
+    nakedret:
+      max-func-lines: 5
+  exclusions:
+    generated: lax
+    presets:
+    - common-false-positives
+    - std-error-handling
+    - comments
+issues:
+  max-same-issues: 8
+formatters:
+  enable:
+  - gofumpt
+  - goimports
