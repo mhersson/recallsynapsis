@@ -62,8 +62,17 @@ The session cookie is marked `Secure` when `public_url` is `https`.
 There is one owner. A changed `owner` renames them at the next `serve` or
 `password`, and the rename keeps their password, sessions and tokens.
 
-This binary has no feature module, so `serve`, `password` and `backup` refuse a
-`[modules.NAME]` table of any name.
+Each feature module of the binary has a table of its own, `[modules.NAME]`, and
+is off without one. `serve`, `password` and `backup` refuse a table no module of
+the binary has. A module that is off serves nothing and keeps what it holds, so
+switched on again it has it all back.
+
+`[modules.notes]` is the notes module: notes and ideas in the areas, with their
+tags, and the inbox of captures that wait to be filed.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | whether notes is on |
 
 A whole file, with `listen`, `backup.at` and `backup.keep` at their defaults:
 
@@ -77,4 +86,7 @@ owner      = "ada"
 dir  = "/mnt/backup/recallsynapsis"
 at   = "03:00"
 keep = 14
+
+[modules.notes]
+enabled = true
 ```

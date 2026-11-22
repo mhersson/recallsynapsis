@@ -14,6 +14,7 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/config"
 	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/module"
+	"github.com/mhersson/recallsynapsis/internal/notes"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -23,7 +24,7 @@ var migrations = slices.Concat(auth.Migrations, core.Migrations)
 
 // modules builds each feature module of the binary, in the order search
 // groups them and the session names them.
-var modules []func(module.Deps) module.Module
+var modules = []func(module.Deps) module.Module{notes.New}
 
 // dataFlags adds --data-dir and --config to flags.
 func dataFlags(flags *flag.FlagSet) (dirFlag, configFlag *string) {

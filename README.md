@@ -8,8 +8,10 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
 - The owner signs in with a name and a password. AI clients and scripts use API
   tokens made in Settings, each with read or write access.
 - What it keeps comes from feature modules, each switched on in the
-  configuration. This build has no feature module, so it holds the areas
-  alone and its search finds nothing.
+  configuration. This build has one, notes: notes and ideas in the areas,
+  with their tags, and an inbox of captures that wait to be filed. It is
+  reached through the REST API alone, and does not search, so search finds
+  nothing.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. The MCP tool `list_areas` lists the
   areas.
