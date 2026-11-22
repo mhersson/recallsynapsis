@@ -116,6 +116,15 @@ test('Trash sends the capture to the trash, and it leaves the list', async () =>
   await waitFor(() => expect(rows()).toHaveLength(1))
 })
 
+test('Open leads from the capture open for filing to its page', async () => {
+  narrow(false)
+  notesServer([capture(1, 30), capture(2, 5)])
+  const { where } = await open('/inbox')
+  await userEvent.click(within(document.querySelector<HTMLElement>('.filing')!).getByRole('link'))
+  await waitFor(() => expect(where()).toBe('/notes/2'))
+  await waitFor(() => expect(screen.getByRole('main').querySelector('.note-read')).not.toBeNull())
+})
+
 test('a capture made elsewhere appears in an open Inbox, the count follows, and the capture open for filing stays open', async () => {
   vi.useFakeTimers()
   try {

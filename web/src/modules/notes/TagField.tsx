@@ -4,8 +4,8 @@ import { useState } from 'react'
 const clean = (w: string) => w.replace(/^#+/, '').toLowerCase()
 
 // Tags as chips. A space, a comma, Enter or leaving the field ends the one being typed, Backspace in the empty field
-// removes the last, and pressing a chip removes it.
-export default function TagField({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+// removes the last, and pressing a chip removes it. While waiting it takes no change, and keeps the focus.
+export default function TagField({ tags, onChange, waiting }: { tags: string[]; onChange: (tags: string[]) => void; waiting?: boolean }) {
   const [draft, setDraft] = useState('')
   const add = (words: string[]) => {
     const next = [...new Set([...tags, ...words.map(clean).filter(Boolean)])]
@@ -18,13 +18,14 @@ export default function TagField({ tags, onChange }: { tags: string[]; onChange:
   return (
     <div className="tag-field">
       {tags.map((t) => (
-        <button key={t} type="button" className="tag" aria-label={`Remove ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))}>
+        <button key={t} type="button" className="tag" aria-label={`Remove ${t}`} disabled={waiting} onClick={() => onChange(tags.filter((x) => x !== t))}>
           #{t} ×
         </button>
       ))}
       <input
         aria-label="Tags"
         placeholder="Add a tag"
+        readOnly={waiting}
         autoCapitalize="none"
         autoCorrect="off"
         spellCheck={false}

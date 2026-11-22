@@ -10,6 +10,13 @@ export const InboxIcon = () => (
   </Icon>
 )
 
+export const NotesIcon = () => (
+  <Icon>
+    <path d="M4 2h5.5L12 4.5V14H4z" />
+    <path d="M6 7.5h4M6 10h4" />
+  </Icon>
+)
+
 // How many captures wait: the total of a list of one.
 export function Waiting() {
   const [n, setN] = useState(0)

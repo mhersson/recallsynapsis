@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 
 export type Kind = 'note' | 'idea'
@@ -26,18 +28,64 @@ export type Row = {
   trashed_at: string | null
 }
 
-// A note as GET /api/notes/{id} gives it; said is the owner's own words on its first revision, when a client gave them.
-export type Note = Row & { body: string; said: string }
+// What a link names, as the core resolves it: an item of a module switched on, unavailable once it is gone.
+export type Linked = { ref: string; kind: string; state: string; title: string; available: boolean }
+
+// A note as GET /api/notes/{id} gives it: in full, with the owner's own words on its first revision when a client gave
+// them, its links and the items that link to it.
+export type Note = Row & { body: string; said: string; links: Linked[]; linked_from: Linked[] }
 
 export type List = { notes: Row[]; total: number }
 
-// Reads when the page mounts, when the stream opens again and on any change of a note. A note moved between areas
-// tells of its new area alone, so no change is passed over for its area.
+// Reads when the page mounts, when the stream opens again, on any change of a note and on any change of an area, whose
+// slug names the notes in it. A note moved between areas tells of its new area alone, so no change is passed over.
 export function useNotes(read: () => void) {
   useStream((changes) => {
-    if (!changes || changes.some((c) => c.module === 'notes')) read()
+    if (!changes || changes.some((c) => c.module === 'notes' || (c.module === 'core' && c.kind === 'area'))) read()
   })
+}
+
+// What GET path gives, read as useNotes reads and when path changes; '' reads nothing. An answer to a question asked
+// since is dropped, and a refusal is kept until a read succeeds.
+export function useRead<T>(path: string): { got?: T; failed: string; again: () => void } {
+  const [got, setGot] = useState<T>()
+  const [failed, setFailed] = useState('')
+  const [tick, setTick] = useState(0)
+  const again = () => setTick((n) => n + 1)
+  useNotes(again)
+  useEffect(() => {
+    if (!tick || !path) return
+    let stale = false
+    api<T>('GET', path).then(
+      (v) => {
+        if (stale) return
+        setGot(v)
+        setFailed('')
+      },
+      (e: unknown) => !stale && setFailed(message(e)),
+    )
+    return () => {
+      stale = true
+    }
+  }, [path, tick])
+  return { got, failed, again }
+}
+
+const step = 50
+const most = 500
+
+// The notes a list asks for with the query asked: 50, and 50 more each time more is called, up to the 500 a list gives.
+// A new question starts again at 50.
+export function useList(asked: string) {
+  const [shown, setShown] = useState({ asked, limit: step })
+  const limit = shown.asked === asked ? shown.limit : step
+  const { got: list, failed, again: reread } = useRead<List>(asked && `/notes?${asked}${limit > step ? `&limit=${limit}` : ''}`)
+  const more = limit < most ? () => setShown({ asked, limit: limit + step }) : undefined
+  return { list, failed, more, reread }
 }
 
 // Where a change came from, as a list shows it.
 export const from = (source: string) => (source === 'web' ? 'web' : `via ${source}`)
+
+// The class of a note's mark: blue for a note, purple for an idea, and the yellow of what waits for a capture not yet filed.
+export const mark = (kind: string, inbox: boolean) => (inbox ? 'wait' : kind === 'idea' ? 'm-idea' : 'm-note')

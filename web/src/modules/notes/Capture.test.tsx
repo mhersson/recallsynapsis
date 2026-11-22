@@ -24,7 +24,7 @@ function server() {
 }
 
 test.each([
-  [['notes'], 1, ['/inbox', '/capture', '/projects', '/more']],
+  [['notes'], 1, ['/inbox', '/notes', '/capture', '/projects', '/more']],
   [[], 0, ['/projects', '/more']],
 ])('with the modules %j on, the side bar has %i action button, and a phone has the tabs %j', async (modules, buttons, tabs) => {
   notesServer([], undefined, modules)

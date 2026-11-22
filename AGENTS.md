@@ -93,14 +93,18 @@ After a change to `web/`, look at the screen before you finish.
   `theme` is `dark` or `light`, and its `path` picks the route, for example
   `path=/settings`. `click=TEXT` clicks the first button, link or summary
   whose text starts with TEXT, and `type=TEXT` types TEXT into the field
-  that has the focus; given more than once, they run in the order given.
+  that has the focus; given more than once, they run in the order given,
+  and `end=1` then scrolls the page to its end.
   `login=wrong` refuses a sign-in and `login=wait` makes it wait;
   `lapsed=1` ends the access to the page; `empty=1` starts with the
-  personal area alone, no token and no note; `modules=notes` switches the
-  named modules on, so Search finds the fixed hits and the Inbox the fixed
-  captures; `backup=old` makes the last backup three days old and
-  `backup=none` leaves none. What the page changes holds until it reloads,
-  and a change of a note reaches the event stream, as the server's does.
+  personal area alone, no token and no note; `many=1` adds older notes, so
+  a list holds more than it shows; `save=moved` refuses the first save of
+  each note's text, as if a client had saved the note meanwhile;
+  `modules=notes` switches the named modules on, so Search finds the fixed
+  hits and the Inbox and Notes the fixed notes; `backup=old` makes the last
+  backup three days old and `backup=none` leaves none. What the page
+  changes holds until it reloads, and a change of a note reaches the event
+  stream, as the server's does.
 - Read the PNG and say what you see. Fix what looks wrong and shoot again.
 - Stop Vite by the pid you recorded, never by port or name.
 
