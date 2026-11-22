@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Session, Token } from '../../api/types.ts'
 import { open } from '../../test-app.tsx'
@@ -176,7 +176,7 @@ test('Sign out ends the session and opens sign-in', async () => {
   const { where } = await open('/settings')
   await userEvent.click(section('session').getByRole('button'))
   expect(calls.some((c) => c.method === 'POST' && c.path === '/api/auth/logout')).toBe(true)
-  expect(where()).toBe('/login')
+  await waitFor(() => expect(where()).toBe('/login'))
 })
 
 test('on desktop the section names link to the sections, and the version ends the page', async () => {

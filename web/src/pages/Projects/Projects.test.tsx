@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Area, Session } from '../../api/types.ts'
 import { open } from '../../test-app.tsx'
@@ -69,8 +69,8 @@ test('on desktop a project is made in a dialog over the list, which then holds i
 
   const post = calls.find((c) => c.method === 'POST')!
   expect([post.path, post.body]).toEqual(['/api/areas', { name: 'garden', description: 'Beds and the greenhouse.' }])
+  await waitFor(() => expect(where()).toBe('/projects'))
   expect(screen.queryByRole('dialog')).toBeNull()
-  expect(where()).toBe('/projects')
   expect(main().getAllByRole('link').map((a) => a.getAttribute('href'))).toContain('/areas/2')
 })
 
@@ -118,7 +118,7 @@ test('on a phone a project is made on a page of its own', async () => {
   await userEvent.type(main().getAllByRole('textbox')[0], 'garden')
   await userEvent.click(main().getAllByRole('button')[0])
   expect(calls.some((c) => c.method === 'POST' && c.path === '/api/areas')).toBe(true)
-  expect(where()).toBe('/projects')
+  await waitFor(() => expect(where()).toBe('/projects'))
 })
 
 test('a project made in another browser appears without a reload', async () => {
