@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, HITS, NOTES, SECRET, SESSION, TOKENS, row } from './fixtures.ts'
+import { AREAS, HEALTH, HITS, NOTES, SECRET, SESSION, TOKENS, note, row } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -84,6 +84,17 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>): R
     const inbox = url.searchParams.get('inbox')
     const found = notes.filter((n) => !n.trashed_at && (inbox === null || String(n.inbox) === inbox)).sort((a, b) => b.changed_at.localeCompare(a.changed_at))
     return json({ notes: found.slice(0, Number(url.searchParams.get('limit')) || 50).map(row), total: found.length })
+  }
+  if (url.pathname === '/api/notes' && method === 'POST') {
+    const n = note(Math.max(0, ...notes.map((x) => x.id)) + 1, 0, {
+      revision: 0,
+      body: String(body.body),
+      kind: body.kind === 'idea' ? 'idea' : 'note',
+      area: body.inbox || !body.area ? 'personal' : String(body.area),
+      inbox: !!body.inbox,
+    })
+    notes.push(n)
+    return json(changed(n), 201)
   }
   const [, id, trash] = /^\/api\/notes\/(\d+)(\/trash)?$/.exec(url.pathname) ?? []
   const n = notes.find((x) => x.id === Number(id))
