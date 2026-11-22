@@ -1,6 +1,7 @@
 // Package core keeps the areas things live in: each user's one personal area
-// and their projects, and finds one by its id, its slug or its name. It owns
-// the table areas.
+// and their projects, and finds one by its id, its slug or its name. It
+// builds the feature modules, and asks the ones switched on to search, to
+// resolve a reference and to find what links to one. It owns the table areas.
 package core
 
 import (

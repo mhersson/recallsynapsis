@@ -55,7 +55,7 @@ func Open(ctx context.Context, path string, ms []Migration) (*Store, error) {
 	db.SetMaxIdleConns(2)
 
 	s := &Store{db}
-	if err := s.migrate(ctx, ms); err != nil {
+	if err := s.Migrate(ctx, ms); err != nil {
 		_ = db.Close()
 
 		return nil, err
