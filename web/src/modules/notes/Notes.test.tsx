@@ -391,3 +391,57 @@ test('the list reads again on a change of a note made elsewhere, and of an area,
     vi.useRealTimers()
   }
 })
+
+test('the idea bank asks for the filed ideas, groups them by area, and filters by area and tag alone', async () => {
+  narrow(false)
+  const calls = server([filed(1, 30, { kind: 'idea' }), filed(2, 20, { kind: 'idea', area: 'garden', tags: ['nas'] }), filed(3, 10), filed(4, 5, { kind: 'idea' })])
+  const { where } = await open('/ideas')
+  expect(within(screen.getByRole('navigation')).getAllByRole('link').map((a) => a.getAttribute('href'))).toContain('/ideas')
+  expect(lists(calls)).toEqual(['/api/notes?inbox=false&kind=idea'])
+  const groups = main().getAllByRole('heading', { level: 2 })
+  expect(groups.map((g) => within(g.parentElement!).getAllByRole('link').map((a) => a.getAttribute('href')))).toEqual([['/ideas/4', '/ideas/1'], ['/ideas/2']])
+  // No idea opens until one is picked.
+  expect(open1()).toBeUndefined()
+  expect(screen.getByRole('main').querySelector('.note-read')).toBeNull()
+
+  expect(selects()).toHaveLength(2)
+  await userEvent.selectOptions(selects()[0], 'garden')
+  await waitFor(() => expect(where()).toBe('/ideas?area=garden'))
+  expect(lists(calls).at(-1)).toBe('/api/notes?inbox=false&area=garden&kind=idea')
+  await waitFor(() => expect(rows()).toHaveLength(1))
+
+  await userEvent.click(rows()[0])
+  await waitFor(() => expect(where()).toBe('/ideas/2?area=garden'))
+  expect(open1()).toBe(rows()[0])
+  expect(await note1().findByRole('heading', { level: 1 })).toHaveTextContent('note 2')
+})
+
+test('the idea bank reads its tag from the address, and going there from Notes opens no idea until one is picked', async () => {
+  narrow(false)
+  const calls = server([filed(1, 30, { kind: 'idea', tags: ['nas'] }), filed(2, 5)])
+  const view = await open('/ideas?tag=nas')
+  expect(lists(calls)).toEqual(['/api/notes?inbox=false&kind=idea&tag=nas'])
+  expect(selects().map((s) => s.value)).toEqual(['', 'nas'])
+  view.unmount()
+
+  server([filed(1, 5, { kind: 'idea' })])
+  const { where } = await open('/notes')
+  expect(open1()).toBe(rows()[0])
+  await userEvent.click(within(screen.getByRole('navigation')).getAllByRole('link').find((a) => a.getAttribute('href') === '/ideas')!)
+  await waitFor(() => expect(where()).toBe('/ideas'))
+  await waitFor(() => expect(rows()).toHaveLength(1))
+  expect(open1()).toBeUndefined()
+  expect(screen.getByRole('main').querySelector('.note-read')).toBeNull()
+})
+
+test('on a phone the idea bank is a row of More, and an idea opens as a page whose crumb leads back to the bank', async () => {
+  narrow(true)
+  server([filed(1, 30, { kind: 'idea' })])
+  const { where } = await open('/more')
+  await userEvent.click(main().getAllByRole('link')[0])
+  await waitFor(() => expect(where()).toBe('/ideas'))
+  await userEvent.click(rows()[0])
+  await waitFor(() => expect(where()).toBe('/ideas/1'))
+  await userEvent.click(await main().findByRole('link'))
+  await waitFor(() => expect(where()).toBe('/ideas'))
+})

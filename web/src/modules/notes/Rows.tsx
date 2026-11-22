@@ -2,13 +2,12 @@ import { Link, useLocation } from 'react-router'
 import type { Area } from '../../api/types.ts'
 import { ago } from '../../components/time.ts'
 import { back } from '../../components/useClose.ts'
-import { mark, type List, type Row } from './api.ts'
+import { mark, nameOf, type List, type Row } from './api.ts'
 
 type RowsProps = { notes: Row[]; areas: Area[]; to: (r: Row) => string; open?: number }
 
 // Notes as a list gives them, each a link to its page; open is the one open beside the list.
 export function Rows({ notes, areas, to, open }: RowsProps) {
-  const name = (slug: string) => areas.find((a) => a.slug === slug)?.name ?? slug
   // A link to the page shown replaces it; the open row keeps the page's state, so closing the note goes where it would.
   const { state } = useLocation()
   return (
@@ -19,7 +18,7 @@ export function Rows({ notes, areas, to, open }: RowsProps) {
           <span className="item">
             <span className="t1">{r.title || r.excerpt}</span>
             <span className="t2">
-              <span>{name(r.area)}</span>
+              <span>{nameOf(areas, r.area)}</span>
               {r.tags.map((t) => (
                 <span key={t}>#{t}</span>
               ))}

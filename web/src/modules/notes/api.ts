@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
+import type { Area } from '../../api/types.ts'
 
 export type Kind = 'note' | 'idea'
 
@@ -83,6 +84,9 @@ export function useList(asked: string) {
   const more = limit < most ? () => setShown({ asked, limit: limit + step }) : undefined
   return { list, failed, more, reread }
 }
+
+// The name of the area a note names by its slug.
+export const nameOf = (areas: Area[], slug: string) => areas.find((a) => a.slug === slug)?.name ?? slug
 
 // Where a change came from, as a list shows it.
 export const from = (source: string) => (source === 'web' ? 'web' : `via ${source}`)

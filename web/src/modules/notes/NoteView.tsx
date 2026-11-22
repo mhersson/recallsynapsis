@@ -5,7 +5,7 @@ import Field from '../../components/Field.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import { ago } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { from, mark, useNotes, type Note } from './api.ts'
+import { from, mark, nameOf, useNotes, type Note } from './api.ts'
 import TagField from './TagField.tsx'
 
 type Props = { id: number; areas: Area[]; onGone: () => void; onChanged?: () => void }
@@ -201,7 +201,7 @@ export default function NoteView({ id, areas, onGone, onChanged }: Props) {
       <span className="t2 note-meta">
         <i className={`mk ${mark(note.kind, note.inbox)}`} />
         <span>{note.kind}</span>
-        <span>{areas.find((a) => a.slug === note.area)?.name ?? note.area}</span>
+        <span>{nameOf(areas, note.area)}</span>
         {note.inbox && <span>in the inbox</span>}
         <span>changed {ago(note.changed_at)}</span>
         <span>{from(note.source)}</span>
