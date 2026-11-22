@@ -86,6 +86,7 @@ func TestClassify(t *testing.T) {
 		status int
 	}{
 		{"the caller's refusal", &apiError{http.StatusTeapot, "no"}, http.StatusTeapot},
+		{"a wrapped broken rule", fmt.Errorf("the personal area keeps its name: %w", store.ErrInvalid), http.StatusBadRequest},
 		{"a wrapped conflict", fmt.Errorf("area name %q: %w", "home", store.ErrConflict), http.StatusConflict},
 		{"a wrapped absence", fmt.Errorf("area 7: %w", store.ErrNotFound), http.StatusNotFound},
 	}

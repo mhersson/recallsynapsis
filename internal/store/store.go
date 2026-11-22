@@ -13,13 +13,15 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
-// The API gives the caller either error with all the text that wraps it, so
-// wrap them only with what the caller may see, never with a driver error.
+// The API gives the caller each of these errors with all the text that wraps
+// it, so wrap them only with what the caller may see, never with a driver error.
 var (
 	// ErrNotFound is returned when a row does not exist.
 	ErrNotFound = errors.New("not found")
 	// ErrConflict is returned when a write loses against existing state.
 	ErrConflict = errors.New("conflict")
+	// ErrInvalid is returned when a write breaks a rule of the data it changes.
+	ErrInvalid = errors.New("invalid")
 )
 
 // Store is the database handle every package shares. It is safe for concurrent use.
