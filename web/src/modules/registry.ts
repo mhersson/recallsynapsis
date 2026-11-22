@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode } from 'react'
+import type { Area } from '../api/types.ts'
 
 // A place the shell links to: an entry of the side bar, a phone tab or a row of More.
 export type Entry = { to: string; label: string; icon: ReactNode }
@@ -15,6 +16,8 @@ export type Module = {
   // Rows of More, with a second line each. Their pages keep the More tab current.
   more: (Entry & { note: string })[]
   routes: { path: string; element: ReactNode }[]
+  // What it holds in an area, shown on that area's page.
+  section?: ComponentType<{ area: Area }>
 }
 
 // Every module, one line each, in the order the navigation shows them.

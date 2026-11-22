@@ -9,6 +9,7 @@ import SideBar from './components/SideBar.tsx'
 import { useNarrow } from './components/useNarrow.ts'
 import Login from './pages/Login/Login.tsx'
 import Placeholder from './pages/Placeholder.tsx'
+import AreaPage from './pages/Projects/AreaPage.tsx'
 import Projects from './pages/Projects/Projects.tsx'
 import { SessionContext, enabled } from './session.ts'
 import './App.css'
@@ -34,7 +35,7 @@ function Frame() {
           <Routes>
             <Route path="/projects" element={<Projects />} />
             <Route path="/areas/new" element={<Projects making />} />
-            <Route path="/areas/:id" element={<Placeholder title="Project" />} />
+            <Route path="/areas/:id" element={<AreaPage />} />
             <Route path="/search" element={<Placeholder title="Search" />} />
             <Route path="/settings" element={<Placeholder title="Settings" />} />
             <Route path="/more" element={<Placeholder title="More" />} />
