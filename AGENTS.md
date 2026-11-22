@@ -119,8 +119,8 @@ Every package states its one responsibility in its package comment, and
   once or every night at `backup.at`: a snapshot of the database by
   `VACUUM INTO`, named by its day, the files under `files/` that the backup
   lacks, and no more snapshots than it keeps. Of what it finds there it
-  removes only regular files with exactly a snapshot's name. It owns no
-  table.
+  removes only regular files with exactly a snapshot's name. It tells when
+  the newest snapshot was made, and owns no table.
 - `internal/config`: reads the configuration file strictly: an unknown key, a
   wrong type or an unusable value is refused with the key named. It keeps
   each `[modules.NAME]` table as read, and decodes one as strictly for its

@@ -436,3 +436,32 @@ func TestTheBackupDirectoryIsPrivate(t *testing.T) {
 		assert.Equal(t, []string{"recallsynapsis-20261120.db"}, names(t, f.dir), mode)
 	}
 }
+
+func TestNewestIsWhenTheNewestSnapshotWasMade(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	for _, none := range []string{"", filepath.Join(dir, "absent"), dir} {
+		made, err := Newest(none)
+		require.NoError(t, err)
+		assert.True(t, made.IsZero(), none)
+	}
+
+	made := time.Date(2026, 11, 22, 3, 0, 5, 0, oslo)
+	touch := func(name string, at time.Time) {
+		path := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(path, nil, 0o600))
+		require.NoError(t, os.Chtimes(path, at, at))
+	}
+
+	touch("recallsynapsis-20261121.db", made.Add(-24*time.Hour))
+	touch("recallsynapsis-20261122.db", made)
+	touch("recallsynapsis-20261123.db.4711.tmp", made.Add(time.Hour))
+	touch("recallsynapsis-20261301.db", made.Add(time.Hour))
+	touch("notes.txt", made.Add(time.Hour))
+
+	got, err := Newest(dir)
+	require.NoError(t, err)
+	assert.True(t, made.Equal(got), got)
+}

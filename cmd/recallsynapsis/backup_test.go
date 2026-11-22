@@ -182,9 +182,11 @@ func TestARestoredSnapshotServes(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 	require.NotEmpty(t, resp.Cookies())
 
+	cookie := resp.Cookies()[0]
+
 	req, err = http.NewRequestWithContext(t.Context(), http.MethodGet, url+"/api/areas", nil)
 	require.NoError(t, err)
-	req.AddCookie(resp.Cookies()[0])
+	req.AddCookie(cookie)
 
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -197,6 +199,24 @@ func TestARestoredSnapshotServes(t *testing.T) {
 	require.NoError(t, resp.Body.Close())
 	require.Len(t, got.Areas, 2)
 	assert.Equal(t, "Garden", got.Areas[1].Name)
+
+	req, err = http.NewRequestWithContext(t.Context(), http.MethodGet, url+"/api/session", nil)
+	require.NoError(t, err)
+	req.AddCookie(cookie)
+
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	var session struct {
+		LastBackup time.Time `json:"last_backup"`
+	}
+
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&session))
+	require.NoError(t, resp.Body.Close())
+
+	info, err := os.Stat(strings.TrimSuffix(stdout, "\n"))
+	require.NoError(t, err)
+	assert.Equal(t, info.ModTime().UTC().Truncate(time.Second), session.LastBackup, "the snapshot in backup.dir")
 
 	// The nightly backup waits until three at night, and stops with the server.
 	signalled := time.Now()

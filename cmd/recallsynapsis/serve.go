@@ -108,7 +108,7 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	log.Info("listening", "address", ln.Addr().String(), "public_url", d.cfg.PublicURL, "data_dir", d.dir, "version", version)
 
-	h := api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Version: version, PublicURL: d.cfg.PublicURL, Timezone: d.cfg.Timezone})
+	h := api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Version: version, PublicURL: d.cfg.PublicURL, Timezone: d.cfg.Timezone, BackupDir: d.cfg.Backup.Dir})
 
 	// A signal cancels the jobs and the backup in flight as the requests get their grace.
 	stop := runJobs(ctx, d.modules.On(), log)

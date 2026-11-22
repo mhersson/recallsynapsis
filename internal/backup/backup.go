@@ -1,6 +1,7 @@
 // Package backup backs up the data directory, once or every night: a snapshot
 // of the database named by its day, the files under files/ that the backup
-// lacks, and no more snapshots than it keeps.
+// lacks, and no more snapshots than it keeps. It tells when the newest
+// snapshot was made.
 package backup
 
 import (
@@ -205,6 +206,30 @@ func prune(dir string, keep int) error {
 	}
 
 	return nil
+}
+
+// Newest is when the newest snapshot in dir was made, or the zero time when dir
+// is empty, absent or holds none.
+func Newest(dir string) (time.Time, error) {
+	if dir == "" {
+		return time.Time{}, nil
+	}
+
+	list, err := snapshots(dir)
+	if errors.Is(err, fs.ErrNotExist) || err == nil && len(list) == 0 {
+		return time.Time{}, nil
+	}
+
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	info, err := list[0].Info()
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return info.ModTime(), nil
 }
 
 // snapshots lists the snapshots in dir, newest first: the regular files whose

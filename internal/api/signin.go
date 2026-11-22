@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/backup"
 	"github.com/mhersson/recallsynapsis/internal/module"
 )
 
@@ -164,12 +166,24 @@ func (s *server) session(w http.ResponseWriter, r *http.Request) error {
 		modules = append(modules, m.Name)
 	}
 
+	// Read when asked, so a backup the verb made shows too. A backup directory
+	// that cannot be read is logged, and does not keep the app from loading.
+	var last *time.Time
+
+	made, err := backup.Newest(s.BackupDir)
+	if err != nil {
+		slog.WarnContext(r.Context(), "the last backup is unknown", "err", err)
+	} else if !made.IsZero() {
+		made = made.UTC().Truncate(time.Second)
+		last = &made
+	}
+
 	module.Reply(w, http.StatusOK, map[string]any{
 		"user":        map[string]string{"name": name},
 		"modules":     modules,
 		"version":     s.Version,
 		"timezone":    s.Timezone,
-		"last_backup": nil,
+		"last_backup": last,
 	})
 
 	return nil
