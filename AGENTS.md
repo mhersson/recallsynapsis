@@ -58,9 +58,19 @@ The owner's words, which bind every change:
 ## Layout
 
 Every package states its one responsibility in its package comment, and
-`go doc ./cmd/recallsynapsis` prints it.
+`go doc` on its directory, such as `go doc ./internal/store`, prints it.
 
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
   verb registers itself from an `init` in its own file.
+- `internal/api`: the REST API under `/api/`, served from one route table.
+  Every refusal and every path no route matches is answered as
+  `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
+  to its clean form. Request bodies are decoded strictly.
+- `internal/config`: reads the configuration file strictly: an unknown key, a
+  wrong type or an unusable value is refused with the key named. It keeps
+  each `[modules.NAME]` table as read.
+- `internal/store`: opens the SQLite database, applies the migrations each
+  package that owns tables brings, keyed by that owner and a version, and
+  hands every package the one handle. It owns no table but the migration ledger.
 - `scripts/`: the scans and the line count that `make` runs.
