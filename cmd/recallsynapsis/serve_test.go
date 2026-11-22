@@ -429,3 +429,21 @@ func TestThePasswordHashFromTheEnvironment(t *testing.T) {
 	assert.Contains(t, start(rightPhrase), "RECALLSYNAPSIS_PASSWORD_HASH", "a value that is not a hash is refused by the variable's name")
 	assert.Equal(t, http.StatusOK, sessionStatus(t, site, cookie), "and changes nothing")
 }
+
+// Not parallel: it sets the environment, and serve replaces the default logger.
+func TestAStartWarnsWhileTheOwnerHasNoPassword(t *testing.T) {
+	keepDefaultLogger(t)
+	t.Setenv("RECALLSYNAPSIS_PASSWORD_HASH", "")
+
+	dir := filepath.Join(t.TempDir(), "data")
+	config := writeConfig(t, t.TempDir(), unbindable)
+
+	_, _, stderr := runVerb("serve", "--data-dir", dir, "--config", config)
+	assert.Contains(t, stderr, "level=WARN")
+
+	code, _, _ := runWithInput(rightPhrase+"\n", "password", "--data-dir", dir, "--config", config)
+	require.Equal(t, 0, code)
+
+	_, _, stderr = runVerb("serve", "--data-dir", dir, "--config", config)
+	assert.NotContains(t, stderr, "level=WARN")
+}

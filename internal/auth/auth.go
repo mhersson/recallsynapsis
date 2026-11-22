@@ -109,6 +109,16 @@ func (a *Service) UserName(ctx context.Context, id int64) (string, error) {
 	return name, nil
 }
 
+// HasPassword reports whether the user with the id has a password to sign in with.
+func (a *Service) HasPassword(ctx context.Context, id int64) (bool, error) {
+	var has bool
+	if err := a.store.QueryRowContext(ctx, `SELECT password_hash <> '' FROM users WHERE id = ?`, id).Scan(&has); err != nil {
+		return false, fmt.Errorf("auth: read user: %w", err)
+	}
+
+	return has, nil
+}
+
 // SetPasswordHash sets the user's password from an argon2id hash. The hash
 // already stored changes nothing; a new one ends every session of the user.
 func (a *Service) SetPasswordHash(ctx context.Context, userID int64, encoded string) error {

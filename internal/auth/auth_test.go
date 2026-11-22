@@ -385,8 +385,18 @@ func TestEnsureUserMakesTheFirst(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ada", name)
 
+	has, err := svc.HasPassword(t.Context(), id)
+	require.NoError(t, err)
+	assert.False(t, has)
+
 	_, _, err = svc.Login(t.Context(), "ada", "", "192.0.2.1")
 	require.ErrorIs(t, err, ErrBadLogin, "the user has no password yet")
+
+	require.NoError(t, svc.SetPasswordHash(t.Context(), id, passwordHash()))
+
+	has, err = svc.HasPassword(t.Context(), id)
+	require.NoError(t, err)
+	assert.True(t, has)
 }
 
 func TestTokens(t *testing.T) {

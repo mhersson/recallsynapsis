@@ -78,6 +78,16 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 		}
 	}
 
+	has, err := signin.HasPassword(ctx, owner)
+	if err != nil {
+		return err
+	}
+
+	// Sign-in answers a missing password as a wrong one, so the operator learns of it here.
+	if !has {
+		log.Warn("the owner has no password and cannot sign in; set one with recallsynapsis password", "owner", cfg.Owner)
+	}
+
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Listen)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
