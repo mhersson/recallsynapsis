@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -10,13 +9,11 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"path/filepath"
+	"os"
 	"time"
 
 	"github.com/mhersson/recallsynapsis/internal/api"
 	"github.com/mhersson/recallsynapsis/internal/auth"
-	"github.com/mhersson/recallsynapsis/internal/config"
-	"github.com/mhersson/recallsynapsis/internal/store"
 	"github.com/mhersson/recallsynapsis/web"
 )
 
@@ -38,8 +35,7 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 		flags.PrintDefaults()
 	}
 
-	dirFlag := flags.String("data-dir", "", "the data directory (default $RECALLSYNAPSIS_DATA_DIR, else $XDG_DATA_HOME/recallsynapsis, else ~/.local/share/recallsynapsis)")
-	configFlag := flags.String("config", "", "the configuration file (default <data-dir>/recallsynapsis.toml)")
+	dirFlag, configFlag := dataFlags(flags)
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -53,27 +49,13 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 		return errors.New("serve takes no arguments; name the data directory with --data-dir")
 	}
 
-	dir, err := dataDir(*dirFlag)
+	dir, cfg, st, err := openData(ctx, *dirFlag, *configFlag)
 	if err != nil {
-		return err
-	}
-
-	cfg, err := config.Load(cmp.Or(*configFlag, filepath.Join(dir, "recallsynapsis.toml")))
-	if err != nil {
-		return err
-	}
-
-	if err := privateDataDir(dir); err != nil {
 		return err
 	}
 
 	log := slog.New(slog.NewTextHandler(stderr, nil))
 	slog.SetDefault(log)
-
-	st, err := store.Open(ctx, filepath.Join(dir, "recallsynapsis.db"), auth.Migrations)
-	if err != nil {
-		return err
-	}
 
 	// The store closes last, once every request has ended or been cut.
 	defer func() {
@@ -83,8 +65,17 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 	}()
 
 	signin := auth.New(st, time.Now)
-	if _, err := signin.EnsureUser(ctx, cfg.Owner); err != nil {
+
+	owner, err := signin.EnsureUser(ctx, cfg.Owner)
+	if err != nil {
 		return err
+	}
+
+	// A container is given the hash this way. The error never holds the value.
+	if hash := os.Getenv("RECALLSYNAPSIS_PASSWORD_HASH"); hash != "" {
+		if err := signin.SetPasswordHash(ctx, owner, hash); err != nil {
+			return fmt.Errorf("RECALLSYNAPSIS_PASSWORD_HASH: %w", err)
+		}
 	}
 
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Listen)

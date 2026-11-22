@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mhersson/recallsynapsis/internal/auth"
 )
 
 const validConfig = "listen = \"127.0.0.1:0\"\npublic_url = \"https://recall.example.org\"\nowner = \"ada\"\n"
@@ -383,4 +385,47 @@ func TestTheRequestLog(t *testing.T) {
 		{Method: http.MethodPost, Path: "/plain", Status: http.StatusOK},
 		{Method: http.MethodPost, Path: "/teapot", Status: http.StatusTeapot},
 	}, lines)
+}
+
+// Not parallel: it sets the environment, and serve replaces the default logger.
+func TestThePasswordHashFromTheEnvironment(t *testing.T) {
+	keepDefaultLogger(t)
+
+	dir := filepath.Join(t.TempDir(), "data")
+	config := writeConfig(t, t.TempDir(), unbindable)
+
+	// Each start runs every step up to listening, which unbindable then fails.
+	start := func(value string) string {
+		t.Setenv("RECALLSYNAPSIS_PASSWORD_HASH", value)
+
+		code, _, stderr := runVerb("serve", "--data-dir", dir, "--config", config)
+		require.Equal(t, 1, code)
+		assert.NotContains(t, stderr, value, "the value never reaches the output")
+
+		return stderr
+	}
+
+	first, err := auth.HashPassword(rightPhrase)
+	require.NoError(t, err)
+	start(first)
+
+	// The owner was made at start, and signs in with the hash's password.
+	site := openSite(t, dir)
+
+	code, cookie := signIn(t, site, rightPhrase)
+	require.Equal(t, http.StatusNoContent, code)
+
+	start(first)
+	assert.Equal(t, http.StatusOK, sessionStatus(t, site, cookie), "the same hash changes nothing")
+
+	second, err := auth.HashPassword(otherPhrase)
+	require.NoError(t, err)
+	start(second)
+	assert.Equal(t, http.StatusUnauthorized, sessionStatus(t, site, cookie), "a new hash ends every session")
+
+	code, cookie = signIn(t, site, otherPhrase)
+	require.Equal(t, http.StatusNoContent, code)
+
+	assert.Contains(t, start(rightPhrase), "RECALLSYNAPSIS_PASSWORD_HASH", "a value that is not a hash is refused by the variable's name")
+	assert.Equal(t, http.StatusOK, sessionStatus(t, site, cookie), "and changes nothing")
 }
