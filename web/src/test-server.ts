@@ -44,8 +44,8 @@ export const redirected = () =>
 
 export type Call = { method: string; path: string; body: unknown; headers: Headers }
 
-// answer maps a request to its response; every request is recorded.
-export function fakeServer(answer: (c: Call) => Response | undefined) {
+// answer maps a request to its response, or to a promise of one that answers late; every request is recorded.
+export function fakeServer(answer: (c: Call) => Response | Promise<Response> | undefined) {
   const calls: Call[] = []
   vi.stubGlobal('EventSource', FakeEventSource)
   FakeEventSource.all = []

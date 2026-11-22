@@ -6,3 +6,10 @@ export type Session = { user: { name: string }; modules: string[]; version: stri
 
 // An area as GET /api/areas lists it: the personal area or a project.
 export type Area = { id: number; kind: 'personal' | 'project'; name: string; slug: string; description: string; archived: boolean }
+
+// A hit of GET /api/search: a module's item, the slug of the area it lives in, as the MCP tool search gives it to clients
+// that know areas by slug, and its state, such as an unsorted capture's.
+export type Hit = { ref: string; kind: string; title: string; snippet: string; area: string; state: string; changed_at: string }
+
+// The hits of one module, ranked.
+export type Group = { module: string; hits: Hit[] }

@@ -9,15 +9,17 @@ import { api } from '../api/client.ts'
 import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area } from '../api/types.ts'
-import { AREAS, HEALTH, SESSION } from './fixtures.ts'
+import { AREAS, HEALTH, HITS, SESSION } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
-// What the page changes is kept until it reloads. empty=1 starts with the personal area alone.
+// What the page changes is kept until it reloads. empty=1 starts with the personal area alone, and modules=a,b switches
+// those modules on.
 const areas = query.get('empty') === '1' ? AREAS.filter((a) => a.kind === 'personal') : AREAS
+const session = { ...SESSION, modules: query.get('modules')?.split(',') ?? SESSION.modules }
 
 // login=wrong refuses every sign-in, and login=wait makes it wait 28 seconds.
 function answer(method: string, url: URL, body: Record<string, unknown>): Response {
@@ -39,7 +41,13 @@ function answer(method: string, url: URL, body: Record<string, unknown>): Respon
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
   if (method !== 'GET') return json({ error: 'not found' }, 404)
   if (path === '/api/health') return json(HEALTH)
-  if (path === '/api/session') return json(SESSION)
+  if (path === '/api/session') return json(session)
+  if (path === '/api/search') {
+    const q = url.searchParams.get('q')!.toLowerCase()
+    const area = url.searchParams.get('area')
+    const hits = HITS.filter((h) => (h.title + h.snippet).toLowerCase().includes(q) && (!area || h.area === area))
+    return json({ groups: hits.length ? [{ module: 'notes', hits }] : [] })
+  }
   if (path === '/api/areas') return json({ areas: areas.filter((a) => url.searchParams.get('archived') === 'true' || !a.archived) })
   return json({ error: 'not found' }, 404)
 }
