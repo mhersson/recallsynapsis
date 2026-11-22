@@ -1,8 +1,10 @@
 // Package api serves the REST API under /api/ from one route table, with the
 // routes of the modules switched on beside the core's, checks the access each
-// route declares in one place, and answers every refusal, and every path no
-// route matches once the mux has redirected it to its clean form, in one JSON
-// shape.
+// route declares in one place, and answers each route's refusal, and every
+// path no route matches once the mux has redirected it to its clean form, in
+// one JSON shape. It serves the core's MCP tools and those of the modules
+// switched on at /mcp, to an API token alone, and gives a tool's refusal as
+// REST's line.
 package api
 
 import (
@@ -56,10 +58,13 @@ type server struct {
 	secure bool
 }
 
-// New returns the handler of every route.
+// New returns the handler of every route and of /mcp.
 func New(d Deps) http.Handler {
 	s := &server{Deps: d, secure: strings.HasPrefix(d.PublicURL, "https://")}
 	mux := http.NewServeMux()
+
+	// Every method reaches it: past the bearer check, the SDK answers any but POST with 405.
+	mux.Handle("/mcp", s.mcp())
 
 	handle := func(pattern string, level module.Access, serve func(http.ResponseWriter, *http.Request) error) {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {

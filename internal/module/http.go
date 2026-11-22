@@ -25,7 +25,8 @@ type Refusal struct {
 
 func (e *Refusal) Error() string { return e.Text }
 
-const maxBody = 1 << 20
+// MaxBody is the most of a request body the server reads, 1 MiB.
+const MaxBody = 1 << 20
 
 // Reply answers v as JSON with status.
 func Reply(w http.ResponseWriter, status int, v any) {
@@ -36,7 +37,7 @@ func Reply(w http.ResponseWriter, status int, v any) {
 
 // Decode reads the body, at most 1 MiB of it, into v, refusing a field v does not have.
 func Decode(w http.ResponseWriter, r *http.Request, v any) error {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, MaxBody))
 	dec.DisallowUnknownFields()
 
 	err := dec.Decode(v)

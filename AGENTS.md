@@ -104,13 +104,20 @@ Every package states its one responsibility in its package comment, and
   before the store closes.
 - `internal/api`: the REST API under `/api/`, served from one route table,
   with the routes of the modules switched on beside the core's. Every refusal
-  and every path no route matches is answered as `{"error": "one line"}`; a
-  path with `.`, `..` or `//` is first redirected to its clean form. Request
-  bodies are decoded strictly. Each route declares its access, `open`, `read`,
-  `write` or `owner`, and one check admits a bearer token, else the session
-  cookie, refuses a cookie request that changes something without the
-  `X-Recallsynapsis-CSRF` header, and puts the `module.Caller` in the
-  request's context.
+  of a route and every path no route matches is answered as
+  `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
+  to its clean form. Request bodies are decoded strictly. Each route declares
+  its access, `open`, `read`, `write` or `owner`, and one check admits a
+  bearer token, else the session cookie, refuses a cookie request that
+  changes something without the `X-Recallsynapsis-CSRF` header, and puts the
+  `module.Caller` in the request's context. At `/mcp` it serves MCP over
+  streamable HTTP, stateless, with JSON responses and tools only: the core's
+  `list_areas` and `search`, each calling what its REST route calls, and the
+  tools of the modules switched on; two tools of one name stop the start. The
+  SDK's bearer check admits an API token alone, so a session cookie is no
+  authority there, and one guard refuses a call the token's access does not
+  cover before the tool runs, puts the token's `module.Caller` in the tool's
+  context, and gives an error as the line REST would answer.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables
@@ -147,7 +154,8 @@ Every package states its one responsibility in its package comment, and
   SDK. Beside it: the `Caller` an authorised request carries in its context,
   with the user, the source of the request and whether it may write; the
   access levels a route or a tool declares; and the refusal, the JSON reply
-  and the strict decoding of a body that every route uses.
+  and the strict decoding of a body that every route uses, with the 1 MiB
+  cap on a body that `/mcp` keeps too.
   Depguard rules in `.golangci.yaml` let a module package's code import
   `module` and `store` and no other package of this binary, let nothing but
   `api` and `cmd` import a module, and let only tests import the fake; tests
