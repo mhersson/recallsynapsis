@@ -73,4 +73,7 @@ Every package states its one responsibility in its package comment, and
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
+- `web`: the Go package that embeds the built web app and serves it in front
+  of the API. A binary built without the app serves the committed
+  `web/dist/placeholder.html` in its place.
 - `scripts/`: the scans and the line count that `make` runs.

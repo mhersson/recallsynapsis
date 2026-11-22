@@ -1,2 +1,4 @@
 bin/
 /recallsynapsis
+node_modules/
+/web/dist/app/

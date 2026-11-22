@@ -2,6 +2,9 @@ module github.com/mhersson/recallsynapsis
 
 go 1.27.4
 
+// An npm package ships Go files there, which ./... would build, vet, test and lint.
+ignore ./web/node_modules
+
 require (
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/stretchr/testify v1.12.1
