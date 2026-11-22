@@ -335,6 +335,10 @@ func TestNotesMadeBeforeTheIndexAreFound(t *testing.T) {
 		_, err := f.store.ExecContext(t.Context(), `INSERT INTO notes (id, user_id, area_id, kind, title, body, inbox, revision, source, created_at, changed_at, trashed_at)
 			VALUES (?, ?, ?, 'note', ?, ?, 0, 1, 'laptop', 1, 1, ?)`, n.id, f.ada, f.areas["garden"], n.title, n.body, n.trashed)
 		require.NoError(t, err)
+
+		_, err = f.store.ExecContext(t.Context(), `INSERT INTO note_revisions (note_id, revision, at, source, title, body, kind, area_id, inbox, tags)
+			VALUES (?, 1, 1, 'laptop', ?, ?, 'note', ?, 0, '[]')`, n.id, n.title, n.body, f.areas["garden"])
+		require.NoError(t, err)
 	}
 
 	_, err := f.store.ExecContext(t.Context(), `INSERT INTO note_tags (note_id, tag) VALUES (1, 'hus')`)

@@ -1019,6 +1019,34 @@ func TestEveryChangeIsKeptInTheHistory(t *testing.T) {
 	assert.Equal(t, history, f.history(t, made, f.phone), "restored from the trash, it keeps its history")
 }
 
+func TestANoteInFullGivesWhatItsFirstRevisionSaid(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	made := f.create(t, `{"body":"Sow the beans"}`, f.laptop)
+	assert.Contains(t, made, "said")
+	assert.Empty(t, made["said"])
+
+	_, err := f.store.ExecContext(t.Context(), `UPDATE note_revisions SET said = 'Husk å så bønnene' WHERE note_id = ?`, made["id"])
+	require.NoError(t, err)
+
+	assert.Empty(t, f.create(t, `{"body":"Water the peas"}`, f.laptop)["said"], "each note gives its own")
+
+	changed := f.change(t, made, `{"revision":1,"title":"Beans"}`, f.desk)
+	assert.Equal(t, "Husk å så bønnene", changed["said"], "a later revision keeps the first one's")
+	assert.Equal(t, changed, f.read(t, made, f.phone))
+
+	code, got := f.do(t, http.MethodGet, path(made)+"/revisions", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	revisions := got["revisions"].([]any)
+	assert.Empty(t, revisions[0].(object)["said"])
+	assert.Equal(t, "Husk å så bønnene", revisions[1].(object)["said"], "the history gives it on the first revision alone")
+
+	code, got = f.do(t, http.MethodGet, "/api/notes", "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+	assert.NotContains(t, got["notes"].([]any)[0], "said", "a list gives no said")
+}
+
 func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	t.Parallel()
 

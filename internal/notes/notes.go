@@ -187,6 +187,7 @@ type row struct {
 type note struct {
 	row
 	Body       string        `json:"body"`
+	Said       string        `json:"said"` // what its first revision carries
 	Links      []module.Item `json:"links"`
 	LinkedFrom []module.Item `json:"linked_from"`
 	Files      []file        `json:"files"` // in the order they were attached
@@ -408,8 +409,9 @@ func (n notes) read(ctx context.Context, slugs map[int64]string, userID, id int6
 		err          error
 	)
 
-	out.row, err = scanRow(n.Store.QueryRowContext(ctx, `SELECT `+columns+`, body, `+linkList+`, `+fileList+` FROM notes WHERE user_id = ? AND id = ?`,
-		userID, id), slugs, &out.Body, &links, &files)
+	out.row, err = scanRow(n.Store.QueryRowContext(ctx, `SELECT `+columns+`, body,
+		(SELECT said FROM note_revisions WHERE note_id = notes.id AND revision = 1), `+linkList+`, `+fileList+`
+		FROM notes WHERE user_id = ? AND id = ?`, userID, id), slugs, &out.Body, &out.Said, &links, &files)
 	if errors.Is(err, sql.ErrNoRows) {
 		return note{}, fmt.Errorf("note %d: %w", id, store.ErrNotFound)
 	}
