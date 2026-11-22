@@ -10,8 +10,9 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
 - What it keeps comes from feature modules, each switched on in the
   configuration. This build has one, notes: notes and ideas in the areas,
   with their tags and history, an inbox of captures that wait to be filed,
-  and a trash. It is reached through the REST API alone, and does not
-  search, so search finds nothing.
+  and a trash. The web app has the Inbox, where captures are filed; the
+  rest is reached through the REST API alone. Notes does not search, so
+  search finds nothing.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. The MCP tool `list_areas` lists the
   areas.

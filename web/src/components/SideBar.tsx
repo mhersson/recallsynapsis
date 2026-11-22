@@ -1,8 +1,5 @@
-import { useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
-import { api } from '../api/client.ts'
-import { touchesAreas, useStream } from '../api/stream.ts'
-import type { Area } from '../api/types.ts'
+import { useAreas } from '../api/areas.ts'
 import type { Action, Module } from '../modules/registry.ts'
 import { AddIcon, ProjectsIcon, SearchIcon, SettingsIcon } from './icons.tsx'
 import './SideBar.css'
@@ -15,11 +12,7 @@ export default function SideBar({ modules, action, onAction, live }: Props) {
   // The dialog that makes a project opens over the Projects list, which stays current.
   const { pathname } = useLocation()
   const projects = pathname === '/projects' || pathname === '/areas/new'
-  const [areas, setAreas] = useState<Area[]>([])
-  useStream((changes) => {
-    if (!touchesAreas(changes)) return
-    api<{ areas: Area[] }>('GET', '/areas').then((r) => setAreas(r.areas), () => {})
-  })
+  const areas = useAreas()
 
   return (
     <nav className="side">

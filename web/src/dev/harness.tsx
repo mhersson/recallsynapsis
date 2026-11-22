@@ -9,18 +9,20 @@ import { api } from '../api/client.ts'
 import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
-import { AREAS, HEALTH, HITS, SECRET, SESSION, TOKENS } from './fixtures.ts'
+import type { Note } from '../modules/notes/api.ts'
+import { AREAS, HEALTH, HITS, NOTES, SECRET, SESSION, TOKENS, row } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
-// What the page changes is kept until it reloads. empty=1 starts with the personal area alone and no token,
+// What the page changes is kept until it reloads. empty=1 starts with the personal area alone, no token and no note,
 // modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
 const empty = query.get('empty') === '1'
 const areas = empty ? AREAS.filter((a) => a.kind === 'personal') : AREAS
 const tokens = empty ? [] : TOKENS
+const notes = empty ? [] : NOTES
 const backups: Record<string, string | null> = { old: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(), none: null }
 const session = {
   ...SESSION,
@@ -56,6 +58,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>): Respon
   }
   const area = areas.find((a) => path === `/api/areas/${a.id}`)
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
+  if (path.startsWith('/api/notes')) return answerNotes(method, url, body)
   if (method !== 'GET') return json({ error: 'not found' }, 404)
   if (path === '/api/health') return json(HEALTH)
   if (path === '/api/session') return json(session)
@@ -68,6 +71,30 @@ function answer(method: string, url: URL, body: Record<string, unknown>): Respon
   }
   if (path === '/api/areas') return json({ areas: areas.filter((a) => url.searchParams.get('archived') === 'true' || !a.archived) })
   return json({ error: 'not found' }, 404)
+}
+
+// The notes routes, as the server answers them, telling the stream of every write.
+function answerNotes(method: string, url: URL, body: Record<string, unknown>): Response {
+  const told = (n: Note) => {
+    tell({ module: 'notes', kind: 'note', id: n.id, area: areas.find((a) => a.slug === n.area)?.id ?? 0 })
+    return n
+  }
+  const changed = (n: Note) => told(Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() }))
+  if (url.pathname === '/api/notes' && method === 'GET') {
+    const inbox = url.searchParams.get('inbox')
+    const found = notes.filter((n) => !n.trashed_at && (inbox === null || String(n.inbox) === inbox)).sort((a, b) => b.changed_at.localeCompare(a.changed_at))
+    return json({ notes: found.slice(0, Number(url.searchParams.get('limit')) || 50).map(row), total: found.length })
+  }
+  const [, id, trash] = /^\/api\/notes\/(\d+)(\/trash)?$/.exec(url.pathname) ?? []
+  const n = notes.find((x) => x.id === Number(id))
+  if (!n) return json({ error: 'not found' }, 404)
+  if (method === 'GET') return json(n)
+  if (method === 'POST' && trash) return json(told(Object.assign(n, { trashed_at: new Date().toISOString() })))
+  if (method !== 'PATCH') return json({ error: 'not found' }, 404)
+  if (n.trashed_at) return json({ error: 'the note is in the trash, and is restored before it is changed: conflict' }, 409)
+  if (body.revision !== n.revision) return json({ error: `note ${n.id} is at revision ${n.revision}, and the change was made from ${body.revision}: conflict` }, 409)
+  const { revision: _, ...change } = body
+  return json(changed(Object.assign(n, change)))
 }
 
 // lapsed=1 ends the access a moment after the page loads: every later request is redirected, and one is made, as the next page's would be.
@@ -85,17 +112,24 @@ window.fetch = (input, init) => {
   return Promise.resolve(answer(init?.method ?? 'GET', new URL(String(input), window.location.origin), body))
 }
 
-// A stream that opens and stays live.
+// A stream that opens and stays live, and tells of each change the harness makes.
+const sources = new Set<LiveEventSource>()
 class LiveEventSource {
   static CLOSED = 2
   readyState = 1
   onopen: (() => void) | null = null
+  onmessage: ((m: { data: string }) => void) | null = null
   constructor() {
+    sources.add(this)
     setTimeout(() => this.onopen?.(), 0)
   }
   close() {
     this.readyState = LiveEventSource.CLOSED
+    sources.delete(this)
   }
+}
+function tell(change: object) {
+  setTimeout(() => sources.forEach((s) => s.onmessage?.({ data: JSON.stringify(change) })), 0)
 }
 window.EventSource = LiveEventSource as unknown as typeof EventSource
 
