@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Area, Session } from '../../api/types.ts'
 import { open } from '../../test-app.tsx'
@@ -95,7 +95,7 @@ test('Create waits for a name, and Cancel and Escape each close the dialog witho
   expect(where()).toBe('/projects')
 
   await userEvent.click(newProject())
-  await userEvent.keyboard('{Escape}')
+  fireEvent(screen.getByRole('dialog'), new Event('cancel'))
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(where()).toBe('/projects')
   expect(calls.filter((c) => c.method !== 'GET')).toEqual([])

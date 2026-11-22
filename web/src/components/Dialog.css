@@ -1,22 +1,20 @@
-.scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  background: color-mix(in oklab, var(--bg-dim) 74%, transparent);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 84px 16px 24px;
-  overflow-y: auto;
-}
-
+/* The browser centres a modal dialog in its own colours; this one sits near the top in the app's, and scrolls within
+   when it is taller than the window. */
 .dialog {
-  width: min(540px, 100%);
+  width: 540px;
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 108px);
+  margin: 84px auto auto;
+  color: inherit;
   background: var(--bg0);
   border: 1px solid var(--bg3);
   border-radius: 10px;
   padding: 20px 22px 18px;
   box-shadow: 0 10px 30px color-mix(in oklab, var(--bg-dim) 70%, transparent);
+}
+
+.dialog::backdrop {
+  background: color-mix(in oklab, var(--bg-dim) 74%, transparent);
 }
 
 .dialog h2 {
