@@ -52,6 +52,97 @@
   margin: 0 0 16px;
 }
 
+/* What the pages share. */
+.crumb {
+  font-size: 12.5px;
+  color: var(--grey1);
+  margin-bottom: 6px;
+}
+
+.crumb a {
+  color: inherit;
+}
+
+.note {
+  color: var(--grey2);
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.err {
+  color: var(--red);
+  margin: 0 0 14px;
+}
+
+.empty {
+  border: 1px dashed var(--bg4);
+  border-radius: 8px;
+  padding: 22px;
+  color: var(--grey2);
+  text-align: center;
+  margin-top: 16px;
+}
+
+.acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.list {
+  border-top: 1px solid var(--bg2);
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--bg2);
+}
+
+.row > .ic {
+  margin-top: 3px;
+  color: var(--grey1);
+}
+
+.row > a {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg);
+}
+
+.row > a:hover {
+  text-decoration: none;
+}
+
+.row > .btn {
+  align-self: center;
+}
+
+.t1 {
+  display: block;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.t3 {
+  display: block;
+  color: var(--grey2);
+  font-size: 13px;
+}
+
+.ghd {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--grey1);
+  margin: 0;
+  padding: 22px 0 6px;
+}
+
 /* The bar over a page outside the shell. */
 .brand-bar {
   background: var(--bg0);
@@ -75,5 +166,15 @@
 
   .page-head h1 {
     font-size: 20px;
+  }
+
+  /* A phone stacks a form's buttons across the whole width. */
+  .acts.stack {
+    display: grid;
+  }
+
+  .acts.stack > .btn {
+    padding: 9px 12px;
+    text-align: center;
   }
 }

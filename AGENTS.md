@@ -78,8 +78,11 @@ After a change to `web/`, look at the screen before you finish.
   `web/src/dev/fixtures.ts`. Its `palette` is `copper` or `catppuccin`, its
   `theme` is `dark` or `light`, and its `path` picks the route, for example
   `path=/settings`. `click=TEXT` clicks the first button, link or summary
-  whose text starts with TEXT; `login=wrong` refuses a sign-in and
-  `login=wait` makes it wait; `lapsed=1` ends the access to the page.
+  whose text starts with TEXT, and `type=TEXT` types TEXT into the field
+  that has the focus; given more than once, they run in the order given.
+  `login=wrong` refuses a sign-in and `login=wait` makes it wait;
+  `lapsed=1` ends the access to the page; `empty=1` starts with the
+  personal area alone. What the page changes holds until it reloads.
 - Read the PNG and say what you see. Fix what looks wrong and shoot again.
 - Stop Vite by the pid you recorded, never by port or name.
 

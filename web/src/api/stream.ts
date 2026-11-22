@@ -95,3 +95,6 @@ export function useStream(read: (changes: Change[] | null) => void): void {
     }
   }, [])
 }
+
+// True when read is to read everything, or when a change of the burst is to an area.
+export const touchesAreas = (changes: Change[] | null) => !changes || changes.some((c) => c.module === 'core' && c.kind === 'area')

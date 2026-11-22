@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
 import { api } from '../api/client.ts'
-import { useStream } from '../api/stream.ts'
+import { touchesAreas, useStream } from '../api/stream.ts'
 import type { Area } from '../api/types.ts'
 import type { Module } from '../modules/registry.ts'
 import { AddIcon, ProjectsIcon, SearchIcon, SettingsIcon } from './icons.tsx'
@@ -17,7 +17,7 @@ export default function SideBar({ modules, live }: Props) {
   const projects = pathname === '/projects' || pathname === '/areas/new'
   const [areas, setAreas] = useState<Area[]>([])
   useStream((changes) => {
-    if (changes && !changes.some((c) => c.module === 'core' && c.kind === 'area')) return
+    if (!touchesAreas(changes)) return
     api<{ areas: Area[] }>('GET', '/areas').then((r) => setAreas(r.areas), () => {})
   })
 
