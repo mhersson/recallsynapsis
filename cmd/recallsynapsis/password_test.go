@@ -15,6 +15,7 @@ import (
 
 	"github.com/mhersson/recallsynapsis/internal/api"
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -36,12 +37,12 @@ func runWithInput(stdin string, args ...string) (code int, stdout, stderr string
 func openSite(t *testing.T, dir string) http.Handler {
 	t.Helper()
 
-	st, err := store.Open(t.Context(), filepath.Join(dir, "recallsynapsis.db"), auth.Migrations)
+	st, err := store.Open(t.Context(), filepath.Join(dir, "recallsynapsis.db"), migrations)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = st.Close() })
 
-	return api.New(api.Deps{Auth: auth.New(st, time.Now), PublicURL: "https://recall.example.org"})
+	return api.New(api.Deps{Auth: auth.New(st, time.Now), Core: core.New(st), PublicURL: "https://recall.example.org"})
 }
 
 // signIn signs ada in and returns the status and the Cookie header of her session.

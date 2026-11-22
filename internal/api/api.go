@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -23,6 +24,7 @@ const maxBody = 1 << 20
 // Deps is what the handler works on.
 type Deps struct {
 	Auth      *auth.Service
+	Core      *core.Service
 	Version   string
 	PublicURL string // the configured public_url; the cookie is Secure when it is https
 	Timezone  string
@@ -50,6 +52,9 @@ var routes = []route{
 	{"POST /api/auth/login", open, (*server).login},
 	{"POST /api/auth/logout", read, (*server).logout},
 	{"GET /api/session", read, (*server).session},
+	{"GET /api/areas", read, (*server).areas},
+	{"POST /api/areas", write, (*server).createArea},
+	{"PATCH /api/areas/{id}", write, (*server).changeArea},
 	{"GET /api/tokens", owner, (*server).tokens},
 	{"POST /api/tokens", owner, (*server).createToken},
 	{"DELETE /api/tokens/{id}", owner, (*server).deleteToken},
@@ -100,13 +105,15 @@ func fail(w http.ResponseWriter, r *http.Request, err error) {
 	reply(w, status, map[string]string{"error": text})
 }
 
-// classify gives err's status and the one line the caller sees. A conflict or
-// an absence is answered with its whole text; any other error that is not the
-// caller's is logged with the route and given without detail.
+// classify gives err's status and the one line the caller sees. A broken rule,
+// a conflict or an absence is answered with its whole text; any other error
+// that is not the caller's is logged with the route and given without detail.
 func classify(ctx context.Context, route string, err error) (int, string) {
 	switch e, ok := errors.AsType[*apiError](err); {
 	case ok:
 		return e.status, e.text
+	case errors.Is(err, store.ErrInvalid):
+		return http.StatusBadRequest, err.Error()
 	case errors.Is(err, store.ErrConflict):
 		return http.StatusConflict, err.Error()
 	case errors.Is(err, store.ErrNotFound):

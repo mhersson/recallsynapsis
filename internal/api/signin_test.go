@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
@@ -39,16 +41,19 @@ var passwordHash = sync.OnceValue(func() string {
 type fixture struct {
 	h     http.Handler
 	auth  *auth.Service
+	core  *core.Service
+	store *store.Store
 	clock *time.Time
 	user  int64
 	port  atomic.Int32
 }
 
-// newFixture serves a new database whose user ada has password as her password.
+// newFixture serves a new database whose user ada has password as her password
+// and her personal area.
 func newFixture(t *testing.T, publicURL string) *fixture {
 	t.Helper()
 
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "recallsynapsis.db"), auth.Migrations)
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "recallsynapsis.db"), slices.Concat(auth.Migrations, core.Migrations))
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = st.Close() })
@@ -60,9 +65,12 @@ func newFixture(t *testing.T, publicURL string) *fixture {
 	require.NoError(t, err)
 	require.NoError(t, svc.SetPasswordHash(t.Context(), user, passwordHash()))
 
-	h := New(Deps{Auth: svc, Version: "1.2.3", PublicURL: publicURL, Timezone: "Europe/Oslo"})
+	areas := core.New(st)
+	require.NoError(t, areas.EnsurePersonal(t.Context(), user))
 
-	return &fixture{h: h, auth: svc, clock: &clock, user: user}
+	h := New(Deps{Auth: svc, Core: areas, Version: "1.2.3", PublicURL: publicURL, Timezone: "Europe/Oslo"})
+
+	return &fixture{h: h, auth: svc, core: areas, store: st, clock: &clock, user: user}
 }
 
 // send serves one request from the address 192.0.2.1, on a new port as each

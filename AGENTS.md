@@ -106,6 +106,10 @@ Every package states its one responsibility in its package comment, and
 - `internal/config`: reads the configuration file strictly: an unknown key, a
   wrong type or an unusable value is refused with the key named. It keeps
   each `[modules.NAME]` table as read.
+- `internal/core`: keeps the areas: each user's one personal area, which
+  keeps its name and is never archived, and their projects, each with a name
+  unique in any case and a slug made from it. It finds one of a user's areas
+  by its id, its slug or its name. It owns the table `areas`.
 - `internal/module`: what the core and its feature modules share: the
   `Caller` an authorised request carries in its context, with the user, the
   source of the request and whether it may write.

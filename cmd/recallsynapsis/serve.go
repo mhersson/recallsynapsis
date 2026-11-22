@@ -14,6 +14,7 @@ import (
 
 	"github.com/mhersson/recallsynapsis/internal/api"
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/web"
 )
 
@@ -71,6 +72,11 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 		return err
 	}
 
+	areas := core.New(st)
+	if err := areas.EnsurePersonal(ctx, owner); err != nil {
+		return err
+	}
+
 	// A container is given the hash this way. The error never holds the value.
 	if hash := os.Getenv("RECALLSYNAPSIS_PASSWORD_HASH"); hash != "" {
 		if err := signin.SetPasswordHash(ctx, owner, hash); err != nil {
@@ -95,7 +101,7 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	log.Info("listening", "address", ln.Addr().String(), "public_url", cfg.PublicURL, "data_dir", dir, "version", version)
 
-	h := api.New(api.Deps{Auth: signin, Version: version, PublicURL: cfg.PublicURL, Timezone: cfg.Timezone})
+	h := api.New(api.Deps{Auth: signin, Core: areas, Version: version, PublicURL: cfg.PublicURL, Timezone: cfg.Timezone})
 
 	return serve(ctx, ln, logRequests(web.Handler(h), log), shutdownGrace, log)
 }
