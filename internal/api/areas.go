@@ -43,6 +43,7 @@ func (s *server) createArea(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	s.areaChanged(r, a)
 	module.Reply(w, http.StatusCreated, a)
 
 	return nil
@@ -64,7 +65,14 @@ func (s *server) changeArea(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	s.areaChanged(r, a)
 	module.Reply(w, http.StatusOK, a)
 
 	return nil
+}
+
+// areaChanged tells the caller's open pages that the area a changed: it is
+// both the item and its area.
+func (s *server) areaChanged(r *http.Request, a module.Area) {
+	s.Hub.Changed(r.Context(), module.Change{Module: "core", Kind: "area", ID: a.ID, Area: a.ID})
 }

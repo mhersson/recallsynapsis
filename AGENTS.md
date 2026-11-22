@@ -99,9 +99,10 @@ Every package states its one responsibility in its package comment, and
   verb registers itself from an `init` in its own file. `datadir.go` holds
   `modules`, the list of the binary's feature modules, empty but for the fake
   the tests add, and every verb that opens the database builds them all, so
-  every module's migrations run whether it is on or not. `serve` runs the
-  jobs of the modules switched on and the nightly backup, and stops them
-  before the store closes.
+  every module's migrations run whether it is on or not. `serve` gives the
+  modules the hub of the event streams, whose streams end as a signal begins
+  the shutdown, runs the jobs of the modules switched on and the nightly
+  backup, and stops them before the store closes.
 - `internal/api`: the REST API under `/api/`, served from one route table,
   with the routes of the modules switched on beside the core's. Every refusal
   of a route and every path no route matches is answered as
@@ -110,14 +111,19 @@ Every package states its one responsibility in its package comment, and
   its access, `open`, `read`, `write` or `owner`, and one check admits a
   bearer token, else the session cookie, refuses a cookie request that
   changes something without the `X-Recallsynapsis-CSRF` header, and puts the
-  `module.Caller` in the request's context. At `/mcp` it serves MCP over
-  streamable HTTP, stateless, with JSON responses and tools only: the core's
-  `list_areas` and `search`, each calling what its REST route calls, and the
-  tools of the modules switched on; two tools of one name stop the start. The
-  SDK's bearer check admits an API token alone, so a session cookie is no
-  authority there, and one guard refuses a call the token's access does not
-  cover before the tool runs, puts the token's `module.Caller` in the tool's
-  context, and gives an error as the line REST would answer.
+  `module.Caller` in the request's context. At `GET /api/events` one hub,
+  which the area routes and the modules' `Deps.Changed` tell, streams each
+  change to the open streams of the user whose change it is, and keeps none.
+  A stream ends when it falls behind, rather than hold up a writer, when the
+  server stops, and after an hour, so its access is checked again when it is
+  opened again. At `/mcp` it serves MCP over streamable HTTP, stateless, with
+  JSON responses and tools only: the core's `list_areas` and `search`, each
+  calling what its REST route calls, and the tools of the modules switched
+  on; two tools of one name stop the start. The SDK's bearer check admits an
+  API token alone, so a session cookie is no authority there, and one guard
+  refuses a call the token's access does not cover before the tool runs, puts
+  the token's `module.Caller` in the tool's context, and gives an error as the
+  line REST would answer.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables

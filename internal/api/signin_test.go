@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -46,6 +45,7 @@ type fixture struct {
 	h         http.Handler
 	auth      *auth.Service
 	core      *core.Service
+	hub       *Hub
 	store     *store.Store
 	clock     *time.Time
 	user      int64
@@ -73,7 +73,7 @@ func newFixture(t *testing.T, publicURL string) *fixture {
 	areas := core.New(st)
 	require.NoError(t, areas.EnsurePersonal(t.Context(), user))
 
-	f := &fixture{auth: svc, core: areas, store: st, clock: &clock, user: user, publicURL: publicURL}
+	f := &fixture{auth: svc, core: areas, hub: NewHub(t.Context().Done()), store: st, clock: &clock, user: user, publicURL: publicURL}
 	f.load(t, nil)
 
 	return f
@@ -89,10 +89,10 @@ func (f *fixture) load(t *testing.T, fake map[string]any) {
 	}
 
 	ms, err := f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{testkit.New}, &config.Config{Modules: tables},
-		module.Deps{Now: func() time.Time { return *f.clock }, Dir: t.TempDir(), Changed: func(context.Context, module.Change) {}})
+		module.Deps{Now: func() time.Time { return *f.clock }, Dir: t.TempDir(), Changed: f.hub.Changed})
 	require.NoError(t, err)
 
-	f.h = New(Deps{Auth: f.auth, Core: f.core, Modules: ms, Version: "1.2.3", PublicURL: f.publicURL, Timezone: "Europe/Oslo"})
+	f.h = New(Deps{Auth: f.auth, Core: f.core, Modules: ms, Version: "1.2.3", PublicURL: f.publicURL, Timezone: "Europe/Oslo", Hub: f.hub})
 }
 
 // send serves one request from the address 192.0.2.1, on a new port as each
