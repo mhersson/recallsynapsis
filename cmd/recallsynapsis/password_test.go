@@ -42,7 +42,7 @@ func openSite(t *testing.T, dir string) http.Handler {
 
 	t.Cleanup(func() { _ = st.Close() })
 
-	return api.New(api.Deps{Auth: auth.New(st, time.Now), Core: core.New(st), PublicURL: "https://recall.example.org"})
+	return api.New(api.Deps{Auth: auth.New(st, time.Now), Core: core.New(st), Modules: &core.Modules{}, PublicURL: "https://recall.example.org"})
 }
 
 // signIn signs ada in and returns the status and the Cookie header of her session.

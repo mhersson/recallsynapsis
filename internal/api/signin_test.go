@@ -17,9 +17,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/config"
 	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
+	"github.com/mhersson/recallsynapsis/internal/testkit"
 )
 
 const (
@@ -39,17 +41,18 @@ var passwordHash = sync.OnceValue(func() string {
 })
 
 type fixture struct {
-	h     http.Handler
-	auth  *auth.Service
-	core  *core.Service
-	store *store.Store
-	clock *time.Time
-	user  int64
-	port  atomic.Int32
+	h         http.Handler
+	auth      *auth.Service
+	core      *core.Service
+	store     *store.Store
+	clock     *time.Time
+	user      int64
+	port      atomic.Int32
+	publicURL string
 }
 
 // newFixture serves a new database whose user ada has password as her password
-// and her personal area.
+// and her personal area, with the fake module off, having no [modules.fake] table.
 func newFixture(t *testing.T, publicURL string) *fixture {
 	t.Helper()
 
@@ -68,9 +71,26 @@ func newFixture(t *testing.T, publicURL string) *fixture {
 	areas := core.New(st)
 	require.NoError(t, areas.EnsurePersonal(t.Context(), user))
 
-	h := New(Deps{Auth: svc, Core: areas, Version: "1.2.3", PublicURL: publicURL, Timezone: "Europe/Oslo"})
+	f := &fixture{auth: svc, core: areas, store: st, clock: &clock, user: user, publicURL: publicURL}
+	f.load(t, nil)
 
-	return &fixture{h: h, auth: svc, core: areas, store: st, clock: &clock, user: user}
+	return f
+}
+
+// load serves the fixture's database again, with fake as the fake module's table.
+func (f *fixture) load(t *testing.T, fake map[string]any) {
+	t.Helper()
+
+	tables := map[string]map[string]any{}
+	if fake != nil {
+		tables["fake"] = fake
+	}
+
+	ms, err := f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{testkit.New}, &config.Config{Modules: tables},
+		module.Deps{Now: func() time.Time { return *f.clock }, Dir: t.TempDir(), Changed: func(module.Change) {}})
+	require.NoError(t, err)
+
+	f.h = New(Deps{Auth: f.auth, Core: f.core, Modules: ms, Version: "1.2.3", PublicURL: f.publicURL, Timezone: "Europe/Oslo"})
 }
 
 // send serves one request from the address 192.0.2.1, on a new port as each
@@ -258,24 +278,24 @@ func TestTheAccessOfEachRoute(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		level   access
+		level   module.Access
 		method  string
 		headers []string
 		status  int // 0 when admitted
 		caller  module.Caller
 	}{
-		{"nothing on an open route", open, http.MethodPost, nil, 0, module.Caller{}},
-		{"nothing", read, http.MethodGet, nil, http.StatusUnauthorized, module.Caller{}},
-		{"a read token reading", read, http.MethodGet, []string{readToken}, 0, module.Caller{UserID: f.user, Source: "phone"}},
-		{"a scheme in any case", read, http.MethodGet, []string{strings.Replace(readToken, "Bearer", "bEARER", 1)}, 0, module.Caller{UserID: f.user, Source: "phone"}},
-		{"a read token writing", write, http.MethodPost, []string{readToken}, http.StatusForbidden, module.Caller{}},
-		{"a write token writing", write, http.MethodPost, []string{writeToken}, 0, module.Caller{UserID: f.user, Source: "laptop", Write: true}},
-		{"a write token on an owner route", owner, http.MethodGet, []string{writeToken}, http.StatusForbidden, module.Caller{}},
-		{"a read token on an owner route", owner, http.MethodGet, []string{readToken}, http.StatusForbidden, module.Caller{}},
-		{"a token before the cookie", owner, http.MethodGet, []string{readToken, cookie}, http.StatusForbidden, module.Caller{}},
-		{"the cookie on an owner route", owner, http.MethodPost, []string{cookie, csrf}, 0, module.Caller{UserID: f.user, Source: "web", Write: true}},
-		{"the cookie reading without the header", read, http.MethodGet, []string{cookie}, 0, module.Caller{UserID: f.user, Source: "web", Write: true}},
-		{"the cookie writing without the header", write, http.MethodPost, []string{cookie}, http.StatusForbidden, module.Caller{}},
+		{"nothing on an open route", module.Open, http.MethodPost, nil, 0, module.Caller{}},
+		{"nothing", module.Read, http.MethodGet, nil, http.StatusUnauthorized, module.Caller{}},
+		{"a read token reading", module.Read, http.MethodGet, []string{readToken}, 0, module.Caller{UserID: f.user, Source: "phone"}},
+		{"a scheme in any case", module.Read, http.MethodGet, []string{strings.Replace(readToken, "Bearer", "bEARER", 1)}, 0, module.Caller{UserID: f.user, Source: "phone"}},
+		{"a read token writing", module.Write, http.MethodPost, []string{readToken}, http.StatusForbidden, module.Caller{}},
+		{"a write token writing", module.Write, http.MethodPost, []string{writeToken}, 0, module.Caller{UserID: f.user, Source: "laptop", Write: true}},
+		{"a write token on an owner route", module.Owner, http.MethodGet, []string{writeToken}, http.StatusForbidden, module.Caller{}},
+		{"a read token on an owner route", module.Owner, http.MethodGet, []string{readToken}, http.StatusForbidden, module.Caller{}},
+		{"a token before the cookie", module.Owner, http.MethodGet, []string{readToken, cookie}, http.StatusForbidden, module.Caller{}},
+		{"the cookie on an owner route", module.Owner, http.MethodPost, []string{cookie, csrf}, 0, module.Caller{UserID: f.user, Source: "web", Write: true}},
+		{"the cookie reading without the header", module.Read, http.MethodGet, []string{cookie}, 0, module.Caller{UserID: f.user, Source: "web", Write: true}},
+		{"the cookie writing without the header", module.Write, http.MethodPost, []string{cookie}, http.StatusForbidden, module.Caller{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -305,7 +325,7 @@ func TestTheAccessOfEachRoute(t *testing.T) {
 			require.NoError(t, err)
 
 			c, ok := module.CallerFrom(r.Context())
-			assert.Equal(t, tt.level != open, ok)
+			assert.Equal(t, tt.level != module.Open, ok)
 			assert.Equal(t, tt.caller, c)
 		})
 	}

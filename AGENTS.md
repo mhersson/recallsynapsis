@@ -96,32 +96,60 @@ Every package states its one responsibility in its package comment, and
 
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
-  verb registers itself from an `init` in its own file.
-- `internal/api`: the REST API under `/api/`, served from one route table.
-  Every refusal and every path no route matches is answered as
-  `{"error": "one line"}`; a path with `.`, `..` or `//` is first redirected
-  to its clean form. Request bodies are decoded strictly. Each route declares
-  its access, `open`, `read`, `write` or `owner`, and one check admits a
-  bearer token, else the session cookie, refuses a cookie request that
-  changes something without the `X-Recallsynapsis-CSRF` header, and puts the
-  `module.Caller` in the request's context.
+  verb registers itself from an `init` in its own file. `datadir.go` holds
+  `modules`, the list of the binary's feature modules, empty but for the fake
+  the tests add, and every verb that opens the database builds them all, so
+  every module's migrations run whether it is on or not. `serve` runs the
+  jobs of the modules switched on, and stops them before the store closes.
+- `internal/api`: the REST API under `/api/`, served from one route table,
+  with the routes of the modules switched on beside the core's. Every refusal
+  and every path no route matches is answered as `{"error": "one line"}`; a
+  path with `.`, `..` or `//` is first redirected to its clean form. Request
+  bodies are decoded strictly. Each route declares its access, `open`, `read`,
+  `write` or `owner`, and one check admits a bearer token, else the session
+  cookie, refuses a cookie request that changes something without the
+  `X-Recallsynapsis-CSRF` header, and puts the `module.Caller` in the
+  request's context.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables
   `users`, `sessions` and `api_tokens`.
 - `internal/config`: reads the configuration file strictly: an unknown key, a
   wrong type or an unusable value is refused with the key named. It keeps
-  each `[modules.NAME]` table as read.
-- `internal/core`: keeps the areas: each user's one personal area, which
-  keeps its name and is never archived, and their projects, each with a name
-  unique in any case and a slug made from it. It finds one of a user's areas
-  by its id, its slug or its name. It owns the table `areas`.
-- `internal/module`: what the core and its feature modules share: the
-  `Caller` an authorised request carries in its context, with the user, the
-  source of the request and whether it may write.
+  each `[modules.NAME]` table as read, and decodes one as strictly for its
+  module: `enabled`, and the rest into the module's own settings. A module
+  with no table is off.
+- `internal/core`: keeps the areas: each user's one personal area, which keeps
+  its name and is never archived, and their projects, each with a name unique
+  in any case and a slug made from it. It finds one of a user's areas by its
+  id, its slug or its name. It builds the feature modules the binary lists: it
+  decodes each one's table, refuses a table no module has and a module route
+  that is open, and applies every module's migrations, on or off, after auth's
+  and its own. Over the modules switched on it searches, grouping the hits by
+  module, giving each its area's slug and failing on a hit outside the
+  caller's areas, resolves a reference, unavailable rather than an error when
+  no module switched on has the item, and finds what links to one. It owns the
+  table `areas`.
+- `internal/module`: what the core and its feature modules share. The
+  contract: the `Module` a feature module's constructor returns, with its
+  settings, migrations, routes, MCP tools, jobs, and optionally its search,
+  the title of an item for a link and what links to a reference; the `Deps`
+  it is built with; and the shapes they exchange, among them the `Area`.
+  `NewTool` makes a tool from a typed function, so no module touches the MCP
+  SDK. Beside it: the `Caller` an authorised request carries in its context,
+  with the user, the source of the request and whether it may write; the
+  access levels a route or a tool declares; and the refusal, the JSON reply
+  and the strict decoding of a body that every route uses.
+  Depguard rules in `.golangci.yaml` let a module package's code import
+  `module` and `store` and no other package of this binary, let nothing but
+  `api` and `cmd` import a module, and let only tests import the fake; tests
+  are otherwise exempt.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
+- `internal/testkit`: `fake`, a feature module as small as the tests of what
+  serves modules need: a table, a route that adds to it, a search of it, and
+  a job that fails on every tick. Only tests register it.
 - `web`: the web app's npm package, with its sources in `web/src`, and the Go
   package that embeds its build from `web/dist/app` and serves it in front of
   the API. A binary built without the app serves the committed

@@ -25,6 +25,7 @@ import (
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
 	"github.com/mhersson/recallsynapsis/internal/core"
+	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -203,6 +204,7 @@ func TestServeAnswersAndStopsOnASignal(t *testing.T) {
 	require.NoError(t, resp.Body.Close())
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, map[string]string{"status": "ok", "version": version}, health)
+	assert.Equal(t, http.StatusNotFound, fakeRoute(t, url), "the route of a module with no table is not served")
 
 	// A page path gets the web app, or the placeholder in a build without it, and its own log line.
 	req, err = http.NewRequestWithContext(t.Context(), http.MethodGet, url+"/settings", nil)
@@ -231,6 +233,7 @@ func TestServeAnswersAndStopsOnASignal(t *testing.T) {
 
 	assert.Equal(t, 0, within(t, done, "serve did not stop on the signal"), stderr.String())
 	assert.Less(t, time.Since(signalled), shutdownGrace)
+	assert.NotContains(t, stderr.String(), "job=tick", "the job of a module with no table never runs")
 	// SQLite removes the write-ahead log when the last connection closes cleanly.
 	assert.NoFileExists(t, filepath.Join(dir, "recallsynapsis.db-wal"))
 }
@@ -457,7 +460,7 @@ func TestAStartMakesTheOwnersPersonalArea(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	config := writeConfig(t, t.TempDir(), unbindable)
 
-	personal := func(owner string) []core.Area {
+	personal := func(owner string) []module.Area {
 		st, err := store.Open(t.Context(), filepath.Join(dir, "recallsynapsis.db"), migrations)
 		require.NoError(t, err)
 

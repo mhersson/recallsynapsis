@@ -115,3 +115,75 @@ func TestAMissingFileNamesThePath(t *testing.T) {
 	assert.Contains(t, err.Error(), path)
 	assert.NoFileExists(t, path, "no starter file is written")
 }
+
+// settings is a module's own struct, with its defaults.
+type settings struct {
+	Size int    `toml:"size"`
+	Mode string `toml:"mode"`
+}
+
+func TestAModuleTable(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := Load(writeFile(t, minimal+`
+[modules.plain]
+enabled = true
+
+[modules.tuned]
+enabled = false
+size    = 7
+
+[modules.silent]
+`))
+	require.NoError(t, err)
+
+	on, err := cfg.Module("plain", nil)
+	require.NoError(t, err)
+	assert.True(t, on)
+
+	got := settings{Size: 1, Mode: "fast"}
+	on, err = cfg.Module("tuned", &got)
+	require.NoError(t, err)
+	assert.False(t, on)
+	assert.Equal(t, settings{Size: 7, Mode: "fast"}, got, "a key left out keeps its default")
+
+	on, err = cfg.Module("silent", nil)
+	require.NoError(t, err)
+	assert.False(t, on, "a table with no enabled is off")
+
+	on, err = cfg.Module("absent", &got)
+	require.NoError(t, err)
+	assert.False(t, on, "a module with no table is off")
+}
+
+func TestAModuleTableRefusesWhatItsModuleLacks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name, table, key string
+		settings         any
+	}{
+		{"enabled not a boolean", "enabled = \"yes\"", "modules.x.enabled", nil},
+		{"a key of a module with no settings", "enabled = true\ncolour = \"red\"", "modules.x.colour", nil},
+		{"a key its settings lack", "enabled = true\nsize = 3\nsise = 4", "modules.x.sise", &settings{}},
+		{"a wrong type", "size = \"big\"", "modules.x.size", &settings{}},
+		{"a table in it", "[modules.x.inner]\nsize = 3", "modules.x.inner", &settings{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			file := minimal + "[modules.x]\n" + tt.table + "\n"
+			if strings.HasPrefix(tt.table, "[") {
+				file = minimal + tt.table + "\n"
+			}
+
+			cfg, err := Load(writeFile(t, file))
+			require.NoError(t, err)
+
+			_, err = cfg.Module("x", tt.settings)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.key)
+		})
+	}
+}

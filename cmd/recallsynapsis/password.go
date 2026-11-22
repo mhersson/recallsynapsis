@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/module"
 )
 
 func init() {
@@ -67,15 +68,15 @@ func runPassword(ctx context.Context, args []string, stdin io.Reader, stdout, st
 		return nil
 	}
 
-	_, cfg, st, err := openData(ctx, *dirFlag, *configFlag)
+	d, err := openData(ctx, *dirFlag, *configFlag, func(module.Change) {})
 	if err != nil {
 		return err
 	}
-	defer st.Close()
+	defer d.store.Close()
 
-	signin := auth.New(st, time.Now)
+	signin := auth.New(d.store, time.Now)
 
-	owner, err := signin.EnsureUser(ctx, cfg.Owner)
+	owner, err := signin.EnsureUser(ctx, d.cfg.Owner)
 	if err != nil {
 		return err
 	}
@@ -84,7 +85,7 @@ func runPassword(ctx context.Context, args []string, stdin io.Reader, stdout, st
 		return err
 	}
 
-	fmt.Fprintf(stdout, "The password of %s is set and every session has ended.\n", cfg.Owner)
+	fmt.Fprintf(stdout, "The password of %s is set and every session has ended.\n", d.cfg.Owner)
 
 	return nil
 }

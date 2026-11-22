@@ -15,11 +15,11 @@ type Migration struct {
 	SQL     string
 }
 
-// migrate applies, in order, the migrations not yet in the ledger, all with
+// Migrate applies, in order, the migrations not yet in the ledger, all with
 // their ledger rows in one transaction so a failure leaves nothing behind.
 // The transaction is immediate (see dsn), so a concurrent opener of a database
 // already in WAL mode waits for it, then finds every version recorded.
-func (s *Store) migrate(ctx context.Context, ms []Migration) error {
+func (s *Store) Migrate(ctx context.Context, ms []Migration) error {
 	return s.Tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 			owner      TEXT NOT NULL,

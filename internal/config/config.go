@@ -1,11 +1,14 @@
 // Package config reads the configuration file strictly: an unknown key, a
-// wrong type or an unusable value is refused with the key named.
+// wrong type or an unusable value is refused with the key named. It keeps
+// each [modules.NAME] table as read, and decodes one for its module as
+// strictly.
 package config
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"os"
@@ -60,25 +63,65 @@ func Load(path string) (*Config, error) {
 // decodeError names the offending key, which go-toml's own text leaves out
 // for unknown keys.
 func decodeError(path string, err error) error {
+	// A strict error unwraps to a decode error per key, each on its own row.
+	if _, strict := errors.AsType[*toml.StrictMissingError](err); !strict {
+		if de, ok := errors.AsType[*toml.DecodeError](err); ok {
+			row, _ := de.Position()
+			path = fmt.Sprintf("%s:%d", path, row)
+		}
+	}
+
+	return fmt.Errorf("%s: %w", path, keyError("", err))
+}
+
+// keyError names each key err is about, prefix put before it.
+func keyError(prefix string, err error) error {
 	if strict, ok := errors.AsType[*toml.StrictMissingError](err); ok {
 		keys := make([]string, len(strict.Errors))
 		for i, e := range strict.Errors {
-			keys[i] = strings.Join(e.Key(), ".")
+			keys[i] = prefix + strings.Join(e.Key(), ".")
 		}
 
-		return fmt.Errorf("%s: unknown key %s", path, strings.Join(keys, ", "))
+		return fmt.Errorf("unknown key %s", strings.Join(keys, ", "))
 	}
 
-	if de, ok := errors.AsType[*toml.DecodeError](err); ok {
-		row, _ := de.Position()
-		if key := de.Key(); len(key) > 0 {
-			return fmt.Errorf("%s:%d: key %s: %w", path, row, strings.Join(key, "."), err)
-		}
-
-		return fmt.Errorf("%s:%d: %w", path, row, err)
+	if de, ok := errors.AsType[*toml.DecodeError](err); ok && len(de.Key()) > 0 {
+		return fmt.Errorf("key %s%s: %w", prefix, strings.Join(de.Key(), "."), err)
 	}
 
-	return fmt.Errorf("%s: %w", path, err)
+	return err
+}
+
+// Module decodes the [modules.NAME] table strictly into settings, a pointer
+// to the module's own struct or nil when it has none, and reports whether
+// the table's enabled is true. A module with no table is off.
+func (c *Config) Module(name string, settings any) (bool, error) {
+	table := maps.Clone(c.Modules[name])
+
+	v, set := table["enabled"]
+
+	on, ok := v.(bool)
+	if set && !ok {
+		return false, fmt.Errorf("key modules.%s.enabled: %#v is not true or false", name, v)
+	}
+
+	delete(table, "enabled")
+
+	// The table was read as TOML, so it writes as TOML.
+	b, err := toml.Marshal(table)
+	if err != nil {
+		return false, fmt.Errorf("modules.%s: %w", name, err)
+	}
+
+	if settings == nil {
+		settings = &struct{}{}
+	}
+
+	if err := toml.NewDecoder(bytes.NewReader(b)).DisallowUnknownFields().Decode(settings); err != nil {
+		return false, keyError("modules."+name+".", err)
+	}
+
+	return on, nil
 }
 
 func (c *Config) validate() error {

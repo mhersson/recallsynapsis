@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mhersson/recallsynapsis/internal/auth"
+	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
@@ -41,7 +42,7 @@ func (f *fixture) user(t *testing.T, name string) int64 {
 	return id
 }
 
-func (f *fixture) project(t *testing.T, user int64, name string) Area {
+func (f *fixture) project(t *testing.T, user int64, name string) module.Area {
 	t.Helper()
 
 	a, err := f.svc.CreateProject(t.Context(), user, name, "")
@@ -75,7 +76,7 @@ func TestEachUserHasOnePersonalArea(t *testing.T) {
 	list, err := f.svc.Areas(t.Context(), ada, true)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
-	assert.Equal(t, Area{ID: list[0].ID, Kind: personal, Name: "Personal", Slug: "personal"}, list[0])
+	assert.Equal(t, module.Area{ID: list[0].ID, Kind: personal, Name: "Personal", Slug: "personal"}, list[0])
 
 	_, err = f.store.ExecContext(t.Context(), `INSERT INTO areas (user_id, kind, name, name_fold, slug) VALUES (?, 'personal', 'Other', 'other', 'other')`, ada)
 	assert.True(t, store.IsUniqueViolation(err), "the schema holds each user to one")
@@ -144,7 +145,7 @@ func TestThePersonalAreaKeepsItsNameAndIsNeverArchived(t *testing.T) {
 
 	got, err := f.svc.ChangeArea(t.Context(), ada, p.ID, Change{Name: new(" Personal "), Description: new(" mine "), Archived: new(false)})
 	require.NoError(t, err, "its own name and staying unarchived change nothing")
-	assert.Equal(t, Area{ID: p.ID, Kind: personal, Name: "Personal", Slug: "personal", Description: "mine"}, got)
+	assert.Equal(t, module.Area{ID: p.ID, Kind: personal, Name: "Personal", Slug: "personal", Description: "mine"}, got)
 
 	again, err := f.svc.Area(t.Context(), ada, p.ID)
 	require.NoError(t, err)
@@ -293,7 +294,7 @@ func TestNamesAndDescriptionsAreChecked(t *testing.T) {
 
 	a, err := f.svc.CreateProject(t.Context(), ada, "  garden  ", "  The beds.\n\tAnd the greenhouse.  ")
 	require.NoError(t, err)
-	assert.Equal(t, Area{ID: a.ID, Kind: project, Name: "garden", Slug: "garden", Description: "The beds.\n\tAnd the greenhouse."}, a)
+	assert.Equal(t, module.Area{ID: a.ID, Kind: project, Name: "garden", Slug: "garden", Description: "The beds.\n\tAnd the greenhouse."}, a)
 
 	_, err = f.svc.CreateProject(t.Context(), ada, strings.Repeat("å", maxName), strings.Repeat("ø", maxDescription))
 	require.NoError(t, err, "the limits count characters")

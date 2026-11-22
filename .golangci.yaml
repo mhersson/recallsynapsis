@@ -8,6 +8,7 @@ linters:
   - staticcheck
   - unused
   - containedctx
+  - depguard
   - gocritic
   - godot
   - gosec
@@ -23,6 +24,47 @@ linters:
   - whitespace
   - wsl_v5
   settings:
+    depguard:
+      rules:
+        # A module's tests may set up users and areas with auth and core.
+        module-imports:
+          list-mode: lax
+          files:
+          - "**/internal/testkit/**"
+          - "**/internal/notes/**"
+          - "**/internal/tasks/**"
+          - "**/internal/knowledge/**"
+          - "**/internal/push/**"
+          - "!$test"
+          allow:
+          - github.com/mhersson/recallsynapsis/internal/module$
+          - github.com/mhersson/recallsynapsis/internal/store$
+          deny:
+          - pkg: github.com/mhersson/recallsynapsis
+            desc: a module imports module and store and no other package of this binary
+        module-importers:
+          files:
+          - "$all"
+          - "!$test"
+          - "!**/internal/api/**"
+          - "!**/cmd/**"
+          deny:
+          - pkg: github.com/mhersson/recallsynapsis/internal/notes
+            desc: nothing but api and cmd imports a module
+          - pkg: github.com/mhersson/recallsynapsis/internal/tasks
+            desc: nothing but api and cmd imports a module
+          - pkg: github.com/mhersson/recallsynapsis/internal/knowledge
+            desc: nothing but api and cmd imports a module
+          - pkg: github.com/mhersson/recallsynapsis/internal/push
+            desc: nothing but api and cmd imports a module
+        # So the fake never reaches the binary.
+        testkit-importers:
+          files:
+          - "$all"
+          - "!$test"
+          deny:
+          - pkg: github.com/mhersson/recallsynapsis/internal/testkit
+            desc: only tests import the fake module
     nakedret:
       max-func-lines: 5
   exclusions:
