@@ -51,6 +51,9 @@ The owner's words, which bind every change:
   messages and added lines, on attribution lines in messages, on em-dashes in
   messages and added lines, and on blobs over 500 KB.
 - `make size`: count the non-test Go lines. `make help` lists the targets.
+- CI (`.github/workflows/ci.yaml`) runs the gates of `make check`,
+  `govulncheck`, and on a pull request `make scan-commits` against its base.
+  Dependabot bumps the Go modules and the pinned actions every week.
 
 ## Layout
 
