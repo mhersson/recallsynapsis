@@ -16,11 +16,12 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/api"
 	"github.com/mhersson/recallsynapsis/internal/config"
 	"github.com/mhersson/recallsynapsis/internal/store"
+	"github.com/mhersson/recallsynapsis/web"
 )
 
 func init() {
 	commands["serve"] = command{
-		summary: "serve the HTTP API until interrupted",
+		summary: "serve the web app and the HTTP API until interrupted",
 		run:     runServe,
 	}
 }
@@ -87,7 +88,7 @@ func runServe(ctx context.Context, args []string, _ io.Reader, _, stderr io.Writ
 
 	log.Info("listening", "address", ln.Addr().String(), "public_url", cfg.PublicURL, "data_dir", dir, "version", version)
 
-	return serve(ctx, ln, logRequests(api.New(api.Deps{Version: version}), log), shutdownGrace, log)
+	return serve(ctx, ln, logRequests(web.Handler(api.New(api.Deps{Version: version})), log), shutdownGrace, log)
 }
 
 // serve serves h on ln until ctx ends, then gives the open requests grace to

@@ -200,6 +200,22 @@ func TestServeAnswersAndStopsOnASignal(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, map[string]string{"status": "ok", "version": version}, health)
 
+	// A page path gets the web app, or the placeholder in a build without it, and its own log line.
+	req, err = http.NewRequestWithContext(t.Context(), http.MethodGet, url+"/settings", nil)
+	require.NoError(t, err)
+
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	page, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
+	assert.NotEmpty(t, resp.Header.Get("Content-Security-Policy"))
+	assert.Contains(t, string(page), "<html")
+	assert.Eventually(t, func() bool { return strings.Contains(stderr.String(), "path=/settings status=200") }, time.Second, 10*time.Millisecond)
+
 	info, err := os.Stat(dir)
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
