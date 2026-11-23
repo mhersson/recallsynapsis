@@ -45,6 +45,12 @@ export type Now = { date: string; weekday: string; time: string; timezone: strin
 
 export type List = { tasks: Row[]; total: number; now: Now }
 
+// The kinds of notification, as GET /api/tasks/notify gives them: each on or off, and the hour, HH:MM, of each that comes
+// once a day. They hold for every browser of the user.
+export type Kind = 'start' | 'morning' | 'deadline' | 'untimed'
+export type Hour = 'morning_at' | 'deadline_at' | 'untimed_at'
+export type Kinds = Record<Kind, boolean> & Record<Hour, string>
+
 // What a change of a task may send; a change sends only what it changes, and links whole, as references.
 export type Fields = Partial<Pick<Task, 'title' | 'notes' | 'area' | 'planned_from' | 'planned_to' | 'planned_time' | 'deadline' | 'list'>> & { done?: boolean; links?: string[] }
 

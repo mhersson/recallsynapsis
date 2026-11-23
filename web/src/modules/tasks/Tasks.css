@@ -318,7 +318,8 @@
 }
 
 .task-fields input,
-.task-fields select {
+.task-fields select,
+.notify-line input {
   background: var(--bg0);
   color: var(--fg);
   border: 1px solid var(--bg3);
@@ -328,7 +329,8 @@
   min-height: 32px;
 }
 
-.task-fields input:disabled {
+.task-fields input:disabled,
+.notify-line input.off {
   opacity: 0.55;
 }
 
@@ -502,4 +504,45 @@
 .dialog .task-fields .acts {
   justify-content: flex-start;
   margin: 0;
+}
+
+/* The kinds of notification, in Settings: a switch beside each, and its hour after its words. */
+.set .notify > .note {
+  margin: 0 0 4px;
+}
+
+.notify-kind {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 0 12px;
+  padding: 6px 0;
+}
+
+.notify-kind > .switch {
+  margin-top: 7px;
+}
+
+.notify-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 32px;
+  font-weight: 500;
+}
+
+.notify-line input {
+  font-weight: 400;
+}
+
+.set .notify-kind .note {
+  margin: 0;
+}
+
+.set .notify > .err {
+  margin: 8px 0 0;
+}
+
+.notify > .acts {
+  margin-top: 12px;
 }

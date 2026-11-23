@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, DONE, HEALTH, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
+import { AREAS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -91,6 +91,18 @@ function answerPush(method: string, url: URL): Response {
   return told()
 }
 
+// The kinds of notification, telling the stream of every change; notify=refused refuses every change, as a server that
+// cannot keep them.
+const kinds = { ...KINDS }
+function answerNotify(method: string, body: Record<string, unknown>): Response {
+  if (method === 'PATCH') {
+    if (query.get('notify') === 'refused') return json({ error: 'internal error' }, 500)
+    Object.assign(kinds, body)
+    tell({ module: 'tasks', kind: 'notify', id: 0, area: 0 })
+  }
+  return json(kinds)
+}
+
 // login=wrong refuses every sign-in, and login=wait makes it wait 28 seconds.
 function answer(method: string, url: URL, body: Record<string, unknown>, file?: Blob): Response | Promise<Response> {
   const path = url.pathname
@@ -121,6 +133,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
   if (path.startsWith('/api/push')) return answerPush(method, url)
+  if (path === '/api/tasks/notify') return answerNotify(method, body)
   if (path.startsWith('/api/tasks')) {
     const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) =>
       tell(t ? { module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 } : { module: 'tasks', kind: 'trash', id: 0, area: 0 }),
@@ -288,9 +301,9 @@ export function Apply() {
   return null
 }
 
-// click=TEXT clicks the first button, link or summary whose text, or label, starts with TEXT, in the dialog open last when
-// one is, as a person can reach nothing else then, type=TEXT types TEXT into
-// the field that has the focus, and choose=N chooses an image of N bytes in the file picker of the note being read.
+// click=TEXT clicks the first button, link, summary or label whose text, or label, starts with TEXT, in the dialog open
+// last when one is, as a person can reach nothing else then, type=TEXT types TEXT into the field that has the focus,
+// and choose=N chooses an image of N bytes in the file picker of the note being read.
 // Each waits until the page shows what it needs, and given more than once they run in order. end=1 then scrolls the
 // page, and what is open beside a list, to their end.
 function step(kind: string, text: string): boolean {
@@ -312,7 +325,7 @@ function step(kind: string, text: string): boolean {
     return true
   }
   const scope = [...document.querySelectorAll('dialog[open]')].pop() ?? document
-  const target = [...scope.querySelectorAll<HTMLElement>('button:enabled, a, summary')].find((e) => (e.textContent || e.getAttribute('aria-label'))?.startsWith(text))
+  const target = [...scope.querySelectorAll<HTMLElement>('button:enabled, a, summary, label')].find((e) => (e.textContent || e.getAttribute('aria-label'))?.startsWith(text))
   target?.click()
   target?.scrollIntoView()
   return !!target

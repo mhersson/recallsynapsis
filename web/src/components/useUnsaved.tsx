@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useBlocker } from 'react-router'
 import Dialog from './Dialog.tsx'
 
@@ -17,8 +18,10 @@ export function useUnsaved(changed: boolean, what: string) {
     window.addEventListener('beforeunload', ask)
     return () => window.removeEventListener('beforeunload', ask)
   }, [changed])
+  // The question is the page's, so it goes to the body, where a folded part of a page cannot hide it.
   return (
-    leaving.state === 'blocked' && (
+    leaving.state === 'blocked' &&
+    createPortal(
       <Dialog title="Give up your changes?" onClose={() => leaving.reset()}>
         <p className="note">They are not saved, and leaving {what} loses them.</p>
         <div className="acts">
@@ -29,7 +32,8 @@ export function useUnsaved(changed: boolean, what: string) {
             Give up mine
           </button>
         </div>
-      </Dialog>
+      </Dialog>,
+      document.body,
     )
   )
 }

@@ -1,6 +1,6 @@
 import type { Area, Hit, Linked, Session, Token } from '../api/types.ts'
 import type { Kind, List, Note, Row, Version } from '../modules/notes/api.ts'
-import type { Entry, Now, List as TaskList, Row as TaskRow, Task } from '../modules/tasks/api.ts'
+import type { Entry, Kinds, Now, List as TaskList, Row as TaskRow, Task } from '../modules/tasks/api.ts'
 import { add } from '../modules/tasks/dates.ts'
 import { order, sortInto } from '../modules/tasks/views.ts'
 
@@ -285,6 +285,9 @@ export function searchNotes(notes: Note[], q: string, area: string | null): Hit[
 
 // The day GET /api/tasks gives the harness: Monday 23 November 2026 in Oslo, with weeks that begin on a Monday.
 export const NOW: Now = { date: '2026-11-23', weekday: 'Monday', time: '10:00', timezone: 'Europe/Oslo', week_start: 'monday' }
+
+// GET /api/tasks/notify for a user who has changed none of the kinds.
+export const KINDS: Kinds = { start: true, morning: true, morning_at: '07:00', deadline: false, deadline_at: '18:00', untimed: false, untimed_at: '09:00' }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const weekday = (date: string) => (date ? WEEKDAYS[new Date(date + 'T00:00:00Z').getUTCDay()] : '')
