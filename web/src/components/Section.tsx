@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
-import { useNarrow } from '../../components/useNarrow.ts'
-import './Sections.css'
+import { useNarrow } from './useNarrow.ts'
+import './Section.css'
 
 type Props = { title: string; count: ReactNode; add?: ReactNode; open?: boolean; children: ReactNode }
 
-// A section of a note under its head on desktop, with what adds to it at the end of the head. On a phone it is folded,
+// A section of an item's page under its head on desktop, with what adds to it at the end of the head. On a phone it is folded,
 // open when asked, and what adds to it comes first.
 export default function Section({ title, count, add, open, children }: Props) {
   const narrow = useNarrow()

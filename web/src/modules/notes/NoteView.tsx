@@ -1,5 +1,4 @@
 import { useEffect, useEffectEvent, useRef, useState, type DragEvent } from 'react'
-import { useBlocker } from 'react-router'
 import { ApiError, api, message } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
 import Dialog from '../../components/Dialog.tsx'
@@ -7,6 +6,7 @@ import Field from '../../components/Field.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import { ago, when } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
+import { useUnsaved } from '../../components/useUnsaved.tsx'
 import { count, from, mark, nameOf, useNotes, type Kind, type Note, type Version } from './api.ts'
 import { Place } from './Filing.tsx'
 import Files from './Files.tsx'
@@ -16,6 +16,7 @@ import { TrashIcon } from './nav.tsx'
 import Links from './Links.tsx'
 import TagField from './TagField.tsx'
 import { size, useUploads } from './uploads.ts'
+import './Sections.css'
 
 type Props = { id: number; areas: Area[]; onGone: () => void; onChanged?: () => void; onRestored?: (n: Note) => void }
 
@@ -99,19 +100,8 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
       document.removeEventListener('drop', keep)
     }
   }, [])
-  // Leaving the note with what is typed unsaved asks first. A change of the filters keeps the note open, and asks nothing.
   const typed = !!draft && Object.keys(changeOf(draft)).length > 0
-  const leaving = useBlocker(({ currentLocation, nextLocation }) => typed && currentLocation.pathname !== nextLocation.pathname)
-  // A save that lands while the way out is held leaves nothing to lose, so the way out goes on.
-  useEffect(() => {
-    if (!typed && leaving.state === 'blocked') leaving.proceed()
-  }, [typed, leaving])
-  useEffect(() => {
-    if (!typed) return
-    const ask = (e: BeforeUnloadEvent) => e.preventDefault()
-    window.addEventListener('beforeunload', ask)
-    return () => window.removeEventListener('beforeunload', ask)
-  }, [typed])
+  const leaving = useUnsaved(typed, 'the note')
 
   if (!note)
     return (
@@ -252,19 +242,7 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
             </>
           )}
         </div>
-        {leaving.state === 'blocked' && (
-          <Dialog title="Give up what you typed?" onClose={() => leaving.reset()}>
-            <p className="note">It is not saved, and leaving the note loses it.</p>
-            <div className="acts">
-              <button className="btn" onClick={() => leaving.reset()}>
-                Keep editing
-              </button>
-              <button className="btn danger" onClick={() => leaving.proceed()}>
-                Give up mine
-              </button>
-            </div>
-          </Dialog>
-        )}
+        {leaving}
       </div>
     )
   }

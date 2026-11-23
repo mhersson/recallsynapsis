@@ -1,0 +1,59 @@
+/* The sections of an item's page: under a head on desktop, folded on a phone. */
+.sects {
+  margin-top: 14px;
+}
+
+.sect {
+  border-top: 1px solid var(--bg2);
+  padding: 12px 0 14px;
+}
+
+.sect-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin-bottom: 6px;
+}
+
+.sect-head h2 {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.sect .dim {
+  color: var(--grey1);
+  font-weight: 400;
+}
+
+details.sect {
+  padding: 0;
+}
+
+details.sect > summary {
+  padding: 11px 2px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+details.sect[open] {
+  padding-bottom: 14px;
+}
+
+.sect-add {
+  margin: -4px 0 4px;
+}
+
+.sect .btn.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sect .err {
+  font-size: 13px;
+  margin: 4px 0 8px;
+}

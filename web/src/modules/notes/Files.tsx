@@ -4,7 +4,7 @@ import Dialog from '../../components/Dialog.tsx'
 import { useNarrow } from '../../components/useNarrow.ts'
 import type { Attached, Note } from './api.ts'
 import { AttachIcon, CameraIcon, DownloadIcon, XIcon } from './icons.tsx'
-import Section from './Section.tsx'
+import Section from '../../components/Section.tsx'
 import { size, type Uploads } from './uploads.ts'
 
 // The types the server answers as themselves, inline; it answers any other as a download.

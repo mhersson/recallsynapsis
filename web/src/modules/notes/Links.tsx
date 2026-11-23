@@ -7,7 +7,7 @@ import { back } from '../../components/useClose.ts'
 import { useItem } from '../../session.ts'
 import { nameOf, type Linked, type Note } from './api.ts'
 import { LinkIcon, XIcon } from './icons.tsx'
-import Section from './Section.tsx'
+import Section from '../../components/Section.tsx'
 
 type Props = { note: Note; areas: Area[]; trashed: boolean; sending: boolean; onLinks: (refs: string[]) => Promise<string> }
 
