@@ -74,6 +74,12 @@
   margin-top: 0;
 }
 
+.tasks .page-head .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .views {
   display: flex;
   gap: 4px;
@@ -253,7 +259,8 @@
   color: var(--grey0);
 }
 
-.task-read .err {
+.task-read .err,
+.task-read .notice {
   margin: 14px 0 0;
 }
 

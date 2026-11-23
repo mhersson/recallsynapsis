@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { nameOf, useAreas } from '../../api/areas.ts'
+import ListEnd from '../../components/ListEnd.tsx'
 import PageHead from '../../components/PageHead.tsx'
 import { useClose } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useList, useRead, type Row } from './api.ts'
 import NoteView from './NoteView.tsx'
-import { ListEnd, Rows } from './Rows.tsx'
+import { Rows } from './Rows.tsx'
 import './Notes.css'
 
 type Filter = { area: string; kind: string; tag: string }
@@ -127,7 +128,7 @@ export default function Notes({ bank = false }: { bank?: boolean }) {
               )}
             </div>
             {listed}
-            {list && !failed && <ListEnd list={list} more={more} />}
+            {list && !failed && <ListEnd shown={list.notes.length} total={list.total} what="changed" more={more} />}
           </div>
         )}
         {id ? (

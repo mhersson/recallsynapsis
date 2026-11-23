@@ -39,8 +39,11 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   beside the list, or as a page on a phone, where it is read first and edited in
   one form that saves nothing before Save: its title, notes, plan, with
   shortcuts for today, tomorrow, the weekend and next week, deadline, list and
-  area. Its ring, on its row or its page, marks it done at once, and its log
-  tells each change, with what the owner said. Search lists the tasks' hits
+  area. Its ring, on its row or its page, marks it done at once, its Trash
+  moves it to the trash at once, and its log tells each change, with what the
+  owner said. Trashed, at the head of Tasks, lists the trash, the most recently
+  trashed first, where a task is read only, restored, and deleted for good, one
+  or all at once. Search lists the tasks' hits
   before the notes', and a task found there or linked from a note shows its ring
   and leads to its page.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool

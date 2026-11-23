@@ -1,10 +1,10 @@
-import { AddIcon } from '../../components/icons.tsx'
+import { AddIcon, TrashIcon } from '../../components/icons.tsx'
 import type { Entry, Module } from '../registry.ts'
 import { mark } from './api.ts'
 import AreaNotes from './AreaNotes.tsx'
 import Capture from './Capture.tsx'
 import Inbox from './Inbox.tsx'
-import { IdeasIcon, InboxIcon, NotesIcon, TrashIcon, Waiting } from './nav.tsx'
+import { IdeasIcon, InboxIcon, NotesIcon, Waiting } from './nav.tsx'
 import Notes from './Notes.tsx'
 import Trash from './Trash.tsx'
 

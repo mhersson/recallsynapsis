@@ -1,7 +1,8 @@
 import type { Area } from '../../api/types.ts'
+import ListEnd from '../../components/ListEnd.tsx'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useList, type List } from './api.ts'
-import { ListEnd, Rows } from './Rows.tsx'
+import { Rows } from './Rows.tsx'
 import './Notes.css'
 
 // An area's filed notes and ideas, side by side on desktop and folded on a phone, the notes open. Each opens beside
@@ -29,7 +30,7 @@ export default function AreaNotes({ area }: { area: Area }) {
     const body = list.notes.length > 0 && (
       <>
         <Rows notes={list.notes} areas={[area]} to={(r) => to(r.id)} />
-        <ListEnd list={list} more={more} />
+        <ListEnd shown={list.notes.length} total={list.total} what="changed" more={more} />
       </>
     )
     return narrow ? (

@@ -94,6 +94,41 @@
   margin-bottom: 4px;
 }
 
+/* A notice at the head of an item or a list: what state it is in, and what can be done. */
+.notice {
+  border: 1px solid var(--bg3);
+  background: var(--bg-dim);
+  border-radius: 8px;
+  padding: 11px 14px;
+  margin: 0 0 16px;
+}
+
+.notice .nt {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.notice .nt .ic {
+  color: var(--grey1);
+}
+
+.notice .nd {
+  color: var(--grey2);
+  font-size: 13px;
+  margin: 2px 0 0;
+}
+
+.notice .acts {
+  margin-top: 10px;
+}
+
+.notice .mk {
+  margin-top: 0;
+}
+
 /* The end of a list that holds more than it shows. */
 .list-end {
   display: flex;

@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, DONE, HEALTH, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
+import { AREAS, DONE, HEALTH, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -26,7 +26,7 @@ const tokens = empty ? [] : TOKENS
 const many = query.get('many') === '1'
 const notes = empty ? [] : many ? [...NOTES, ...OLDER] : NOTES
 const today = query.get('today') === 'none' ? onToday(TASKS, NOW) : []
-const tasks = empty ? [] : [...TASKS.filter((t) => !today.includes(t.id)), ...DONE, ...(many ? OLDER_DONE : [])]
+const tasks = empty ? [] : [...TASKS.filter((t) => !today.includes(t.id)), ...DONE, ...(many ? OLDER_DONE : []), ...TRASHED]
 const backups: Record<string, string | null> = { old: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(), none: null }
 const session = {
   ...SESSION,
@@ -64,8 +64,10 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
   if (path.startsWith('/api/tasks')) {
-    const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) => tell({ module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 }))
-    return json(answered, status)
+    const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) =>
+      tell(t ? { module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 } : { module: 'tasks', kind: 'trash', id: 0, area: 0 }),
+    )
+    return status === 204 ? new Response(null, { status }) : json(answered, status)
   }
   if (method !== 'GET') return json({ error: 'not found' }, 404)
   if (path === '/api/health') return json(HEALTH)

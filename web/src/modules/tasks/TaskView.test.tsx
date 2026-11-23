@@ -4,7 +4,7 @@ import { changeTask, task } from '../../dev/fixtures.ts'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, json, narrow, type Call } from '../../test-server.ts'
 import type { Task } from './api.ts'
-import { editButton, form, monday, taskView as view, tasksServer } from './test-tasks.ts'
+import { editButton, form, monday, taskView as view, tasksServer, trashButton } from './test-tasks.ts'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -94,12 +94,12 @@ test('the ring of the open task marks it done, which strikes its row in place, a
   ])
 })
 
-test('a task read has no control but its ring and Edit', async () => {
+test('a task read has no control but its ring, Edit and Trash', async () => {
   narrow(false)
   tasksServer(tasks())
   await open('/tasks/3')
   await waitFor(editButton)
-  expect(inView().getAllByRole('button')).toEqual([ring(), editButton()])
+  expect(inView().getAllByRole('button')).toEqual([ring(), editButton(), trashButton()])
   expect(view().querySelectorAll('input, select, textarea')).toHaveLength(0)
 })
 

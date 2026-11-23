@@ -2,9 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import { nameOf, useAreas } from '../../api/areas.ts'
-import { AddIcon } from '../../components/icons.tsx'
+import { AddIcon, TrashIcon } from '../../components/icons.tsx'
+import ListEnd from '../../components/ListEnd.tsx'
 import PageHead from '../../components/PageHead.tsx'
-import { back } from '../../components/useClose.ts'
+import { back, useClose } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useMore, useOpen, useTask, type Fields, type Now, type Row, type Task } from './api.ts'
 import { add, clock, day, week } from './dates.ts'
@@ -35,6 +36,7 @@ export default function Tasks() {
   const view = views.find(([v]) => v === params.get('view'))?.[0] ?? 'today'
   const area = params.get('area') ?? ''
   const search = params.toString() ? `?${params}` : ''
+  const close = useClose('/tasks' + search)
   const areas = useAreas(true)
   // A task open as a page of its own on a phone shows no list, and gives the server's today itself.
   const alone = narrow && !!id
@@ -44,7 +46,7 @@ export default function Tasks() {
   const [added, setAdded] = useState<number>()
   const here = (t: Row) => !area || t.area === area
   const open = list?.tasks.filter(here) ?? []
-  const done = useMore(view === 'done' && !alone ? new URLSearchParams({ done: 'true', ...(area && { area }) }).toString() : '', (t) => t.state === 'done')
+  const done = useMore(view === 'done' && !alone ? new URLSearchParams({ done: 'true', ...(area && { area }) }).toString() : '', (t) => t.state === 'done' && !t.trashed_at && here(t))
   // What the server gives the view, and the rows a ring changed in it, as they stood, so each stays where it stood until the
   // view is left: struck through once done, and in Done no longer once opened again. A row the server still gives shows as
   // it gives it, so a change made since shows, but in Done one done again stays under the time it stood under.
@@ -104,6 +106,29 @@ export default function Tasks() {
       return message(e)
     }
   }
+  // Moves a task to the trash at once, out of every list, and closes it: on a phone to where it was opened from, and on
+  // desktop to the view, which opens its first task.
+  async function trash(t: Task): Promise<string> {
+    try {
+      const answer = await api<Task>('POST', `/tasks/${t.id}/trash`)
+      took(answer)
+      done.took(answer)
+      setKept((k) => ({ ...k, rows: k.rows.filter((x) => x.id !== t.id) }))
+      if (narrow) close()
+      else void navigate('/tasks' + search, { replace: true })
+      return ''
+    } catch (e) {
+      return message(e)
+    }
+  }
+  // A task trashed elsewhere while it is open here is restored here, back where it was.
+  const restore = (t: Task) =>
+    api<Task>('POST', `/tasks/${t.id}/restore`).then((answer) => {
+      took(answer)
+      done.took(answer)
+      opened.show(answer)
+      return ''
+    }, message)
   const tap = async (t: Row, fields: Fields) => {
     setRefused('')
     setRefused(await change(t, fields))
@@ -133,16 +158,7 @@ export default function Tasks() {
             <div className="list">{ts.map((t) => row(t, [!area && project(t, areas), `done ${clock(t.done_at!, now)[1]}`].filter(Boolean)))}</div>
           </section>
         ))}
-        {done.list.total > done.list.tasks.length && (
-          <div className="list-end">
-            <span>These are the {done.list.tasks.length} most recently done. There are more.</span>
-            {done.more && (
-              <button className="btn" onClick={done.more}>
-                Show 50 more
-              </button>
-            )}
-          </div>
-        )}
+        <ListEnd shown={done.list.tasks.length} total={done.list.total} what="done" more={done.more} />
       </>
     )
   } else if (!list) listed = null
@@ -189,7 +205,7 @@ export default function Tasks() {
   )
 
   const task = opened.task ? (
-    <TaskView key={opened.task.id} task={opened.task} now={now} areas={areas} onChange={(f) => change(opened.task!, f)} />
+    <TaskView key={opened.task.id} task={opened.task} now={now} areas={areas} onChange={(f) => change(opened.task!, f)} onTrash={() => trash(opened.task!)} onRestore={() => restore(opened.task!)} />
   ) : (
     opened.failed && (
       <p role="alert" className="err">
@@ -206,7 +222,13 @@ export default function Tasks() {
         </div>
       ) : (
         <>
-          <PageHead title="Tasks">{select}</PageHead>
+          <PageHead title="Tasks">
+            {select}
+            <Link className="btn sm" to="/tasks/trashed" state={back}>
+              <TrashIcon />
+              Trashed
+            </Link>
+          </PageHead>
           <p className="sub">{about(view, now)}</p>
         </>
       )}

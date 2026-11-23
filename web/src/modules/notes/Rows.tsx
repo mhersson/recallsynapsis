@@ -3,7 +3,7 @@ import { nameOf } from '../../api/areas.ts'
 import type { Area } from '../../api/types.ts'
 import { ago } from '../../components/time.ts'
 import { back } from '../../components/useClose.ts'
-import { mark, type List, type Row } from './api.ts'
+import { mark, type Row } from './api.ts'
 
 type RowsProps = { notes: Row[]; areas: Area[]; to: (r: Row) => string; open?: number; trashed?: boolean }
 
@@ -38,23 +38,6 @@ export function Rows({ notes, areas, to, open, trashed }: RowsProps) {
           </span>
         </Link>
       ))}
-    </div>
-  )
-}
-
-// The end of a list that holds more than it shows, with a way to show more while the list may give more.
-export function ListEnd({ list, more, trashed }: { list: List; more?: () => void; trashed?: boolean }) {
-  if (list.total <= list.notes.length) return null
-  return (
-    <div className="list-end">
-      <span>
-        These are the {list.notes.length} most recently {trashed ? 'trashed' : 'changed'}. There are more.
-      </span>
-      {more && (
-        <button className="btn" onClick={more}>
-          Show 50 more
-        </button>
-      )}
     </div>
   )
 }

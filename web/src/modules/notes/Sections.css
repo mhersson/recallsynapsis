@@ -322,10 +322,6 @@
   margin: 0 0 16px;
 }
 
-.notice .nt .ic {
-  color: var(--grey1);
-}
-
 /* An earlier revision, in a frame that is clearly not the current text. */
 .rev {
   margin-top: 16px;

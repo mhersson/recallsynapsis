@@ -318,6 +318,7 @@ export function task(id: number, minutes: number, t: Partial<Task>): Task {
     source: 'web',
     created_at: before(minutes),
     changed_at: before(minutes),
+    trashed_at: null,
     notes: '',
     said: '',
     log: [],
@@ -338,14 +339,23 @@ export function task(id: number, minutes: number, t: Partial<Task>): Task {
 // A task as a list gives it.
 export const taskRow = ({ notes: _, said: __, log: ___, now: ____, ...r }: Task): TaskRow => r
 
-// GET /api/tasks from tasks, as the server answers it: the open tasks, or the done with done=true, of the area and the
-// list asked, or those to sort, in the server's order, as many as its limit, how many it asked for in all, and now.
+// GET /api/tasks from tasks, as the server answers it: the open tasks outside the trash, or the done with done=true, or
+// with trashed=true the whole trash, done and open alike, of the area and the list asked, or those to sort, in the
+// server's order, as many as its limit, how many it asked for in all, and now.
 export function listTasks(tasks: Task[], q: URLSearchParams, now: Now): TaskList {
   const done = q.get('done') === 'true'
+  const trash = q.get('trashed') === 'true'
   const list = q.get('list') === 'none' ? '' : q.get('list')
   const found = tasks
-    .filter((t) => !!t.done_at === done && (!q.has('area') || t.area === q.get('area')) && (list === null || t.list === list) && (q.get('unsorted') !== 'true' || t.state === 'unsorted'))
-    .sort(done ? (a, b) => b.done_at!.localeCompare(a.done_at!) : order)
+    .filter(
+      (t) =>
+        !!t.trashed_at === trash &&
+        ((trash && !done) || !!t.done_at === done) &&
+        (!q.has('area') || t.area === q.get('area')) &&
+        (list === null || t.list === list) &&
+        (q.get('unsorted') !== 'true' || t.state === 'unsorted'),
+    )
+    .sort(trash ? (a, b) => b.trashed_at!.localeCompare(a.trashed_at!) : done ? (a, b) => b.done_at!.localeCompare(a.done_at!) : order)
   return { tasks: found.slice(0, Number(q.get('limit')) || 50).map(taskRow), total: found.length, now }
 }
 
@@ -444,7 +454,7 @@ export const TASKS: Task[] = (
 export function searchTasks(tasks: Task[], q: string, area: string | null): Hit[] {
   const has = (t: Task) => (t.title + '\n' + t.notes).toLowerCase().includes(q.toLowerCase())
   return tasks
-    .filter((t) => has(t) && (!area || t.area === area))
+    .filter((t) => !t.trashed_at && has(t) && (!area || t.area === area))
     .map((t) => ({ ref: t.ref, kind: 'task', title: t.title, snippet: t.notes, area: t.area, state: t.state, changed_at: t.changed_at }))
 }
 
@@ -472,11 +482,21 @@ export const OLDER_DONE: Task[] = Array.from({ length: 60 }, (_, i) => {
   return task(201 + i, (20 + i) * 24 * 60, { title: CHORES[i % CHORES.length], area: i % 3 ? 'personal' : 'hytta', done_at: at, changed_at: at })
 })
 
+// The trashed tasks of the harness, the most recently trashed first: one planned, one on Someday and one to sort.
+export const TRASHED: Task[] = (
+  [
+    [{ title: 'Ringe banken om lånet', planned_from: '2026-11-24', notes: 'Spør om fastrente på resten av lånet.' }, 2 * 60],
+    [{ title: 'Kjøpe ny snøfreser', list: 'someday' }, 26 * 60],
+    [{ title: 'Rydde i bilen', area: 'hytta' }, 5 * 24 * 60],
+  ] as [Partial<Task>, number][]
+).map(([t, minutes], i) => task(301 + i, minutes + 3 * 24 * 60, { ...t, trashed_at: before(minutes) }))
+
 // What Today would show of tasks, which today=none leaves out.
 export const onToday = (tasks: Task[], now: Now) => sortInto('today', tasks.map(taskRow), now).flatMap(([, ts]) => ts.map((t) => t.id))
 
-// The tasks routes from tasks, as the server answers them, as a status and a body; tell hears of each task made or changed.
-export function answerTasks(tasks: Task[], method: string, url: URL, body: Record<string, unknown>, now: Now, tell: (t: Task) => void): [number, unknown] {
+// The tasks routes from tasks, as the server answers them, as a status and a body, none with 204; tell hears of each task
+// made, changed or deleted, and of none when the trash is emptied.
+export function answerTasks(tasks: Task[], method: string, url: URL, body: Record<string, unknown>, now: Now, tell: (t?: Task) => void): [number, unknown] {
   if (url.pathname === '/api/tasks' && method === 'GET') return [200, listTasks(tasks, url.searchParams, now)]
   if (url.pathname === '/api/tasks' && method === 'POST') {
     const made: Task[] = []
@@ -486,14 +506,34 @@ export function answerTasks(tasks: Task[], method: string, url: URL, body: Recor
       made.push(t)
     }
     tasks.push(...made)
-    made.forEach(tell)
+    made.forEach((t) => tell(t))
     return [201, { tasks: made.map(taskRow), now }]
   }
-  const t = tasks.find((x) => url.pathname === `/api/tasks/${x.id}`)
-  if (!t || !['GET', 'PATCH'].includes(method)) return [404, { error: 'not found' }]
-  if (method === 'GET') return [200, { ...t, now }]
+  if (url.pathname === '/api/tasks/trash' && method === 'DELETE') {
+    for (const t of tasks.filter((x) => x.trashed_at)) tasks.splice(tasks.indexOf(t), 1)
+    tell()
+    return [204, undefined]
+  }
+  const [, id, part] = /^\/api\/tasks\/(\d+)(?:\/(trash|restore))?$/.exec(url.pathname) ?? []
+  const t = tasks.find((x) => x.id === Number(id))
+  if (!t) return [404, { error: 'not found' }]
+  const told = (x: Task): [number, unknown] => {
+    tell(x)
+    return [200, { ...x, now }]
+  }
+  // Trashing a task in the trash, or restoring one outside it, changes nothing and tells nothing.
+  if (part && method === 'POST') return !!t.trashed_at === (part === 'trash') ? [200, { ...t, now }] : told(Object.assign(t, { trashed_at: part === 'trash' ? new Date().toISOString() : null }))
+  if (method === 'GET' && !part) return [200, { ...t, now }]
+  if (method === 'DELETE' && !part) {
+    if (!t.trashed_at) return [409, { error: `task ${t.id} is not in the trash, and only a task in the trash is deleted: conflict` }]
+    tasks.splice(tasks.indexOf(t), 1)
+    tell(t)
+    return [204, undefined]
+  }
+  if (method !== 'PATCH' || part) return [404, { error: 'not found' }]
+  if (t.trashed_at) return [409, { error: 'the task is in the trash, and is restored before it is changed: conflict' }]
   const changed = changeTask(t, body)
   if (Array.isArray(changed)) return [changed[0], { error: changed[1] }]
-  if (changed !== t) tell(Object.assign(t, changed))
-  return [200, { ...t, now }]
+  if (changed === t) return [200, { ...t, now }]
+  return told(Object.assign(t, changed))
 }

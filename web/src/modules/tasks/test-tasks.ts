@@ -23,15 +23,17 @@ export function tasksServer(tasks: Task[], now: Now = monday, answer: (c: Call) 
     if (c.path.startsWith('/api/areas')) return json({ areas })
     if (!c.path.startsWith('/api/tasks')) return
     const [status, body] = answerTasks(tasks, c.method, new URL(c.path, 'http://here'), (c.body ?? {}) as Record<string, unknown>, now, () => {})
-    return json(body, status)
+    return status === 204 ? new Response(null, { status }) : json(body, status)
   })
 }
 
 // The task open, beside the list on desktop or as a page on a phone.
 export const taskView = () => screen.getByRole('main').querySelector<HTMLElement>('.task-read')!
 
-// Edit, in the head of a task on desktop and at its foot on a phone.
-export const editButton = () => [...taskView().querySelectorAll<HTMLElement>('.task-head .btn, .task-foot .btn')][0]
+// Edit and Trash, in the head of a task on desktop and at its foot on a phone.
+const acts = () => [...taskView().querySelectorAll<HTMLElement>('.task-head .btn, .task-foot .btn')]
+export const editButton = () => acts()[0]
+export const trashButton = () => acts()[1]
 
 // The form's Save and Cancel: on desktop Cancel, then Save, at the right, and on a phone Save above Cancel.
 export function form() {

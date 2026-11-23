@@ -1,7 +1,9 @@
 import { useId, useState } from 'react'
 import { nameOf } from '../../api/areas.ts'
 import type { Area } from '../../api/types.ts'
+import Dialog from '../../components/Dialog.tsx'
 import Field from '../../components/Field.tsx'
+import { TrashIcon } from '../../components/icons.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import Section from '../../components/Section.tsx'
 import Seg from '../../components/Seg.tsx'
@@ -12,7 +14,16 @@ import Check from './Check.tsx'
 import { day, period, shortcuts, stamp } from './dates.ts'
 import { words } from './log.ts'
 
-type Props = { task: Task; now: Now; areas: Area[]; onChange: (f: Fields) => Promise<string> }
+// Each callback sends what its button asks and gives the server's refusal; a button shows only when its callback is given.
+type Props = {
+  task: Task
+  now: Now
+  areas: Area[]
+  onChange?: (f: Fields) => Promise<string>
+  onTrash?: () => Promise<string>
+  onRestore?: () => Promise<string>
+  onDelete?: () => Promise<string>
+}
 
 // What the form holds, and the task as the editing began.
 type Draft = Pick<Task, 'title' | 'notes' | 'planned_from' | 'planned_to' | 'planned_time' | 'deadline' | 'list' | 'area'> & { from: Task }
@@ -40,42 +51,67 @@ function changeOf(d: Draft): Fields {
 }
 
 // A task, read first, and edited in place in one form that sends nothing before Save; no read of the task replaces the
-// form. Only the ring saves at once. onChange sends a change and gives the server's refusal.
-export default function TaskView({ task, now, areas, onChange }: Props) {
+// form. Only the ring, Trash and a link act at once. In the trash it is read only, with Restore and Delete for good.
+export default function TaskView({ task, now, areas, onChange, onTrash, onRestore, onDelete }: Props) {
   const narrow = useNarrow()
   const [draft, setDraft] = useState<Draft>()
   const [sending, setSending] = useState(false)
   const [refused, setRefused] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const leaving = useUnsaved(!!draft && Object.keys(changeOf(draft)).length > 0, 'the task')
   const ids = { planned: useId(), deadline: useId(), area: useId() }
 
-  async function send(f: Fields) {
+  async function send(act: () => Promise<string>) {
     setRefused('')
     setSending(true)
-    const why = await onChange(f)
+    const why = await act()
     setSending(false)
     setRefused(why)
     return !why
   }
+  const change = (f: Fields) => send(() => onChange!(f))
   const editing = (d?: Draft) => {
     setDraft(d)
     setRefused('')
   }
   async function save(d: Draft) {
     const f = changeOf(d)
-    if (Object.keys(f).length === 0 || (await send(f))) editing()
+    if (Object.keys(f).length === 0 || (await change(f))) editing()
   }
 
   const done = task.state === 'done'
+  const trashed = !!task.trashed_at
   const alert = refused && (
     <p role="alert" className="err">
       {refused}
     </p>
   )
-  const edit = (
-    <button className="btn" onClick={() => editing({ ...task, from: task })}>
-      Edit
-    </button>
+  const acts = trashed ? (
+    <>
+      {onRestore && (
+        <button className="btn" disabled={sending} onClick={() => void send(onRestore)}>
+          Restore
+        </button>
+      )}
+      {onDelete && (
+        <button className="btn danger" disabled={sending} onClick={() => setDeleting(true)}>
+          Delete for good
+        </button>
+      )}
+    </>
+  ) : (
+    <>
+      {onChange && (
+        <button className="btn" onClick={() => editing({ ...task, from: task })}>
+          Edit
+        </button>
+      )}
+      {onTrash && (
+        <button className="btn danger" disabled={sending} onClick={() => void send(onTrash)}>
+          Trash
+        </button>
+      )}
+    </>
   )
 
   let body
@@ -212,22 +248,31 @@ export default function TaskView({ task, now, areas, onChange }: Props) {
   return (
     <div className="task-read">
       <div className="page-head task-head">
-        <Check big done={done} sort={task.state === 'unsorted'} onClick={() => void send({ done: !done })} />
+        {onChange && !trashed && <Check big done={done} sort={task.state === 'unsorted'} onClick={() => void change({ done: !done })} />}
         {draft ? (
           <input className="ttl" aria-label="Title" autoComplete="off" autoFocus value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
         ) : (
           <h1>{task.title}</h1>
         )}
-        {!narrow && !draft && edit}
+        {!narrow && !draft && acts}
       </div>
       <span className="t2 task-meta">
         <i className={`mk ${ring(task.state)}`} />
         <span>task</span>
         <span>{nameOf(areas, task.area)}</span>
         {task.state === 'unsorted' && <span>to sort</span>}
-        <span>{done ? `done ${stamp(task.done_at!, now)}` : `changed ${stamp(task.changed_at, now)}`}</span>
+        <span>{trashed ? `trashed ${stamp(task.trashed_at!, now)}` : done ? `done ${stamp(task.done_at!, now)}` : `changed ${stamp(task.changed_at, now)}`}</span>
         <span>{from(task.source)}</span>
       </span>
+      {trashed && (
+        <div className="notice">
+          <div className="nt">
+            <TrashIcon />
+            In the trash
+          </div>
+          <p className="nd">It cannot be changed, and no list, search or link finds it until it is restored.</p>
+        </div>
+      )}
       {body}
       <div className="sects">
         <Section title="Log" count={`${task.log.length} ${task.log.length === 1 ? 'change' : 'changes'}`}>
@@ -241,7 +286,26 @@ export default function TaskView({ task, now, areas, onChange }: Props) {
           ))}
         </Section>
       </div>
-      {narrow && !draft && <div className="acts stack task-foot">{edit}</div>}
+      {narrow && !draft && <div className="acts stack task-foot">{acts}</div>}
+      {deleting && (
+        <Dialog title={`Delete “${task.title}” for good?`} onClose={() => setDeleting(false)}>
+          <p className="note">The task and its log are deleted. This cannot be undone.</p>
+          <div className="acts">
+            <button className="btn" onClick={() => setDeleting(false)}>
+              Keep it
+            </button>
+            <button
+              className="btn danger"
+              onClick={() => {
+                setDeleting(false)
+                void send(onDelete!)
+              }}
+            >
+              Delete for good
+            </button>
+          </div>
+        </Dialog>
+      )}
       {leaving}
     </div>
   )

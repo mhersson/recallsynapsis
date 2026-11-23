@@ -3,13 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import { nameOf, useAreas } from '../../api/areas.ts'
 import Dialog from '../../components/Dialog.tsx'
+import { RestoreIcon } from '../../components/icons.tsx'
+import ListEnd from '../../components/ListEnd.tsx'
 import PageHead from '../../components/PageHead.tsx'
 import { useClose } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { count, useList, type Note } from './api.ts'
-import { RestoreIcon } from './icons.tsx'
 import NoteView from './NoteView.tsx'
-import { ListEnd, Rows } from './Rows.tsx'
+import { Rows } from './Rows.tsx'
 import './Notes.css'
 
 // What was trashed, the most recently trashed first, with the note open beside the list on desktop and as a page of
@@ -106,7 +107,7 @@ export default function Trash() {
             </div>
           )}
           {list && <Rows notes={list.notes} areas={areas} to={(r) => `/trash/${r.id}`} open={id} trashed />}
-          {list && <ListEnd list={list} more={more} trashed />}
+          {list && <ListEnd shown={list.notes.length} total={list.total} what="trashed" more={more} />}
         </div>
         {!narrow &&
           (id ? (

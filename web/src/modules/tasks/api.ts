@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, message } from '../../api/client.ts'
+import { ApiError, api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 
 // A task's state: done, or unsorted while it is open with no list, no plan and no deadline, or else open.
 export type State = 'open' | 'unsorted' | 'done'
 
 // A task as GET /api/tasks lists it. The dates are YYYY-MM-DD and "" when it has none, a plan of one day has its to equal
-// to its from, planned_time is HH:MM, area is the slug, and source that of the last change, web or the name of a token.
+// to its from, planned_time is HH:MM, area is the slug, source that of the last change, web or the name of a token, and
+// trashed_at null unless it is in the trash.
 export type Row = {
   id: number
   ref: string
@@ -26,6 +27,7 @@ export type Row = {
   source: string
   created_at: string
   changed_at: string
+  trashed_at: string | null
 }
 
 // An entry of a task's log, the newest first: what each field was and became, as strings, an area as its slug and done as
@@ -53,8 +55,8 @@ export function useTasks(read: () => void) {
 }
 
 // The open tasks, 500 at most, as useTasks reads them while on, and again once on. took places a task as a change answered
-// it, at once and before the stream tells of it, and takes it out once done; a read asked before it is dropped. A page
-// sorts what it shows.
+// it, at once and before the stream tells of it, and takes it out once done or trashed; a read asked before it is dropped.
+// A page sorts what it shows.
 export function useOpen(on = true) {
   const [list, setList] = useState<List>()
   const [failed, setFailed] = useState('')
@@ -78,7 +80,7 @@ export function useOpen(on = true) {
     setList((l) => {
       if (!l) return l
       const rest = l.tasks.filter((x) => x.id !== t.id)
-      return { ...l, tasks: t.state === 'done' ? rest : [...rest, t] }
+      return { ...l, tasks: t.state === 'done' || t.trashed_at ? rest : [...rest, t] }
     })
   }
   return { list, failed, took }
@@ -118,7 +120,7 @@ export function useMore(asked: string, holds: (t: Row) => boolean) {
     })
   }
   const more = limit < 500 ? () => setShown({ asked, limit: limit + step }) : undefined
-  return { list: got?.asked === asked ? got.list : undefined, failed, more, took }
+  return { list: got?.asked === asked ? got.list : undefined, failed, more, took, again: () => setTick((x) => x + 1) }
 }
 
 // The task id names, in full, read as useTasks reads and when id changes. show puts a change's answer in its place while
@@ -142,7 +144,12 @@ export function useTask(id?: number) {
         setTask(t)
         setFailed('')
       },
-      (e: unknown) => n === asked.current && setFailed(message(e)),
+      (e: unknown) => {
+        if (n !== asked.current) return
+        // A task deleted meanwhile, as by emptying the trash elsewhere, closes to say so.
+        if (e instanceof ApiError && e.status === 404) setTask(undefined)
+        setFailed(message(e))
+      },
     )
   }, [id, tick])
   const show = (t: Task) => {
