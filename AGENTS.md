@@ -307,6 +307,9 @@ Every package states its one responsibility in its package comment, and
   the API. A binary built without the app serves the committed
   `web/dist/placeholder.html` in its place. Each module of the web app is one
   folder under `web/src/modules/`, listed in `web/src/modules/registry.ts`.
+  The service worker, `web/public/sw.js`, shows each notification pushed to
+  the browser, and a tap on one takes an open window to its path, or opens
+  one there.
 - `scripts/`: the scans and the line count that `make` runs.
 - `Dockerfile`: Node builds the web app, Go builds the binary with it
   embedded, and a distroless static image runs it as user 65532. Every base
