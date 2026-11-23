@@ -93,9 +93,10 @@ After a change to `web/`, look at the screen before you finish.
   November 2026. Its `palette` is `copper` or `catppuccin`, its
   `theme` is `dark` or `light`, and its `path` picks the route, for example
   `path=/settings`. `click=TEXT` clicks the first button, link or summary
-  whose text, or label, starts with TEXT, `type=TEXT` types TEXT into the
-  field that has the focus, and `choose=N` chooses an image of N bytes in
-  the file picker of the note being read; given more than once, they run
+  whose text, or label, starts with TEXT, in the dialog open last when one
+  is, `type=TEXT` types TEXT into the field that has the focus, and
+  `choose=N` chooses an image of N bytes in the file picker of the note
+  being read; given more than once, they run
   in the order given, and `end=1` then scrolls the page, and what is open
   beside a list, to their end.
   `login=wrong` refuses a sign-in and `login=wait` makes it wait;

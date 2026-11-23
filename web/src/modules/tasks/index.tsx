@@ -1,15 +1,17 @@
 import type { Entry, Module } from '../registry.ts'
-import { ring, type State } from './api.ts'
+import { make, ring, split, type State } from './api.ts'
 import AreaTasks from './AreaTasks.tsx'
 import { TasksIcon, Unsorted } from './nav.tsx'
 import Tasks from './Tasks.tsx'
 import Trashed from './Trashed.tsx'
+import When from './When.tsx'
 
 const entry: Entry = { to: '/tasks', label: 'Tasks', icon: <TasksIcon />, count: Unsorted }
 
 export const tasks: Module = {
   name: 'tasks',
   home: '/tasks',
+  capture: [{ name: 'task', label: 'Task', more: When, save: (text, area, more) => make({ ...split(text), area, ...more }) }],
   nav: [entry],
   tabs: [entry],
   more: [],

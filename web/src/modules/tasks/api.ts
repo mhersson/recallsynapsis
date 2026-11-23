@@ -47,6 +47,16 @@ export type List = { tasks: Row[]; total: number; now: Now }
 // What a change of a task may send; a change sends only what it changes, and links whole, as references.
 export type Fields = Partial<Pick<Task, 'title' | 'notes' | 'area' | 'planned_from' | 'planned_to' | 'planned_time' | 'deadline' | 'list'>> & { done?: boolean; links?: string[] }
 
+// Makes one task, with the owner's words when given, and gives it as a list gives it; a refusal throws.
+export const make = (t: Fields, said = '') => api<{ tasks: Row[] }>('POST', '/tasks', { tasks: [t], ...(said && { said }) }).then((r) => r.tasks[0])
+
+// A text as a task takes it: its first line the title, and what follows the notes.
+export function split(text: string): Fields {
+  const [title, ...rest] = text.trim().split('\n')
+  const notes = rest.join('\n').trim()
+  return { title: title.trim(), ...(notes && { notes }) }
+}
+
 // Reads when the page mounts, when the stream opens again, on any change of a task and on any change of an area, whose
 // slug names the tasks in it.
 export function useTasks(read: () => void) {

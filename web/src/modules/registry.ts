@@ -11,6 +11,15 @@ export type Entry = { to: string; label: string; icon: ReactNode; count?: Compon
 // to on a phone. Opened from an area's page, it is given that area's id, which the page takes as ?area=.
 export type Action = Pick<Entry, 'to' | 'label' | 'icon'> & { form: ComponentType<{ area?: number; dialog?: boolean; onClose: () => void }> }
 
+// A kind a module adds to Capture beside Note and Idea. Chosen, Capture goes to an area, never to the Inbox, and shows more
+// under its text, which keeps what is chosen there; save sends the text to the area with it, and throws a refusal.
+export type CaptureKind = {
+  name: string
+  label: string
+  more: ComponentType<{ value: Record<string, string>; onChange: (v: Record<string, string>) => void }>
+  save: (text: string, area: string, more: Record<string, string>) => Promise<unknown>
+}
+
 // Where an item leads, the class of the small mark that shows what it is, and its state in words when it has one
 // to show.
 export type Item = { to: string; mark: string; state?: string }
@@ -22,6 +31,8 @@ export type Module = {
   home?: string
   // The green button of the side bar and the centre tab on a phone, when this is the first enabled module that has one.
   action?: Action
+  // What it adds to Capture.
+  capture?: CaptureKind[]
   // In the side bar, above Search.
   nav: Entry[]
   // On a phone, before Projects and More.
