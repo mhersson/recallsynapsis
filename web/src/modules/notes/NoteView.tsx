@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState, type DragEvent } from 'react'
 import { nameOf } from '../../api/areas.ts'
 import { ApiError, api, message } from '../../api/client.ts'
+import { useStream } from '../../api/stream.ts'
 import type { Area } from '../../api/types.ts'
 import Dialog from '../../components/Dialog.tsx'
 import Field from '../../components/Field.tsx'
@@ -9,7 +10,7 @@ import { Markdown } from '../../components/Markdown.tsx'
 import { ago, when } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useUnsaved } from '../../components/useUnsaved.tsx'
-import { count, from, mark, useNotes, type Kind, type Note, type Version } from './api.ts'
+import { count, from, mark, type Kind, type Note, type Version } from './api.ts'
 import { Place } from './Filing.tsx'
 import Files from './Files.tsx'
 import History, { RevisionView } from './History.tsx'
@@ -66,7 +67,8 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
       },
     )
   }
-  useNotes(() => void read())
+  // Every change reads it again: what it links to may be any module's item, and the core tells only of areas.
+  useStream(() => void read())
   // At the note's level, so an upload goes on while the note is edited.
   const up = useUploads(id, read)
   // On desktop a file dropped on the note, or an image pasted anywhere, is attached to the note being read.

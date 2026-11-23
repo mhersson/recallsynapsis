@@ -105,8 +105,8 @@ After a change to `web/`, look at the screen before you finish.
   tasks Today would show; `save=moved` refuses the first save of
   each note's text, as if a client had saved the note meanwhile;
   `upload=wait` holds every upload, so it stays under way;
-  `modules=tasks,notes` switches the named modules on, so Tasks finds the
-  fixed tasks, and the Inbox, Notes and Search the fixed notes;
+  `modules=tasks,notes` switches the named modules on, so Tasks and Search
+  find the fixed tasks, and the Inbox, Notes and Search the fixed notes;
   `backup=old` makes the last backup three days old and `backup=none`
   leaves none. What the page changes holds until it reloads, and a change
   of a note or a task reaches the event stream, as the server's does.

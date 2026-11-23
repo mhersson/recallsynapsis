@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, NOTES, NOW, OLDER, SECRET, SESSION, TASKS, TOKENS, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, tagsOf, version } from './fixtures.ts'
+import { AREAS, HEALTH, NOTES, NOW, OLDER, SECRET, SESSION, TASKS, TOKENS, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -71,8 +71,13 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   if (path === '/api/session') return json(session)
   if (path === '/api/tokens') return json({ tokens })
   if (path === '/api/search') {
-    const hits = searchNotes(notes, url.searchParams.get('q')!, url.searchParams.get('area'))
-    return json({ groups: hits.length ? [{ module: 'notes', hits }] : [] })
+    // The server groups the hits in its own order of the modules, the notes first.
+    const q = url.searchParams.get('q')!
+    const groups = [
+      { module: 'notes', hits: searchNotes(notes, q, url.searchParams.get('area')) },
+      { module: 'tasks', hits: searchTasks(tasks, q, url.searchParams.get('area')) },
+    ]
+    return json({ groups: groups.filter((g) => session.modules.includes(g.module) && g.hits.length) })
   }
   if (path === '/api/areas') return json({ areas: areas.filter((a) => url.searchParams.get('archived') === 'true' || !a.archived) })
   return json({ error: 'not found' }, 404)

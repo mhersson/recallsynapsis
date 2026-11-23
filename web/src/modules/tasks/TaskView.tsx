@@ -221,7 +221,7 @@ export default function TaskView({ task, now, areas, onChange }: Props) {
         {!narrow && !draft && edit}
       </div>
       <span className="t2 task-meta">
-        <i className={ring(task.state)} />
+        <i className={`mk ${ring(task.state)}`} />
         <span>task</span>
         <span>{nameOf(areas, task.area)}</span>
         {task.state === 'unsorted' && <span>to sort</span>}

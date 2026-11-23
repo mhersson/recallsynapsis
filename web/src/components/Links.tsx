@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { nameOf } from '../api/areas.ts'
 import { api, message } from '../api/client.ts'
 import type { Area, Group, Hit, Linked } from '../api/types.ts'
-import { useItem } from '../session.ts'
+import { useItem, useRanked } from '../session.ts'
 import { LinkIcon, SearchIcon, XIcon } from './icons.tsx'
 import Section from './Section.tsx'
 import { back } from './useClose.ts'
@@ -82,9 +82,10 @@ type FinderProps = { self: string; refs: string[]; areas: Area[]; sending: boole
 // links to already is shown and cannot be picked again.
 function Finder({ self, refs, areas, sending, onPick, onClose }: FinderProps) {
   const item = useItem()
+  const ranked = useRanked()
   const [q, setQ] = useState('')
   const query = q.trim()
-  const [found, setFound] = useState<{ q: string; hits: Hit[] }>()
+  const [found, setFound] = useState<{ q: string; groups: Group[] }>()
   const [failed, setFailed] = useState('')
   useEffect(() => {
     if (!query) return
@@ -94,7 +95,7 @@ function Finder({ self, refs, areas, sending, onPick, onClose }: FinderProps) {
       api<{ groups: Group[] }>('GET', '/search?' + new URLSearchParams({ q: query })).then(
         (r) => {
           if (stale) return
-          setFound({ q: query, hits: r.groups.flatMap((g) => g.hits).filter((h) => h.ref !== self) })
+          setFound({ q: query, groups: r.groups })
           setFailed('')
         },
         (e: unknown) => !stale && setFailed(message(e)),
@@ -104,9 +105,9 @@ function Finder({ self, refs, areas, sending, onPick, onClose }: FinderProps) {
       stale = true
       clearTimeout(timer)
     }
-  }, [query, self])
+  }, [query])
 
-  const hits = (query && found?.hits) || []
+  const hits: Hit[] = (query && found && ranked(found.groups).flatMap((g) => g.hits).filter((h) => h.ref !== self)) || []
   let said = 'Pick one to link to it.'
   if (failed) said = failed
   else if (query && found?.q === query && hits.length === 0) said = `Nothing matches “${query}”.`

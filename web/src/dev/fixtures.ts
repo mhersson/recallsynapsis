@@ -435,6 +435,15 @@ export const TASKS: Task[] = (
   ] as [Partial<Task>, number?][]
 ).map(([t, minutes], i) => task(i + 1, minutes ?? (40 - i) * 24 * 60, t))
 
+// GET /api/search from tasks, as the tasks module answers it: every task outside the trash, done or open, whose title or
+// notes hold q, in any case, and in the area asked for, if one is.
+export function searchTasks(tasks: Task[], q: string, area: string | null): Hit[] {
+  const has = (t: Task) => (t.title + '\n' + t.notes).toLowerCase().includes(q.toLowerCase())
+  return tasks
+    .filter((t) => has(t) && (!area || t.area === area))
+    .map((t) => ({ ref: t.ref, kind: 'task', title: t.title, snippet: t.notes, area: t.area, state: t.state, changed_at: t.changed_at }))
+}
+
 // What Today would show of tasks, which today=none leaves out.
 export const onToday = (tasks: Task[], now: Now) => sortInto('today', tasks.map(taskRow), now).flatMap(([, ts]) => ts.map((t) => t.id))
 

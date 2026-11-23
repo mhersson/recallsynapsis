@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import type { Area, Group, Session } from '../../api/types.ts'
 import { notes } from '../../modules/notes/index.tsx'
+import { tasks } from '../../modules/tasks/index.tsx'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, fakeServer, json, narrow, type Call } from '../../test-server.ts'
 
@@ -90,6 +91,39 @@ test('a hit is a link to its item with its mark, as the module it names gives th
   fireEvent.click(rows[2])
   await pause()
   expect(where()).toBe('/notes/3')
+})
+
+test('with tasks on its hits come before the notes’, though the server gives them after, each a link to its task with its ring and its state', async () => {
+  narrow(false)
+  server(
+    () => [
+      { module: 'notes', hits: [hit('notes:1', 'filed')] },
+      { module: 'tasks', hits: [hit('tasks:5', 'open', 'task'), hit('tasks:6', 'unsorted', 'task'), hit('tasks:7', 'done', 'task')] },
+    ],
+    ['notes', 'tasks'],
+  )
+  const { where } = await open('/search?q=gar')
+  await pause()
+  expect(main().getAllByRole('heading', { level: 2 }).map((g) => g.textContent)).toEqual(['tasks', 'notes'])
+  const rows = [...screen.getByRole('main').querySelectorAll('.row')]
+  expect(rows.map((r) => [r.getAttribute('href'), r.querySelector('.mk')!.className])).toEqual([
+    ['/tasks/5', 'mk m-task'],
+    ['/tasks/6', 'mk m-task t-sort'],
+    ['/tasks/7', 'mk m-task t-done'],
+    ['/notes/1', 'mk m-note'],
+  ])
+  // The ring tells an open task; to sort and done are said too.
+  const said = (state: string) => tasks.item!('tasks:1', 'task', state).state
+  expect([said('unsorted'), said('done')].every(Boolean)).toBe(true)
+  const details = rows.slice(0, 3).map((r) => [...r.querySelector('.t2')!.children].map((s) => s.textContent))
+  expect(details).toEqual([
+    ['CAVU', 'task', expect.any(String)],
+    ['CAVU', 'task', said('unsorted'), expect.any(String)],
+    ['CAVU', 'task', said('done'), expect.any(String)],
+  ])
+  fireEvent.click(rows[1])
+  await pause()
+  expect(where()).toBe('/tasks/6')
 })
 
 test('the area dropdown offers the areas that are not archived, and narrows the search to one', async () => {
