@@ -1,6 +1,8 @@
 // Package store opens the SQLite database, applies the migrations the packages
-// that own tables bring, and hands every package the one handle. It owns no
-// table but the migration ledger.
+// that own tables bring, and hands every package the one handle. Beside it is
+// what the modules' searches share: the words of a search's text, as an FTS5
+// index with the trigram tokenizer and the text read back look for them, and
+// a hit's snippet. It owns no table but the migration ledger.
 package store
 
 import (

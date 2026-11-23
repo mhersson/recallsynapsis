@@ -10,7 +10,7 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
-// serveList answers the tasks that ?area=, ?list=, ?from=, ?to=, ?unsorted=, ?done= and ?limit= ask for.
+// serveList answers the tasks that ?area=, ?list=, ?from=, ?to=, ?unsorted=, ?done=, ?trashed= and ?limit= ask for.
 func (t tasks) serveList(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	f := filter{area: q.Get("area"), list: q.Get("list"), from: q.Get("from"), to: q.Get("to")}
@@ -22,6 +22,10 @@ func (t tasks) serveList(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if f.done, err = flag(q, "done"); err != nil {
+		return err
+	}
+
+	if f.trashed, err = flag(q, "trashed"); err != nil {
 		return err
 	}
 
@@ -91,6 +95,51 @@ func (t tasks) serveChange(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	module.Reply(w, http.StatusOK, out)
+
+	return nil
+}
+
+// serveTrash answers the task once it is in the trash, or out of it when
+// trashed is false.
+func (t tasks) serveTrash(trashed bool) func(http.ResponseWriter, *http.Request) error {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		id, err := taskID(r)
+		if err != nil {
+			return err
+		}
+
+		out, err := t.trash(r.Context(), id, trashed)
+		if err != nil {
+			return err
+		}
+
+		module.Reply(w, http.StatusOK, out)
+
+		return nil
+	}
+}
+
+func (t tasks) serveDelete(w http.ResponseWriter, r *http.Request) error {
+	id, err := taskID(r)
+	if err != nil {
+		return err
+	}
+
+	if err := t.remove(r.Context(), id); err != nil {
+		return err
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+
+	return nil
+}
+
+func (t tasks) serveEmpty(w http.ResponseWriter, r *http.Request) error {
+	if err := t.empty(r.Context()); err != nil {
+		return err
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 
 	return nil
 }

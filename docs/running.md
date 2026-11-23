@@ -94,8 +94,8 @@ The token starts with `recall_` and is shown once, as it is made: only its hash
 is kept. A client sends it as `Authorization: Bearer TOKEN`, to `/mcp` or to
 `/api/`. Settings lists each token with its access, when it was made and when it
 was last used. Revoking one refuses it from its next request. No token can list,
-make or revoke tokens, delete a note for good, or attach, read or remove a
-note's file: only a signed-in session can.
+make or revoke tokens, delete a note or a task for good, or attach, read or
+remove a note's file: only a signed-in session can.
 
 ### The MCP tools
 

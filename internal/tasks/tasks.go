@@ -1,9 +1,13 @@
 // Package tasks keeps each user's tasks: each in one of the user's areas,
 // with its notes, a planned period of days with an optional time on its
-// first, a deadline, a list, soon or someday, and when it was done. It lists
-// them by area, list, state and a span of dates, tells which day it is in the
-// configured time zone, and keeps a log of every change of a task's fields.
-// It owns the tables tasks and task_changes.
+// first, a deadline, a list, soon or someday, when it was done, and its links
+// to the items of any module. It lists them by area, list, state and a span
+// of dates, tells which day it is in the configured time zone, and keeps a
+// log of every change of a task's fields. A task in the trash is in no list
+// but the trash's, found by no search and no link, and kept unchanged until
+// it is restored or deleted for good. It searches them through an index of
+// their title and notes. It owns the tables tasks, task_changes, task_links
+// and tasks_fts.
 package tasks
 
 import (
@@ -26,7 +30,9 @@ import (
 // migrations make the module's schema. A task's id is AUTOINCREMENT, so a
 // task deleted for good never gives its id to another, and a link to it never
 // leads to another task. A date is text, YYYY-MM-DD or empty for none, so
-// dates compare as text, and a time is HH:MM.
+// dates compare as text, and a time is HH:MM. The index keeps no copy of the
+// text, which a hit reads from the task, and its trigrams let a word find
+// part of a compound.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE tasks (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,6 +64,22 @@ CREATE TABLE task_changes (
 );
 
 CREATE INDEX task_changes_task ON task_changes (task_id);
+`}, {Version: 2, SQL: `
+CREATE VIRTUAL TABLE tasks_fts USING fts5 (title, notes, tokenize = 'trigram', content = '', contentless_delete = 1);
+
+INSERT INTO tasks_fts (rowid, title, notes) SELECT id, title, notes FROM tasks;
+
+CREATE TRIGGER tasks_fts_delete AFTER DELETE ON tasks BEGIN
+	DELETE FROM tasks_fts WHERE rowid = old.id;
+END;
+
+CREATE TABLE task_links (
+	task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+	ref     TEXT NOT NULL,
+	PRIMARY KEY (task_id, ref)
+);
+
+CREATE INDEX task_links_ref ON task_links (ref);
 `}}
 
 const (
@@ -74,7 +96,8 @@ var (
 	lists    = []string{"", "soon", "someday"}
 	weekdays = []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 
-	errLimit = fmt.Errorf("limit is 1 to %d: %w", maxLimit, store.ErrInvalid)
+	errLimit   = fmt.Errorf("limit is 1 to %d: %w", maxLimit, store.ErrInvalid)
+	errTrashed = fmt.Errorf("the task is in the trash, and is restored before it is changed: %w", store.ErrConflict)
 )
 
 // settings are the module's keys of [modules.tasks] beside enabled.
@@ -109,7 +132,14 @@ func New(d module.Deps) module.Module {
 			{Pattern: "POST /api/tasks", Access: module.Write, Serve: t.serveCreate},
 			{Pattern: "GET /api/tasks/{id}", Access: module.Read, Serve: t.serveGet},
 			{Pattern: "PATCH /api/tasks/{id}", Access: module.Write, Serve: t.serveChange},
+			{Pattern: "POST /api/tasks/{id}/trash", Access: module.Write, Serve: t.serveTrash(true)},
+			{Pattern: "POST /api/tasks/{id}/restore", Access: module.Write, Serve: t.serveTrash(false)},
+			{Pattern: "DELETE /api/tasks/{id}", Access: module.Owner, Serve: t.serveDelete},
+			{Pattern: "DELETE /api/tasks/trash", Access: module.Owner, Serve: t.serveEmpty},
 		},
+		Search:  t.search,
+		Resolve: t.resolve,
+		LinksTo: t.linksTo,
 	}
 }
 
@@ -144,14 +174,19 @@ type row struct {
 	Source         string     `json:"source"` // that of the last change
 	CreatedAt      time.Time  `json:"created_at"`
 	ChangedAt      time.Time  `json:"changed_at"`
+	TrashedAt      *time.Time `json:"trashed_at"` // null unless the task is in the trash
 }
 
-// task is a task in full, with its log, the newest entry first.
+// task is a task in full, with its links and the items that link to it,
+// its log, the newest entry first, and which day it is.
 type task struct {
 	row
-	Notes string  `json:"notes"`
-	Said  string  `json:"said"` // what its making carries
-	Log   []entry `json:"log"`
+	Notes      string        `json:"notes"`
+	Said       string        `json:"said"` // what its making carries
+	Links      []module.Item `json:"links"`
+	LinkedFrom []module.Item `json:"linked_from"`
+	Log        []entry       `json:"log"`
+	Now        clock         `json:"now"`
 }
 
 // entry is one change of a task as its log keeps it; the first is its making.
@@ -163,7 +198,7 @@ type entry struct {
 }
 
 // delta is one field a change changed, named as the wire names it, with what
-// it was and what it became; neither for the notes.
+// it was and what it became; neither for the notes and the links.
 type delta struct {
 	Field string  `json:"field"`
 	From  *string `json:"from,omitempty"`
@@ -173,14 +208,15 @@ type delta struct {
 // draft is a new task, in the personal area unless it names another, as a
 // slug or a name.
 type draft struct {
-	Title       string `json:"title"`
-	Notes       string `json:"notes"`
-	Area        string `json:"area"`
-	PlannedFrom string `json:"planned_from"`
-	PlannedTo   string `json:"planned_to"`
-	PlannedTime string `json:"planned_time"`
-	Deadline    string `json:"deadline"`
-	List        string `json:"list"`
+	Title       string       `json:"title"`
+	Notes       string       `json:"notes"`
+	Area        string       `json:"area"`
+	PlannedFrom string       `json:"planned_from"`
+	PlannedTo   string       `json:"planned_to"`
+	PlannedTime string       `json:"planned_time"`
+	Deadline    string       `json:"deadline"`
+	List        string       `json:"list"`
+	Links       []module.Ref `json:"links"`
 }
 
 // batch is the tasks one call makes, with the owner's own words, kept on the
@@ -198,15 +234,16 @@ type made struct {
 
 // change is what a change sets; a nil field stays as it is.
 type change struct {
-	Title       *string `json:"title"`
-	Notes       *string `json:"notes"`
-	Area        *string `json:"area"`
-	PlannedFrom *string `json:"planned_from"`
-	PlannedTo   *string `json:"planned_to"`
-	PlannedTime *string `json:"planned_time"`
-	Deadline    *string `json:"deadline"`
-	List        *string `json:"list"`
-	Done        *bool   `json:"done"`
+	Title       *string       `json:"title"`
+	Notes       *string       `json:"notes"`
+	Area        *string       `json:"area"`
+	PlannedFrom *string       `json:"planned_from"`
+	PlannedTo   *string       `json:"planned_to"`
+	PlannedTime *string       `json:"planned_time"`
+	Deadline    *string       `json:"deadline"`
+	List        *string       `json:"list"`
+	Done        *bool         `json:"done"`
+	Links       *[]module.Ref `json:"links"` // replaces them all
 }
 
 // filter is what a list asks for; a zero field asks for nothing.
@@ -216,6 +253,7 @@ type filter struct {
 	from, to string // the span of dates, each side open when ""
 	unsorted bool
 	done     bool // the done tasks, else the open ones
+	trashed  bool // the trash alone, else none of it
 	limit    int  // defaultLimit when 0
 }
 
@@ -233,6 +271,7 @@ type fields struct {
 	area                         int64
 	from, to, at, deadline, list string
 	done                         bool
+	links                        []module.Ref
 }
 
 // apply sets on f what ch gives, with area the id of the area it names. A
@@ -274,6 +313,10 @@ func (f *fields) apply(ch change, area int64) {
 
 	if ch.Done != nil {
 		f.done = *ch.Done
+	}
+
+	if ch.Links != nil {
+		f.links = *ch.Links
 	}
 }
 
@@ -357,11 +400,24 @@ func diff(from, to fields, slugs map[int64]string) []delta {
 		out = append(out, delta{Field: "notes"})
 	}
 
+	if !slices.Equal(from.links, to.links) {
+		out = append(out, delta{Field: "links"})
+	}
+
 	return out
 }
 
 // columns are a row's, in the order scanRow reads them.
-const columns = `id, area_id, title, planned_from, planned_to, planned_time, deadline, list, done_at, notes <> '', source, created_at, changed_at`
+const columns = `id, area_id, title, planned_from, planned_to, planned_time, deadline, list, done_at, notes <> '', source, created_at, changed_at,
+	trashed_at`
+
+const (
+	// index writes the task ?1 into the search index as it now stands.
+	index = `REPLACE INTO tasks_fts (rowid, title, notes) SELECT id, title, notes FROM tasks WHERE id = ?1`
+	// purge rewrites the search index whole. A delete only marks a task's
+	// rows in it, whose text a backup would copy until a merge drops them.
+	purge = `INSERT INTO tasks_fts (tasks_fts) VALUES ('optimize')`
+)
 
 // scanRow reads a row of columns, and extra after it, naming its area by
 // its slug in slugs.
@@ -369,12 +425,12 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 	var (
 		r                      row
 		area, created, changed int64
-		done                   sql.NullInt64
+		done, trashed          sql.NullInt64
 	)
 
 	err := sc.Scan(append([]any{
 		&r.ID, &area, &r.Title, &r.PlannedFrom, &r.PlannedTo, &r.PlannedTime, &r.Deadline, &r.List,
-		&done, &r.HasNotes, &r.Source, &created, &changed,
+		&done, &r.HasNotes, &r.Source, &created, &changed, &trashed,
 	}, extra...)...)
 	if err != nil {
 		return row{}, err
@@ -390,16 +446,30 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 	r.PlannedFromDay, r.PlannedToDay, r.DeadlineDay = weekday(r.PlannedFrom), weekday(r.PlannedTo), weekday(r.Deadline)
 	r.CreatedAt, r.ChangedAt = time.UnixMilli(created).UTC(), time.UnixMilli(changed).UTC()
 
-	switch {
-	case done.Valid:
-		r.State, r.DoneAt = "done", new(time.UnixMilli(done.Int64).UTC())
-	case r.List == "" && r.PlannedFrom == "" && r.Deadline == "":
-		r.State = "unsorted"
-	default:
-		r.State = "open"
+	if trashed.Valid {
+		r.TrashedAt = new(time.UnixMilli(trashed.Int64).UTC())
 	}
 
+	if done.Valid {
+		r.DoneAt = new(time.UnixMilli(done.Int64).UTC())
+	}
+
+	r.State = state(done.Valid, r.List, r.PlannedFrom, r.Deadline)
+
 	return r, nil
+}
+
+// state is how a row, a hit or a link tells a task: "done", "unsorted" when
+// it is open with no list, no plan and no deadline, else "open".
+func state(done bool, list, from, deadline string) string {
+	switch {
+	case done:
+		return "done"
+	case list == "" && from == "" && deadline == "":
+		return "unsorted"
+	}
+
+	return "open"
 }
 
 // today is which day it is in the configured zone.
@@ -447,21 +517,42 @@ func (t tasks) get(ctx context.Context, id int64) (task, error) {
 	return t.read(ctx, slugs, c.UserID, id)
 }
 
-// read gives the user's task with the id in full.
+// read gives the user's task with the id in full, its links and the items
+// that link to it each as the core resolves it for the caller, and which day
+// it is, so the page of a task tells it without reading a list.
 func (t tasks) read(ctx context.Context, slugs map[int64]string, userID, id int64) (task, error) {
 	var (
-		out task
-		err error
+		out   task
+		links string
+		err   error
 	)
 
-	out.row, err = scanRow(t.Store.QueryRowContext(ctx, `SELECT `+columns+`, notes FROM tasks WHERE user_id = ? AND id = ?`,
-		userID, id), slugs, &out.Notes)
+	out.row, err = scanRow(t.Store.QueryRowContext(ctx, `SELECT `+columns+`, notes, `+linkList+` FROM tasks WHERE user_id = ? AND id = ?`,
+		userID, id), slugs, &out.Notes, &links)
 	if errors.Is(err, sql.ErrNoRows) {
 		return task{}, fmt.Errorf("task %d: %w", id, store.ErrNotFound)
 	}
 
 	if err != nil {
 		return task{}, fmt.Errorf("tasks: read: %w", err)
+	}
+
+	var refs []module.Ref
+	if err := json.Unmarshal([]byte(links), &refs); err != nil {
+		return task{}, fmt.Errorf("tasks: read: %w", err)
+	}
+
+	from, err := t.LinksTo(ctx, out.Ref)
+	if err != nil {
+		return task{}, err
+	}
+
+	if out.Links, err = t.Items(ctx, refs); err != nil {
+		return task{}, err
+	}
+
+	if out.LinkedFrom, err = t.Items(ctx, from); err != nil {
+		return task{}, err
 	}
 
 	rows, err := t.Store.QueryContext(ctx, `SELECT at, source, said, changes FROM task_changes WHERE task_id = ? ORDER BY id DESC`, id)
@@ -498,7 +589,7 @@ func (t tasks) read(ctx context.Context, slugs map[int64]string, userID, id int6
 		return task{}, fmt.Errorf("tasks: task %d has no log", id)
 	}
 
-	out.Said = out.Log[len(out.Log)-1].Said
+	out.Said, out.Now = out.Log[len(out.Log)-1].Said, t.today()
 
 	return out, nil
 }
@@ -508,10 +599,11 @@ func (t tasks) read(ctx context.Context, slugs map[int64]string, userID, id int6
 // first, by time; and the oldest first among equals.
 const openOrder = `coalesce(nullif(planned_from, ''), nullif(deadline, '')) NULLS LAST, nullif(planned_time, '') NULLS LAST, created_at, id`
 
-// list gives the caller's tasks that f asks for, the open ones in openOrder
-// or the done ones the most recently done first, and how many there are in
-// all. A span gives the tasks whose plan overlaps it or whose deadline lies
-// in it, and with no from it gives those of every day before its to.
+// list gives the caller's tasks that f asks for, the open ones in openOrder,
+// the done ones the most recently done first or the trash the most recently
+// trashed first, and how many there are in all. A span gives the tasks whose
+// plan overlaps it or whose deadline lies in it, and with no from it gives
+// those of every day before its to.
 func (t tasks) list(ctx context.Context, f filter) (page, error) {
 	c, _ := module.CallerFrom(ctx)
 
@@ -568,15 +660,24 @@ func (t tasks) list(ctx context.Context, f filter) (page, error) {
 		done, order = "done_at IS NOT NULL", "done_at DESC, id DESC"
 	}
 
+	// The trash holds open and done tasks alike: done narrows it, and leaving it out does not.
+	if f.trashed {
+		order = "trashed_at DESC, id DESC"
+
+		if !f.done {
+			done = "true"
+		}
+	}
+
 	// The window counts every row the query matches, before the limit cuts
 	// them. A side of the span left out is open: '' is before every date.
 	rows, err := t.Store.QueryContext(ctx, `SELECT `+columns+`, count(*) OVER () FROM tasks
-		WHERE user_id = ?1 AND `+done+` AND ?2 IN (0, area_id) AND (?3 IS NULL OR list = ?3)
+		WHERE user_id = ?1 AND (trashed_at IS NOT NULL) = ?8 AND `+done+` AND ?2 IN (0, area_id) AND (?3 IS NULL OR list = ?3)
 			AND (NOT ?4 OR done_at IS NULL AND list = '' AND planned_from = '' AND deadline = '')
 			AND (?5 = '' AND ?6 = ''
 				OR planned_from <> '' AND (?6 = '' OR planned_from <= ?6) AND planned_to >= ?5
 				OR deadline <> '' AND (?6 = '' OR deadline <= ?6) AND deadline >= ?5)
-		ORDER BY `+order+` LIMIT ?7`, c.UserID, area, list, f.unsorted, f.from, f.to, f.limit)
+		ORDER BY `+order+` LIMIT ?7`, c.UserID, area, list, f.unsorted, f.from, f.to, f.limit, f.trashed)
 	if err != nil {
 		return page{}, fmt.Errorf("tasks: list: %w", err)
 	}
@@ -628,9 +729,14 @@ func (t tasks) create(ctx context.Context, b batch) (made, error) {
 			f.area = a.ID
 		}
 
+		links, err := module.CleanLinks(d.Links)
+		if err != nil {
+			return made{}, fmt.Errorf("task %d of the call: %w", i+1, err)
+		}
+
 		f.apply(change{
 			Title: &d.Title, Notes: &d.Notes, PlannedFrom: &d.PlannedFrom, PlannedTo: &d.PlannedTo,
-			PlannedTime: &d.PlannedTime, Deadline: &d.Deadline, List: &d.List,
+			PlannedTime: &d.PlannedTime, Deadline: &d.Deadline, List: &d.List, Links: &links,
 		}, 0)
 
 		if err := f.check(); err != nil {
@@ -655,6 +761,14 @@ func (t tasks) create(ctx context.Context, b batch) (made, error) {
 
 			out.Tasks[i] = r
 
+			if _, err := tx.ExecContext(ctx, index, r.ID); err != nil {
+				return fmt.Errorf("tasks: index: %w", err)
+			}
+
+			if err := keepLinks(ctx, tx, r.ID, f.links); err != nil {
+				return err
+			}
+
 			if err := logChange(ctx, tx, r.ID, now, c.Source, b.Said, diff(fields{}, f, slugs)); err != nil {
 				return err
 			}
@@ -678,7 +792,7 @@ func (t tasks) create(ctx context.Context, b batch) (made, error) {
 // change sets what ch gives on the caller's task with the id, and logs each
 // field it changes. A change that leaves every field as it was logs nothing
 // and tells no page. Marking a task done keeps when it was first done until
-// it is opened again.
+// it is opened again. A change of a task in the trash is ErrConflict.
 func (t tasks) change(ctx context.Context, id int64, ch change) (task, error) {
 	c, _ := module.CallerFrom(ctx)
 
@@ -702,19 +816,40 @@ func (t tasks) change(ctx context.Context, id int64, ch change) (task, error) {
 		area = a.ID
 	}
 
+	if ch.Links != nil {
+		links, err := module.CleanLinks(*ch.Links)
+		if err != nil {
+			return task{}, err
+		}
+
+		ch.Links = &links
+	}
+
 	var (
 		f       fields
 		changed bool
 	)
 
 	err = t.Store.Tx(ctx, func(tx *sql.Tx) error {
-		err := tx.QueryRowContext(ctx, `SELECT title, notes, area_id, planned_from, planned_to, planned_time, deadline, list, done_at IS NOT NULL
-			FROM tasks WHERE user_id = ? AND id = ?`, c.UserID, id).Scan(&f.title, &f.notes, &f.area, &f.from, &f.to, &f.at, &f.deadline, &f.list, &f.done)
-		if errors.Is(err, sql.ErrNoRows) {
+		var (
+			trashed bool
+			links   string
+		)
+
+		err := tx.QueryRowContext(ctx, `SELECT title, notes, area_id, planned_from, planned_to, planned_time, deadline, list, done_at IS NOT NULL,
+			trashed_at IS NOT NULL, `+linkList+` FROM tasks WHERE user_id = ? AND id = ?`, c.UserID, id).Scan(
+			&f.title, &f.notes, &f.area, &f.from, &f.to, &f.at, &f.deadline, &f.list, &f.done, &trashed, &links)
+
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
 			return fmt.Errorf("task %d: %w", id, store.ErrNotFound)
+		case err != nil:
+			return fmt.Errorf("tasks: change: %w", err)
+		case trashed:
+			return errTrashed
 		}
 
-		if err != nil {
+		if err := json.Unmarshal([]byte(links), &f.links); err != nil {
 			return fmt.Errorf("tasks: change: %w", err)
 		}
 
@@ -739,6 +874,18 @@ func (t tasks) change(ctx context.Context, id int64, ch change) (task, error) {
 			return fmt.Errorf("tasks: change: %w", err)
 		}
 
+		if was.title != f.title || was.notes != f.notes {
+			if _, err := tx.ExecContext(ctx, index, id); err != nil {
+				return fmt.Errorf("tasks: index: %w", err)
+			}
+		}
+
+		if !slices.Equal(was.links, f.links) {
+			if err := keepLinks(ctx, tx, id, f.links); err != nil {
+				return err
+			}
+		}
+
 		changed = true
 
 		return logChange(ctx, tx, id, now, c.Source, "", changes)
@@ -752,6 +899,106 @@ func (t tasks) change(ctx context.Context, id int64, ch change) (task, error) {
 	}
 
 	return t.read(ctx, slugs, c.UserID, id)
+}
+
+// trash puts the caller's task with the id in the trash, or takes it out
+// when trashed is false. Neither writes an entry of the log or moves the task
+// in its list, and finding the task where it is asked to be changes nothing.
+func (t tasks) trash(ctx context.Context, id int64, trashed bool) (task, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	slugs, _, err := t.places(ctx, c.UserID)
+	if err != nil {
+		return task{}, err
+	}
+
+	var (
+		at   any // null takes the task out
+		area int64
+	)
+
+	if trashed {
+		at = t.Now().UnixMilli()
+	}
+
+	err = t.Store.QueryRowContext(ctx, `UPDATE tasks SET trashed_at = ?1 WHERE user_id = ?2 AND id = ?3 AND (trashed_at IS NULL) = ?4
+		RETURNING area_id`, at, c.UserID, id, trashed).Scan(&area)
+
+	switch {
+	case err == nil:
+		t.Changed(ctx, module.Change{Module: name, Kind: "task", ID: id, Area: area})
+	case !errors.Is(err, sql.ErrNoRows):
+		return task{}, fmt.Errorf("tasks: trash: %w", err)
+	}
+
+	return t.read(ctx, slugs, c.UserID, id)
+}
+
+// remove deletes the caller's task with the id for good, with its log, its
+// links and its text in the search index. A task outside the trash is
+// ErrConflict.
+func (t tasks) remove(ctx context.Context, id int64) error {
+	c, _ := module.CallerFrom(ctx)
+
+	var area int64
+
+	err := t.Store.Tx(ctx, func(tx *sql.Tx) error {
+		var trashed bool
+
+		err := tx.QueryRowContext(ctx, `SELECT area_id, trashed_at IS NOT NULL FROM tasks WHERE user_id = ? AND id = ?`,
+			c.UserID, id).Scan(&area, &trashed)
+
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return fmt.Errorf("task %d: %w", id, store.ErrNotFound)
+		case err != nil:
+			return fmt.Errorf("tasks: delete: %w", err)
+		case !trashed:
+			return fmt.Errorf("task %d is not in the trash, and only a task in the trash is deleted: %w", id, store.ErrConflict)
+		}
+
+		if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE user_id = ? AND id = ?`, c.UserID, id); err != nil {
+			return fmt.Errorf("tasks: delete: %w", err)
+		}
+
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("tasks: delete: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	t.Changed(ctx, module.Change{Module: name, Kind: "task", ID: id, Area: area})
+
+	return nil
+}
+
+// empty deletes every task in the caller's trash for good, as remove does.
+func (t tasks) empty(ctx context.Context) error {
+	c, _ := module.CallerFrom(ctx)
+
+	err := t.Store.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
+			return fmt.Errorf("tasks: empty the trash: %w", err)
+		}
+
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("tasks: empty the trash: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// One change for them all, since a stream that falls behind is ended.
+	t.Changed(ctx, module.Change{Module: name, Kind: "trash"})
+
+	return nil
 }
 
 // logChange writes the entry of a change of the task id at the time at.

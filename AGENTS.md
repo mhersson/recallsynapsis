@@ -187,9 +187,11 @@ Every package states its one responsibility in its package comment, and
   `NewTool` makes a tool from a typed function, so no module touches the MCP
   SDK. Beside it: the `Caller` an authorised request carries in its context,
   with the user, the source of the request and whether it may write; the
-  access levels a route or a tool declares; and the refusal, the JSON reply
-  and the strict decoding of a JSON body that every route taking one uses,
-  with the 1 MiB cap on a body that `/mcp` keeps too.
+  access levels a route or a tool declares; the links an item keeps, at most
+  100 references, each well formed and kept once, which `Deps.Items` reads
+  as the core resolves them; and the refusal, the JSON reply and the strict
+  decoding of a JSON body that every route taking one uses, with the 1 MiB
+  cap on a body that `/mcp` keeps too.
   Depguard rules in `.golangci.yaml` let a module package's code import
   `module` and `store` and no other package of this binary, let nothing but
   `api` and `cmd` import a module, and let only tests import the fake; tests
@@ -233,23 +235,39 @@ Every package states its one responsibility in its package comment, and
   `note_tags`, `note_revisions`, `note_links`, `notes_fts` and `note_files`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
-  hands every package the one handle. It owns no table but the migration ledger.
+  hands every package the one handle. Beside it is what the modules' searches
+  share: a search's text parted into its words, each of three characters or
+  more quoted as a phrase for an FTS5 index with the trigram tokenizer and
+  each shorter one looked for in the text read back, in any case, and a hit's
+  snippet, placed by those words. It owns no table but the migration ledger.
 - `internal/tasks`: the tasks module. It keeps each user's tasks, each in one of
   the user's areas, named by the area's slug, with its notes, a planned period,
-  a deadline, a list, `soon` or `someday`, and when it was done. A date is text,
-  `YYYY-MM-DD` or `""` for none, so dates compare as text, and an answer gives
-  each date's weekday beside it. A from alone plans one day, a to before its
-  from and a time without a plan are refused, and a from cleared clears the
-  plan whole. A task is `done`, `unsorted` when it is open with no list, no plan
-  and no deadline, or `open`. A list gives the open tasks unless asked for the
-  done, by area, by list, by a span of dates, which a plan overlaps or a
-  deadline lies in, or the unsorted alone, and gives `now`: the date, its
-  weekday and the time in the configured `timezone`, and `week_start`. A call
-  makes 1 to 50 tasks, all or none, with one `said` kept on the making of each.
-  A change gives only its fields and the last one wins. Each change writes one
-  entry of the task's log, with its source and what each field was and became,
-  and of the notes only that they changed; a change that changes nothing writes
-  none. It owns the tables `tasks` and `task_changes`.
+  a deadline, a list, `soon` or `someday`, when it was done, and its links, at
+  most 100, each a reference to an item of any module, which a change gives
+  whole. A date is text, `YYYY-MM-DD` or `""` for none, so dates compare as
+  text, and an answer gives each date's weekday beside it. A from alone plans
+  one day, a to before its from and a time without a plan are refused, and a
+  from cleared clears the plan whole. A task is `done`, `unsorted` when it is
+  open with no list, no plan and no deadline, or `open`. A list gives the open
+  tasks unless asked for the done, by area, by list, by a span of dates, which a
+  plan overlaps or a deadline lies in, or the unsorted alone, and gives `now`:
+  the date, its weekday and the time in the configured `timezone`, and
+  `week_start`. A call makes 1 to 50 tasks, all or none, with one `said` kept on
+  the making of each. A change gives only its fields and the last one wins. Each
+  change writes one entry of the task's log, with its source and what each field
+  was and became, and of the notes and the links only that they changed; a
+  change that changes nothing writes none. A task in full, wherever one is
+  answered, gives its links and the items that link to it, each as the core
+  resolves it, and `now`, and a link to a task in the trash or deleted for good
+  leads nowhere. It searches its tasks, done and open, for every word of a
+  query, in title and notes and in any case, as notes does, through an FTS5
+  index with the trigram tokenizer, which every write keeps level, which keeps
+  no copy of the text, and which deleting a task for good rewrites. A task in
+  the trash is in no list but the trash's, which gives the done and the open
+  alike, the most recently trashed first, is found by no search and cannot be
+  changed. Trashing and restoring write no entry of the log, and only the
+  session cookie deletes a task for good, alone or by emptying the trash. It
+  owns the tables `tasks`, `task_changes`, `task_links` and `tasks_fts`.
 - `internal/testkit`: `fake`, a feature module as small as the tests of what
   serves modules need: a table, a route and a write tool that add to it and
   tell of what they add, a search of it, and a job that fails on every tick.
