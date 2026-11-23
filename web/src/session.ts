@@ -21,6 +21,9 @@ export const ModulesContext = createContext<Module[]>([])
 
 export const useModules = () => useContext(ModulesContext)
 
+// Whether Projects is a tab on a phone: while the modules' tabs, their action's and More leave it room among five.
+export const projectsTabbed = (on: Module[]) => on.flatMap((m) => m.tabs).length + (on.some((m) => m.action) ? 1 : 0) + 2 <= 5
+
 // The item a reference names, from the module switched on that its reference names; undefined when that module gives none.
 export function useItem(): (ref: string, kind: string, state: string) => Item | undefined {
   const on = useModules()

@@ -8,7 +8,7 @@ import PageHead from '../../components/PageHead.tsx'
 import { ProjectsIcon } from '../../components/icons.tsx'
 import { back, useClose } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { useSession } from '../../session.ts'
+import { projectsTabbed, useModules, useSession } from '../../session.ts'
 import AreaForm from './AreaForm.tsx'
 import './Projects.css'
 
@@ -21,6 +21,8 @@ function count(n: number) {
 export default function Projects({ making = false }: { making?: boolean }) {
   const narrow = useNarrow()
   const { modules } = useSession()
+  // Reached through More on a phone when the tabs have no room for it.
+  const tabbed = projectsTabbed(useModules())
   const [areas, setAreas] = useState<Area[] | null>(null)
   const [refused, setRefused] = useState('')
 
@@ -77,6 +79,11 @@ export default function Projects({ making = false }: { making?: boolean }) {
 
   return (
     <div className="page narrow">
+      {narrow && !tabbed && (
+        <div className="crumb">
+          <Link to="/more">More</Link> /
+        </div>
+      )}
       <PageHead title="Projects">
         <Link className="btn" to="/areas/new" state={back}>
           New project

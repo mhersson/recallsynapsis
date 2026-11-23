@@ -89,25 +89,27 @@ After a change to `web/`, look at the screen before you finish.
   `node shoot.mjs 1280 900 "http://127.0.0.1:5197/harness.html?palette=copper&theme=dark" /tmp/shot.png`.
   Use `390 844` for a phone.
 - `web/harness.html` shows the app on the fixed data of
-  `web/src/dev/fixtures.ts`. Its `palette` is `copper` or `catppuccin`, its
+  `web/src/dev/fixtures.ts`, whose tasks are on a fixed day, Monday 23
+  November 2026. Its `palette` is `copper` or `catppuccin`, its
   `theme` is `dark` or `light`, and its `path` picks the route, for example
   `path=/settings`. `click=TEXT` clicks the first button, link or summary
   whose text, or label, starts with TEXT, `type=TEXT` types TEXT into the
   field that has the focus, and `choose=N` chooses an image of N bytes in
   the file picker of the note being read; given more than once, they run
-  in the order given, and `end=1` then scrolls the page, and the note open
+  in the order given, and `end=1` then scrolls the page, and what is open
   beside a list, to their end.
   `login=wrong` refuses a sign-in and `login=wait` makes it wait;
   `lapsed=1` ends the access to the page; `empty=1` starts with the
-  personal area alone, no token and no note; `many=1` adds older notes, so
-  a list holds more than it shows; `save=moved` refuses the first save of
+  personal area alone, no token, no note and no task; `many=1` adds older
+  notes, so a list holds more than it shows; `today=none` leaves out the
+  tasks Today would show; `save=moved` refuses the first save of
   each note's text, as if a client had saved the note meanwhile;
   `upload=wait` holds every upload, so it stays under way;
-  `modules=notes` switches the named modules on, so the Inbox, Notes and
-  Search find the fixed notes; `backup=old` makes the last backup three
-  days old and `backup=none` leaves none. What the page changes holds until
-  it reloads, and a change of a note reaches the event stream, as the
-  server's does.
+  `modules=tasks,notes` switches the named modules on, so Tasks finds the
+  fixed tasks, and the Inbox, Notes and Search the fixed notes;
+  `backup=old` makes the last backup three days old and `backup=none`
+  leaves none. What the page changes holds until it reloads, and a change
+  of a note or a task reaches the event stream, as the server's does.
 - Read the PNG and say what you see. Fix what looks wrong and shoot again.
 - Stop Vite by the pid you recorded, never by port or name.
 

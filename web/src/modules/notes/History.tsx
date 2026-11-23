@@ -5,7 +5,7 @@ import { clock } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { count, from, useRead, type Note, type Revision, type Version } from './api.ts'
 import { HistoryIcon } from './icons.tsx'
-import Section from './Section.tsx'
+import Section from '../../components/Section.tsx'
 
 // The note's revisions, the newest first, read again whenever the note moves on. fresh is the one a restore just wrote.
 export default function History({ note, fresh, onRead }: { note: Note; fresh?: number; onRead: (revision: number) => void }) {

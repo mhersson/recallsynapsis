@@ -10,20 +10,22 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, NOTES, OLDER, SECRET, SESSION, TOKENS, full, history, listNotes, listed, note, refs, searchNotes, tagsOf, version } from './fixtures.ts'
+import { AREAS, HEALTH, NOTES, NOW, OLDER, SECRET, SESSION, TASKS, TOKENS, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, tagsOf, version } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
-// What the page changes is kept until it reloads. empty=1 starts with the personal area alone, no token and no note,
-// many=1 adds older notes, so a list holds more than it shows, modules=a,b switches those modules on, and backup=old or
-// backup=none ages or drops the last backup.
+// What the page changes is kept until it reloads. empty=1 starts with the personal area alone, no token, no note and no
+// task, many=1 adds older notes, so a list holds more than it shows, today=none leaves out the tasks Today would show,
+// modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
 const empty = query.get('empty') === '1'
 const areas = empty ? AREAS.filter((a) => a.kind === 'personal') : AREAS
 const tokens = empty ? [] : TOKENS
 const notes = empty ? [] : query.get('many') === '1' ? [...NOTES, ...OLDER] : NOTES
+const today = query.get('today') === 'none' ? onToday(TASKS, NOW) : []
+const tasks = empty ? [] : TASKS.filter((t) => !today.includes(t.id))
 const backups: Record<string, string | null> = { old: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(), none: null }
 const session = {
   ...SESSION,
@@ -60,6 +62,10 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   const area = areas.find((a) => path === `/api/areas/${a.id}`)
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
+  if (path.startsWith('/api/tasks')) {
+    const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) => tell({ module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 }))
+    return json(answered, status)
+  }
   if (method !== 'GET') return json({ error: 'not found' }, 404)
   if (path === '/api/health') return json(HEALTH)
   if (path === '/api/session') return json(session)
@@ -218,7 +224,7 @@ export function Apply() {
 // click=TEXT clicks the first button, link or summary whose text, or label, starts with TEXT, type=TEXT types TEXT into
 // the field that has the focus, and choose=N chooses an image of N bytes in the file picker of the note being read.
 // Each waits until the page shows what it needs, and given more than once they run in order. end=1 then scrolls the
-// page, and the note open beside a list, to their end.
+// page, and what is open beside a list, to their end.
 function step(kind: string, text: string): boolean {
   if (kind === 'choose') {
     const picker = document.querySelector<HTMLInputElement>('.note-read input[type=file]')

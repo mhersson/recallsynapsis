@@ -3,7 +3,7 @@ import type { Session } from '../../api/types.ts'
 import { open } from '../../test-app.tsx'
 import { fakeServer, json, narrow } from '../../test-server.ts'
 
-// A stand-in module with two rows of More.
+// A stand-in module with two rows of More, and one with four tabs, which leave Projects no room among the tabs.
 vi.mock('../../modules/registry.ts', () => ({
   modules: [
     {
@@ -16,6 +16,13 @@ vi.mock('../../modules/registry.ts', () => ({
       ],
       routes: [],
     },
+    {
+      name: 'crowd',
+      nav: [],
+      tabs: ['/one', '/two', '/three', '/four'].map((to) => ({ to, label: to, icon: null })),
+      more: [],
+      routes: [],
+    },
   ],
 }))
 
@@ -24,6 +31,7 @@ afterEach(() => vi.unstubAllGlobals())
 test.each([
   [[], ['/search', '/settings']],
   [['things'], ['/ideas', '/trash', '/search', '/settings']],
+  [['things', 'crowd'], ['/ideas', '/trash', '/projects', '/search', '/settings']],
 ])('with the modules %j on, More lists %j, each with a second line', async (modules, rows) => {
   narrow(true)
   const session: Session = { user: { name: 'ada' }, modules, version: '1.2.3', timezone: 'UTC', last_backup: null }
