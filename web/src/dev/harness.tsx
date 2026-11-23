@@ -34,6 +34,63 @@ const session = {
   last_backup: (query.get('backup') ?? '') in backups ? backups[query.get('backup')!] : SESSION.last_backup,
 }
 
+// push=off, on, failed, home, refused or none makes this browser one with Web Push that is off, on, or on with its last
+// notification failed, an iPhone's Safari tab, one that refuses notifications, or one with no Web Push. Two other
+// browsers are on, but for push=off, which has none. The state is set on every load, as one profile serves many pages.
+const push = query.get('push')
+const browsers = !push || push === 'off' ? [] : ['on', 'failed'].includes(push) ? [1, 2, 3] : [2, 3]
+if (push) {
+  let subscribed = browsers.includes(1)
+  const subscription = {
+    endpoint: 'https://push.example/harness',
+    toJSON: () => ({ endpoint: 'https://push.example/harness', keys: { p256dh: 'P', auth: 'A' } }),
+    unsubscribe: async () => {
+      subscribed = false
+      return true
+    },
+  }
+  const subscribe = async () => {
+    subscribed = true
+    return subscription
+  }
+  const registration = { pushManager: { getSubscription: async () => (subscribed ? subscription : null), subscribe } }
+  const worker = { register: async () => registration, getRegistration: async () => registration, ready: Promise.resolve(registration) }
+  Object.defineProperty(navigator, 'serviceWorker', { value: worker, configurable: true })
+  const notification = { permission: push === 'refused' ? 'denied' : subscribed ? 'granted' : 'default', requestPermission: async () => (notification.permission = 'granted') }
+  Object.defineProperty(window, 'Notification', { value: notification, configurable: true })
+  if (push === 'home' || push === 'none') Reflect.deleteProperty(window, 'PushManager')
+  if (push === 'home') Object.defineProperty(navigator, 'standalone', { value: false, configurable: true })
+  if (subscribed) localStorage.setItem('push_browser', '1')
+  else localStorage.removeItem('push_browser')
+}
+
+// The push routes, telling the stream of every change of a browser. A browser turned on is 4, then 5 and so on.
+function answerPush(method: string, url: URL): Response {
+  const told = () => {
+    tell({ module: 'push', kind: 'browser', id: 0, area: 0 })
+    return new Response(null, { status: 204 })
+  }
+  if (url.pathname === '/api/push' && method === 'GET') {
+    const id = Number(url.searchParams.get('browser'))
+    const failed = push === 'failed' && id === 1 ? { failed_at: new Date(new Date().setHours(14, 0, 0, 0)).toISOString(), failure: 'web.push.apple.com was not reached' } : { failed_at: null, failure: '' }
+    return json({ key: 'BHarness-key_00', on: browsers.length, browser: browsers.includes(id) ? { id, ...failed } : null })
+  }
+  if (url.pathname === '/api/push' && method === 'PUT') {
+    const id = Math.max(3, ...browsers) + 1
+    browsers.push(id)
+    told()
+    return json({ id })
+  }
+  if (url.pathname === '/api/push' && method === 'DELETE') {
+    browsers.length = 0
+    return told()
+  }
+  const at = browsers.indexOf(Number(/^\/api\/push\/(\d+)$/.exec(url.pathname)?.[1]))
+  if (method !== 'DELETE' || at < 0) return json({ error: 'not found' }, 404)
+  browsers.splice(at, 1)
+  return told()
+}
+
 // login=wrong refuses every sign-in, and login=wait makes it wait 28 seconds.
 function answer(method: string, url: URL, body: Record<string, unknown>, file?: Blob): Response | Promise<Response> {
   const path = url.pathname
@@ -63,6 +120,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   const area = areas.find((a) => path === `/api/areas/${a.id}`)
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
+  if (path.startsWith('/api/push')) return answerPush(method, url)
   if (path.startsWith('/api/tasks')) {
     const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) =>
       tell(t ? { module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 } : { module: 'tasks', kind: 'trash', id: 0, area: 0 }),

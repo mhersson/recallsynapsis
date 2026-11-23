@@ -7,7 +7,7 @@ import PageHead from '../../components/PageHead.tsx'
 import { ago, since, when } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useSignOut } from '../../components/useSignOut.ts'
-import { useSession } from '../../session.ts'
+import { useModules, useSession } from '../../session.ts'
 import { useLook, type Look } from '../../theme/theme.ts'
 import Choice from './Choice.tsx'
 import Tokens, { type Made } from './Tokens.tsx'
@@ -47,6 +47,7 @@ function Backup({ at }: { at: string | null }) {
 export default function Settings() {
   const narrow = useNarrow()
   const session = useSession()
+  const on = useModules()
   const [look, setLook] = useLook()
   const signOut = useSignOut()
   // Held above the two layouts, so a phone turned across the width of a desktop keeps the one showing of a token.
@@ -60,6 +61,7 @@ export default function Settings() {
   const parts = [
     { id: 'tokens', title: 'Tokens', body: <Tokens made={made} setMade={setMade} /> },
     { id: 'backups', title: 'Backups', body: <Backup at={backup} /> },
+    ...on.flatMap((m) => m.settings ?? []),
     {
       id: 'browser',
       title: 'This browser',

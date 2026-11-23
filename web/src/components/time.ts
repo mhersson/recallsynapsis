@@ -19,6 +19,9 @@ export function clock(iso: string): string {
   return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hm(d)
 }
 
+// A moment as a line names it in passing: today and the time, or the day and the time.
+export const moment = (iso: string) => (today(new Date(iso)) ? 'today ' : '') + clock(iso)
+
 // The day of the month and the month, as a list of things made shows when each was made.
 export const day = (iso: string) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' })
 

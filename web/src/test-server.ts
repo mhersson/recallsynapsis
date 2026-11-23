@@ -1,4 +1,4 @@
-// Fakes of what a page talks to, fetch and EventSource, and of the window's width.
+// Fakes of what a page talks to, fetch and EventSource, of the window's width and of the browser's push.
 export class FakeEventSource {
   static CONNECTING = 0
   static OPEN = 1
@@ -82,4 +82,63 @@ export function narrow(matches: boolean) {
     matches = next
     listeners.forEach((l) => l())
   }
+}
+
+type PushOptions = {
+  supported?: boolean
+  secure?: boolean
+  standalone?: boolean
+  permission?: NotificationPermission
+  answer?: NotificationPermission
+  subscribed?: boolean
+}
+
+// A browser with Web Push, or with none (supported: false), whose worker is registered once it is asked to be or while
+// it holds a subscription; answer is what the person answers when asked for the permission. Returns what a test inspects.
+export function fakePush({ supported = true, secure = true, standalone, permission = 'default', answer = 'granted', subscribed = false }: PushOptions = {}) {
+  vi.stubGlobal('isSecureContext', secure)
+  Reflect.deleteProperty(navigator, 'serviceWorker')
+  Reflect.deleteProperty(navigator, 'standalone')
+  if (standalone !== undefined) Object.defineProperty(navigator, 'standalone', { value: standalone, configurable: true })
+  const unsubscribe = vi.fn(() => {
+    current = null
+    return Promise.resolve(true)
+  })
+  const subscription = {
+    endpoint: 'https://push.example/s1',
+    toJSON: () => ({ endpoint: 'https://push.example/s1', expirationTime: null, keys: { p256dh: 'P', auth: 'A', extra: 'X' } }),
+    unsubscribe,
+  }
+  let current: typeof subscription | null = subscribed ? subscription : null
+  const subscribe = vi.fn((_: PushSubscriptionOptionsInit) => {
+    current = subscription
+    return Promise.resolve(subscription)
+  })
+  const registration = { pushManager: { getSubscription: () => Promise.resolve(current), subscribe } }
+  let registered = subscribed
+  const register = vi.fn((_: string) => {
+    registered = true
+    return Promise.resolve(registration)
+  })
+  const notification = {
+    permission,
+    requestPermission: vi.fn(() => {
+      notification.permission = answer
+      return Promise.resolve(answer)
+    }),
+  }
+  if (supported) {
+    const worker = {
+      register,
+      // As a browser's, ready never settles before a worker is registered.
+      get ready() {
+        return registered ? Promise.resolve(registration) : new Promise(() => {})
+      },
+      getRegistration: () => Promise.resolve(registered ? registration : undefined),
+    }
+    Object.defineProperty(navigator, 'serviceWorker', { value: worker, configurable: true })
+    vi.stubGlobal('PushManager', class {})
+    vi.stubGlobal('Notification', notification)
+  }
+  return { register, subscribe, unsubscribe, requestPermission: notification.requestPermission, subscribed: () => current !== null }
 }

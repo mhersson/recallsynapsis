@@ -268,10 +268,10 @@ hostname.
 With `[modules.push]` on ([configuration.md](configuration.md#recallsynapsistoml)),
 the server sends notifications to the owner's browsers as Web Push, with
 `public_url`, which must be `https`, as its contact. They are turned on in each
-browser, for that browser, with the session cookie alone: no API token turns a
-browser on or off. On an iPhone or iPad only the app added to the Home Screen
-can turn them on, since a Safari tab there has no Web Push. A message goes to
-every browser that has them on.
+browser, for that browser, in Settings under Notifications, with the session
+cookie alone: no API token turns a browser on or off. On an iPhone or iPad only
+the app added to the Home Screen can turn them on, since a Safari tab there has
+no Web Push. A message goes to every browser that has them on.
 
 The server must be able to reach, on port 443, the push service of each
 browser in use, which the browser names as it turns notifications on:
