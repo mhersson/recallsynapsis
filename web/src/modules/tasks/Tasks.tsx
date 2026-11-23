@@ -1,12 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import { nameOf, useAreas } from '../../api/areas.ts'
-import { AddIcon, TrashIcon } from '../../components/icons.tsx'
+import { TrashIcon } from '../../components/icons.tsx'
 import ListEnd from '../../components/ListEnd.tsx'
 import PageHead from '../../components/PageHead.tsx'
 import { back, useClose } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
+import AddLine from './AddLine.tsx'
 import { useMore, useOpen, useTask, type Fields, type Now, type Row, type Task } from './api.ts'
 import { add, clock, day, week } from './dates.ts'
 import { line, project } from './line.tsx'
@@ -249,8 +250,7 @@ export default function Tasks() {
             {view !== 'week' && view !== 'done' && (
               <AddLine
                 key={view}
-                view={view}
-                area={area && nameOf(areas, area)}
+                placeholder={`Add a task ${view === 'today' ? 'for today' : `to ${views.find(([v]) => v === view)![1]}`}${area && `, in ${nameOf(areas, area)}`}`}
                 fields={{ ...(view === 'today' ? { planned_from: now.date } : { list: view }), ...(area && { area }) }}
                 onAdded={(t) => {
                   took(t)
@@ -271,42 +271,5 @@ export default function Tasks() {
         {id && <div className={narrow ? undefined : 'box'}>{task}</div>}
       </div>
     </div>
-  )
-}
-
-// The line that adds a task where one stands, given what that puts on it: planned for today, on the list, in the area.
-function AddLine({ view, area, fields, onAdded }: { view: View; area: string; fields: Fields; onAdded: (t: Row) => void }) {
-  const [title, setTitle] = useState('')
-  const [sending, setSending] = useState(false)
-  const [refused, setRefused] = useState('')
-  async function add(e: FormEvent) {
-    e.preventDefault()
-    setRefused('')
-    setSending(true)
-    try {
-      const r = await api<{ tasks: Row[] }>('POST', '/tasks', { tasks: [{ title: title.trim(), ...fields }] })
-      setTitle('')
-      onAdded(r.tasks[0])
-    } catch (err) {
-      setRefused(message(err))
-    }
-    setSending(false)
-  }
-  const where = view === 'today' ? 'for today' : `to ${views.find(([v]) => v === view)![1]}`
-  return (
-    <form className="addl" onSubmit={(e) => void add(e)}>
-      <label className="addl-field">
-        <AddIcon />
-        <input aria-label="New task" placeholder={`Add a task ${where}${area && `, in ${area}`}`} autoComplete="off" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </label>
-      <button className="btn" disabled={sending || !title.trim()}>
-        Add
-      </button>
-      {refused && (
-        <p role="alert" className="err">
-          {refused}
-        </p>
-      )}
-    </form>
   )
 }

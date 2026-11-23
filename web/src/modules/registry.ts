@@ -29,8 +29,9 @@ export type Module = {
   // Rows of More, with a second line each. Their pages keep the More tab current.
   more: (Entry & { note: string })[]
   routes: { path: string; element: ReactNode }[]
-  // What it holds in an area, shown on that area's page.
-  section?: ComponentType<{ area: Area }>
+  // What it holds in an area, shown on that area's page beside the other modules' on desktop; first when it comes first
+  // there, so on a phone it opens.
+  section?: ComponentType<{ area: Area; first: boolean }>
   // An item of the module, given its reference, kind and state, as a hit or a link names it.
   item?: (ref: string, kind: string, state: string) => Item
 }

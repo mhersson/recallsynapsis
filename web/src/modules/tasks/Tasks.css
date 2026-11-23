@@ -196,6 +196,12 @@
   color: var(--red);
 }
 
+/* What a project's tasks end with. */
+.area-tasks .afoot {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
 /* On desktop the task beside the list stays in view as the list scrolls, and scrolls within itself when it is taller. */
 .tasks .panes > .box {
   position: sticky;

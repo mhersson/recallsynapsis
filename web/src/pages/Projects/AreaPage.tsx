@@ -63,15 +63,19 @@ function View({ id }: { id: number }) {
       )}
     </>
   )
+  const parts = modules.filter((m) => m.section)
   const holds =
     names.length === 0 ? (
       <div className="empty">No module is switched on, so {area.kind === 'personal' ? 'the personal area' : 'this project'} holds nothing yet.</div>
     ) : (
-      modules.map((m) => m.section && <m.section key={m.name} area={area} />)
+      <div className="area-parts">
+        {parts.map((m, i) => m.section && <m.section key={m.name} area={area} first={i === 0} />)}
+      </div>
     )
 
+  // The sections of more than one module take the page's whole width.
   return (
-    <div className="page narrow">
+    <div className={parts.length > 1 ? 'page' : 'page narrow'}>
       {narrow && (
         <div className="crumb">
           <Link to="/projects">Projects</Link> /

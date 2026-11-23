@@ -48,12 +48,12 @@ function holds(g: Group, t: Row, today: string, end: string) {
   }
 }
 
-// The groups of a view, each with its tasks in the order given; a task is in the first group it belongs to, or in none.
-export function sortInto(view: View, tasks: Row[], now: Now): [Group, Row[]][] {
+// The groups of a view, or of every view with all, each with its tasks in the order given; a task is in the first group
+// it belongs to, or in none.
+export function sortInto(view: View | 'all', tasks: Row[], now: Now): [Group, Row[]][] {
   const end = week(now)[1]
   const placed = new Set<number>()
-  return views
-    .find(([v]) => v === view)![2]
+  return (view === 'all' ? views.flatMap(([, , gs]) => gs) : views.find(([v]) => v === view)![2])
     .map((g) => {
       const held = tasks.filter((t) => !placed.has(t.id) && holds(g, t, now.date, end))
       held.forEach((t) => placed.add(t.id))
