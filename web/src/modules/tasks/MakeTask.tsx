@@ -4,7 +4,7 @@ import Field from '../../components/Field.tsx'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useItem } from '../../session.ts'
 import type { Maker } from '../registry.ts'
-import { make, split, useNow, type Fields } from './api.ts'
+import { made, make, split, useNow, type Fields } from './api.ts'
 import { AreaField, PlanFields, type Plan } from './fields.tsx'
 
 type Props = ComponentProps<Maker['form']>
@@ -30,8 +30,7 @@ export default function MakeTask({ of, text, area, areas, onEntered, onClose }: 
     setRefused('')
     setSending(true)
     try {
-      const t = await make({ ...(Object.fromEntries(Object.entries(draft).filter(([, v]) => v)) as Fields), title: draft.title.trim(), links: [of.ref] })
-      onClose({ ref: t.ref, kind: 'task', state: t.state, title: t.title })
+      onClose(made(await make({ ...(Object.fromEntries(Object.entries(draft).filter(([, v]) => v)) as Fields), title: draft.title.trim(), links: [of.ref] })))
     } catch (e) {
       setRefused(message(e))
       setSending(false)

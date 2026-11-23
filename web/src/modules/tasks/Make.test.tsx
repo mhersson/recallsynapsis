@@ -4,7 +4,7 @@ import { answerTasks, full, note } from '../../dev/fixtures.ts'
 import { open } from '../../test-app.tsx'
 import { json, narrow, type Call } from '../../test-server.ts'
 import type { Note } from '../notes/api.ts'
-import { notesServer } from '../notes/test-notes.ts'
+import { capture, notesServer } from '../notes/test-notes.ts'
 import type { Task } from './api.ts'
 import { monday } from './test-tasks.ts'
 
@@ -20,6 +20,8 @@ const notesField = () => document.querySelector<HTMLTextAreaElement>('.task-make
 const writes = (calls: Call[]) => calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path, c.body])
 const linkedFrom = () => [...main().querySelectorAll<HTMLElement>('.sect .lrow')].filter((r) => !r.querySelector('button'))
 const put = (input: HTMLElement, value: string) => fireEvent.change(input, { target: { value } })
+const filing = () => within(main().querySelector<HTMLElement>('.filing')!)
+const captures = () => main().querySelectorAll('.pick, .strip')
 
 // A server with the modules given on that keeps the notes and the tasks, resolves the links of each among both, trashes a
 // note, and answers the tasks routes as the server does, on a Monday; answer, when given, answers first.
@@ -201,4 +203,40 @@ test('on a phone Make a task is the note’s page, Save above Cancel; leaving it
   expect(writes(calls)).toEqual([['POST', '/api/tasks', { tasks: [{ title: 'Shelves', notes: 'by hand', area: 'garden', links: ['notes:7'] }] }]])
   await waitFor(() => expect(tools()).toHaveLength(3))
   expect(where()).toBe('/notes/7')
+})
+
+test.each([
+  [['notes'], 2],
+  [['notes', 'tasks'], 3],
+])('with %j on, the Inbox’s filing box offers %i buttons', async (modules, n) => {
+  narrow(false)
+  server([capture(1, 5)], [], undefined, modules)
+  await open('/inbox')
+  await waitFor(() => expect(filing().getAllByRole('button')).toHaveLength(n))
+})
+
+test('Make a task in the Inbox sends the capture’s text, the area chosen and what the owner said, then trashes the capture, which leaves the list', async () => {
+  narrow(false)
+  const tasks: Task[] = []
+  const calls = server([capture(1, 30), capture(2, 5, { title: 'Ring the plumber', body: 'about the leak', said: 'remind me to ring the plumber' })], tasks)
+  await open('/inbox')
+  await userEvent.click(await waitFor(() => within(filing().getAllByRole('radiogroup')[0]).getAllByRole('radio')[1]))
+  await userEvent.click(filing().getAllByRole('button')[1])
+  expect(writes(calls)).toEqual([
+    ['POST', '/api/tasks', { tasks: [{ title: 'Ring the plumber', notes: 'about the leak', area: 'garden' }], said: 'remind me to ring the plumber' }],
+    ['POST', '/api/notes/2/trash', undefined],
+  ])
+  await waitFor(() => expect(captures()).toHaveLength(1))
+  expect(within(main().querySelector<HTMLElement>('.notice')!).getByRole('link')).toHaveAttribute('href', `/tasks/${tasks[0].id}`)
+})
+
+test('on a phone a task the server refuses leaves the capture where it was, and says why', async () => {
+  narrow(true)
+  const calls = server([capture(1, 5)], [], (c) => (c.method === 'POST' && c.path === '/api/tasks' ? json({ error: 'refused' }, 400) : undefined))
+  await open('/inbox')
+  await userEvent.click(await waitFor(() => filing().getAllByRole('button')[1]))
+  expect(await filing().findByRole('alert')).toBeInTheDocument()
+  expect(writes(calls)).toEqual([['POST', '/api/tasks', { tasks: [{ title: 'capture 1', area: 'personal' }] }]])
+  expect(captures()).toHaveLength(1)
+  expect(main().querySelector('.notice')).toBeNull()
 })

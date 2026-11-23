@@ -6,13 +6,17 @@ import { Markdown } from '../../components/Markdown.tsx'
 import Seg from '../../components/Seg.tsx'
 import { ago } from '../../components/time.ts'
 import { back } from '../../components/useClose.ts'
+import { useModules } from '../../session.ts'
+import type { Maker, Named } from '../registry.ts'
 import { from, kinds, type Kind, type Note } from './api.ts'
 import TagField from './TagField.tsx'
 
-type Props = { note: Note; areas: Area[]; narrow: boolean; onDone: () => void }
+type Props = { note: Note; areas: Area[]; narrow: boolean; onDone: () => void; onMade: (made: Named) => void }
 
-// Files a capture where it stands. Read again at a new revision, it shows as it now is but for what was chosen here.
-export default function Filing({ note, areas, narrow, onDone }: Props) {
+// Files a capture where it stands, or makes another module's item of it in the area chosen, with what the owner said on
+// it, and trashes it. Read again at a new revision, it shows as it now is but for what was chosen here.
+export default function Filing({ note, areas, narrow, onDone, onMade }: Props) {
+  const makers = useModules().flatMap((m) => (m.make ? [m.make] : []))
   const [chosen, setChosen] = useState<{ area?: string; kind?: Kind; tags?: string[] }>({})
   const { area = note.area, kind = note.kind, tags = note.tags } = chosen
   const choose = (c: typeof chosen) => setChosen({ ...chosen, ...c })
@@ -29,6 +33,21 @@ export default function Filing({ note, areas, narrow, onDone }: Props) {
       setSending(false)
     }
     // Read again after a refusal too, so a capture that has moved on shows as it now is.
+    onDone()
+  }
+
+  // The capture goes to the trash only once what is made of it is made, so a refusal leaves it as it was; what is made is
+  // told of at once, so a capture that then stays is not made again unawares.
+  async function make(m: Maker) {
+    setRefused('')
+    setSending(true)
+    try {
+      onMade(await m.atOnce(note.title ? `${note.title}\n${note.body}` : note.body, area, note.said))
+      await api('POST', `/notes/${note.id}/trash`)
+    } catch (e) {
+      setRefused(message(e))
+      setSending(false)
+    }
     onDone()
   }
 
@@ -62,6 +81,11 @@ export default function Filing({ note, areas, narrow, onDone }: Props) {
         <button className="btn primary" disabled={sending} onClick={() => void send('PATCH', `/notes/${note.id}`, { revision: note.revision, area, kind, tags, inbox: false })}>
           File
         </button>
+        {makers.map((m) => (
+          <button key={m.label} className="btn" disabled={sending} onClick={() => void make(m)}>
+            {m.label}
+          </button>
+        ))}
         {!narrow && (
           <>
             <Link className="btn" to={`/notes/${note.id}`} state={back}>
@@ -74,6 +98,11 @@ export default function Filing({ note, areas, narrow, onDone }: Props) {
           Trash
         </button>
       </div>
+      {makers.map((m) => (
+        <p key={m.label} className="note">
+          {m.label} takes the text and the area, and moves the capture to the trash. Kind and tags are for filing.
+        </p>
+      ))}
     </div>
   )
 }

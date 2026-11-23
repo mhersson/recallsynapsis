@@ -1,5 +1,5 @@
 import type { Entry, Module } from '../registry.ts'
-import { make, ring, split, type State } from './api.ts'
+import { made, make, ring, split, type State } from './api.ts'
 import AreaTasks from './AreaTasks.tsx'
 import MakeTask from './MakeTask.tsx'
 import { TasksIcon, Unsorted } from './nav.tsx'
@@ -21,7 +21,7 @@ export const tasks: Module = {
     { path: '/tasks/trashed/:id?', element: <Trashed /> },
   ],
   section: AreaTasks,
-  make: { label: 'Make a task', form: MakeTask },
+  make: { label: 'Make a task', form: MakeTask, atOnce: (text, area, said) => make({ ...split(text), area }, said).then(made) },
   // A reference is tasks:ID. The ring tells an open task, so only done and to sort are said.
   item: (ref, _kind, state) => ({
     to: `/tasks/${ref.slice('tasks:'.length)}`,

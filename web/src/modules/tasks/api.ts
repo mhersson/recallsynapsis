@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ApiError, api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 import type { Linked } from '../../api/types.ts'
+import type { Named } from '../registry.ts'
 
 // A task's state: done, or unsorted while it is open with no list, no plan and no deadline, or else open.
 export type State = 'open' | 'unsorted' | 'done'
@@ -61,6 +62,9 @@ export function useNow() {
   }, [])
   return now
 }
+
+// A task as a link names it.
+export const made = (t: Row): Named => ({ ref: t.ref, kind: 'task', state: t.state, title: t.title })
 
 // A text as a task takes it: its first line the title, and what follows the notes.
 export function split(text: string): { title: string; notes?: string } {
