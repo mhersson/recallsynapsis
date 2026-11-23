@@ -250,17 +250,17 @@ Every package states its one responsibility in its package comment, and
   at a character boundary to fit, and posted with a token signed with the
   server's key (RFC 8292) that names `public_url` as the contact, at high
   urgency, to wait until the day ends in the configured `timezone`, with its
-  tag as the topic. The client waits at most 30 seconds and follows no redirect. A push
-  service answering 404 or 410 means the browser is gone, and it is forgotten;
-  any other failure is logged and kept on the browser's row as one line that
-  names the push service's host and never the address, which is a capability,
-  until a message goes through. The key is one P-256 key, made the first time
-  it is needed and kept in the database. Its routes, all for the session
-  cookie alone, give the public key, the count of the caller's browsers and
-  one of them by its id, register a browser by its address, unique, which
+  tag as the topic. The client waits at most 30 seconds and follows no redirect.
+  A push service answering 404 or 410 means the browser is gone, and it is
+  forgotten; any other failure is logged and kept on the browser's row as one
+  line that names the push service's host and never the address, which is a
+  capability, until a message goes through. The key is one P-256 key, made the
+  first time it is needed and kept in the database. Its routes, all for the
+  session cookie alone, give the public key, the count of the caller's browsers
+  and one of them by its id, register a browser by its address, unique, which
   makes it the caller's, and turn one or all of the caller's off, each change
-  told to the caller's open streams. It owns the tables `push_subscriptions`
-  and `push_key`.
+  told to the caller's open streams. It owns the tables `push_subscriptions` and
+  `push_key`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. Beside it is what the modules' searches
@@ -301,8 +301,24 @@ Every package states its one responsibility in its package comment, and
   does not cap. A call of `create_tasks` or `update_task` that sets a date is
   refused, and saves nothing, unless its `today` is the date in the configured
   `timezone`, with a line that gives that date, its weekday, the time zone and
-  `week_start`; REST takes no `today`. It owns the tables `tasks`,
-  `task_changes`, `task_links` and `tasks_fts`.
+  `week_start`; REST takes no `today`. Its job, every 30 seconds, keeps the
+  moment it has notified up to and hands `Deps.Notify`, for the user each task
+  is of, what came due after that moment and not after now on today's date in
+  the configured `timezone`, of the open tasks outside the trash: at a task's
+  start time on the first day of its plan, its title over its time and its
+  area's name, but the personal area's; at the morning hour, as the Today page
+  sorts them, how many are today's, left from earlier and overdue, and their
+  titles, those that start at a time today first, by time; at the deadline hour,
+  the tasks due tomorrow, and at the planned-today hour, those planned for today
+  with no start time today, each kind as one message that opens the task when it
+  names one alone. A run after the server was down sends what it missed of
+  today, and nothing of a day before, the very first sends nothing, and one the
+  stop cuts short keeps no moment. A user's four kinds, start time and morning
+  on, at 07:00, and deadline and planned today off, at 18:00 and 09:00, until
+  the user changes one, are read and changed at `/api/tasks/notify` with the
+  session cookie alone, each change told to the user's open streams. It owns the
+  tables `tasks`, `task_changes`, `task_links`, `tasks_fts`, `task_notify` and
+  `task_notified`.
 - `internal/testkit`: `fake`, a feature module as small as the tests of what
   serves modules need: a table, a route and a write tool that add to it and
   tell of what they add, a search of it, and a job that fails on every tick.

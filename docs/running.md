@@ -273,6 +273,31 @@ cookie alone: no API token turns a browser on or off. On an iPhone or iPad only
 the app added to the Home Screen can turn them on, since a Safari tab there has
 no Web Push. A message goes to every browser that has them on.
 
+Tasks sends four kinds of notification, each to the user whose open tasks,
+outside the trash, it names:
+
+- at a task's start time, on the first day of its plan, its title over its
+  time and its area, but the personal one;
+- at a morning hour, what the day holds: how many tasks are today's, left
+  from earlier and overdue, and their titles;
+- at a deadline hour, the tasks due tomorrow;
+- at a planned-today hour, the tasks planned for today with no start time
+  today.
+
+A kind with no task to name sends nothing. Its hour is read in `timezone`. At
+first the start time and the morning, at 07:00, are on, and the deadline, at
+18:00, and the planned today, at 09:00, are off. Each kind is switched on or
+off, and its hour set, for every browser of the user at once, with the session
+cookie alone: `GET /api/tasks/notify` reads the four and their hours, and
+`PATCH /api/tasks/notify` changes those it is given.
+
+The server looks every 30 seconds and keeps the moment it has notified up to,
+so each notification is sent once. One whose time passed while the server was
+down is sent late as it starts again, if it is still the same day in
+`timezone`, and else never. One whose time passed while push was off is not
+sent when push is switched on. A server stopped while it sends may send that
+notification again as it starts, and the second replaces the first.
+
 The server must be able to reach, on port 443, the push service of each
 browser in use, which the browser names as it turns notifications on:
 `web.push.apple.com` for Safari, `updates.push.services.mozilla.com` for

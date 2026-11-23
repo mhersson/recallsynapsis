@@ -58,7 +58,11 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
 - Push sends a module's notifications as Web Push to every browser of the
   owner's in which they are turned on, encrypted for each browser, and a
   browser is turned on or off in Settings, under Notifications, with the
-  session cookie alone. No module of this build sends one.
+  session cookie alone. Tasks sends four kinds, of the open tasks: a reminder
+  at a task's start time, and what the day holds at a morning hour, both on at
+  first; and, once switched on, the tasks due tomorrow and those planned for
+  today with no start time today, each at its own hour. Each kind is switched,
+  and its hour set, with the session cookie alone.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and Tasks the tasks, done or
