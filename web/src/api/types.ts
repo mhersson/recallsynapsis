@@ -11,6 +11,9 @@ export type Area = { id: number; kind: 'personal' | 'project'; name: string; slu
 // that know areas by slug, and its state, such as an unsorted capture's.
 export type Hit = { ref: string; kind: string; title: string; snippet: string; area: string; state: string; changed_at: string }
 
+// What a link names, as the core resolves it: an item of a module switched on, unavailable once it is gone.
+export type Linked = { ref: string; kind: string; state: string; title: string; available: boolean }
+
 // The hits of one module, ranked.
 export type Group = { module: string; hits: Hit[] }
 

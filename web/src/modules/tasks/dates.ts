@@ -51,10 +51,15 @@ export function shortcuts(now: Now): [string, string, string][] {
   ]
 }
 
-// An instant on the server's clock: today and the time, or the day and the time.
-export function stamp(iso: string, now: Now) {
+// An instant on the server's clock, as its date and its time.
+export function clock(iso: string, now: Now): [string, string] {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: now.timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso))
   const p = Object.fromEntries(parts.map((x) => [x.type, x.value]))
-  const date = `${p.year}-${p.month}-${p.day}`
-  return `${date === now.date ? 'today' : day(date)} ${p.hour}:${p.minute}`
+  return [`${p.year}-${p.month}-${p.day}`, `${p.hour}:${p.minute}`]
+}
+
+// An instant on the server's clock: today and the time, or the day and the time.
+export function stamp(iso: string, now: Now) {
+  const [date, time] = clock(iso, now)
+  return `${date === now.date ? 'today' : day(date)} ${time}`
 }

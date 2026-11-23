@@ -1,12 +1,13 @@
 import type { Area } from '../../api/types.ts'
+import ListEnd from '../../components/ListEnd.tsx'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useList, type List } from './api.ts'
-import { ListEnd, Rows } from './Rows.tsx'
+import { Rows } from './Rows.tsx'
 import './Notes.css'
 
-// An area's filed notes and ideas, side by side on desktop and folded on a phone, the notes open. Each opens beside
-// the list in Notes or the idea bank that holds the same, filtered to the area.
-export default function AreaNotes({ area }: { area: Area }) {
+// An area's filed notes and ideas, side by side on desktop and folded on a phone, the notes open when they come first.
+// Each opens beside the list in Notes or the idea bank that holds the same, filtered to the area.
+export default function AreaNotes({ area, first }: { area: Area; first: boolean }) {
   const narrow = useNarrow()
   const ask = (kind: string) => new URLSearchParams({ inbox: 'false', area: area.slug, kind }).toString()
   const notes = useList(ask('note'))
@@ -29,11 +30,11 @@ export default function AreaNotes({ area }: { area: Area }) {
     const body = list.notes.length > 0 && (
       <>
         <Rows notes={list.notes} areas={[area]} to={(r) => to(r.id)} />
-        <ListEnd list={list} more={more} />
+        <ListEnd shown={list.notes.length} total={list.total} what="changed" more={more} />
       </>
     )
     return narrow ? (
-      <details open={title === 'Notes'}>
+      <details open={first && title === 'Notes'}>
         <summary>{head}</summary>
         {body}
       </details>

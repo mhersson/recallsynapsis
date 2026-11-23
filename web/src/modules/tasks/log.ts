@@ -1,5 +1,6 @@
+import { nameOf } from '../../api/areas.ts'
 import type { Area } from '../../api/types.ts'
-import { nameOf, type Entry } from './api.ts'
+import type { Entry } from './api.ts'
 import { day, period } from './dates.ts'
 
 const lists: Record<string, string> = { soon: 'Soon', someday: 'Someday' }

@@ -34,12 +34,21 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   what waits to be sorted. Its views sort the open tasks by the server's today:
   Today holds what waits to be sorted, what was left from earlier, what is
   overdue and what today holds; Week the rest of the week and what lies beyond
-  it; Soon and Someday their lists. A task is added where one stands, and opens
+  it; Soon and Someday their lists. Done lists what was done, the newest
+  first, by the day it was done. A task is added where one stands, and opens
   beside the list, or as a page on a phone, where it is read first and edited in
   one form that saves nothing before Save: its title, notes, plan, with
   shortcuts for today, tomorrow, the weekend and next week, deadline, list and
-  area. Its ring, on its row or its page, marks it done at once, and its log
-  tells each change, with what the owner said.
+  area. Its ring, on its row or its page, marks it done at once, its Trash moves
+  it to the trash at once, a link is added or removed at once on its page, which
+  shows what it links to and what links to it, and its log tells each change,
+  with what the owner said. Trashed, at the head of Tasks, lists the trash, the
+  most recently trashed first, where a task is read only, restored, and deleted
+  for good, one or all at once. An area's page shows its open tasks first,
+  grouped as the views group them, under a line that adds one to it unless it is
+  archived, beside its notes and ideas, and leads to what was done in it. Search
+  lists the tasks' hits before the notes', and a task found there or linked from
+  a note shows its ring and leads to its page.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and Tasks the tasks, done or

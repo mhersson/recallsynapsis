@@ -8,7 +8,7 @@ import { SearchIcon } from '../../components/icons.tsx'
 import { ago } from '../../components/time.ts'
 import { back } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { useItem, useSession } from '../../session.ts'
+import { useItem, useRanked, useSession } from '../../session.ts'
 import './Search.css'
 
 // What a search answered, with the question it answered, which the page names while a newer one is typed.
@@ -19,6 +19,7 @@ export default function Search() {
   const narrow = useNarrow()
   const none = useSession().modules.length === 0
   const item = useItem()
+  const ranked = useRanked()
   const [params, setParams] = useSearchParams()
   const [q, setQ] = useState(params.get('q') ?? '')
   // Spaces around the words would be searched for as part of them.
@@ -84,7 +85,7 @@ export default function Search() {
       <div className="empty">Nothing matches “{result.q}”.</div>
     )
   else
-    body = result?.groups.map((g) => (
+    body = result && ranked(result.groups).map((g) => (
       <section key={g.module}>
         <h2 className="ghd hits-head">{g.module}</h2>
         <div className="list">

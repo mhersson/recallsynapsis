@@ -52,7 +52,7 @@ test('each view shows the open tasks its question gives by the server’s today,
   // What was left keeps the dates it had, and a deadline passed is in the danger look.
   expect(rowOf('last weekend').querySelector('.t2')).toHaveTextContent('Sat-Sun 21-22 Nov')
   expect(rowOf('overdue').querySelector('.late')).not.toBeNull()
-  expect(counts()).toEqual(['4', '1', '1', '1'])
+  expect(counts()).toEqual(['4', '1', '1', '1', ''])
 
   await userEvent.click(viewLinks()[1])
   await waitFor(() => expect(where()).toBe('/tasks?view=week'))
@@ -79,9 +79,9 @@ test('the area chosen narrows every view and count and is kept in the address wi
   const area = within(page()).getByRole('combobox')
   await userEvent.selectOptions(area, 'garden')
   await waitFor(() => expect(view.where()).toBe('/tasks?view=week&area=garden'))
-  expect(counts()).toEqual(['', '1', '', ''])
+  expect(counts()).toEqual(['', '1', '', '', ''])
   await userEvent.selectOptions(area, '')
-  await waitFor(() => expect(counts()).toEqual(['4', '1', '1', '1']))
+  await waitFor(() => expect(counts()).toEqual(['4', '1', '1', '1', '']))
   view.unmount()
 
   const calls = tasksServer(week())
@@ -201,6 +201,20 @@ test('a task marked done stays in place, struck through, until the view is left,
   expect(counts()[0]).toBe('3')
 })
 
+test('a row marked done and opened again shows a change saved on its page since', async () => {
+  narrow(false)
+  tasksServer(week())
+  await open('/tasks/4')
+  await userEvent.click(ringOf('today'))
+  await waitFor(() => expect(ringOf('today')).toHaveAttribute('aria-pressed', 'true'))
+  await userEvent.click(ringOf('today'))
+  await waitFor(() => expect(ringOf('today')).toHaveAttribute('aria-pressed', 'false'))
+  await userEvent.click(await waitFor(editButton))
+  await userEvent.type(within(taskView().querySelector<HTMLElement>('.task-head')!).getByRole('textbox'), ' again')
+  await userEvent.click(form().save)
+  await waitFor(() => expect(rowOf('today again')).toBeDefined())
+})
+
 test('two tasks marked done before either answer lands both stay struck through in place', async () => {
   narrow(true)
   const tasks = week()
@@ -235,6 +249,14 @@ test('a change made elsewhere shows without a reload, and a refusal shows the se
   expect(await within(page()).findByRole('alert')).toHaveTextContent('the line the server gave')
   expect(ringOf('soon')).toHaveAttribute('aria-pressed', 'false')
   expect(reads(calls)).toBe(2)
+})
+
+test('a list that cannot be read says why, though the task open beside it is read', async () => {
+  narrow(false)
+  tasksServer(week(), monday, (c) => (c.path.startsWith('/api/tasks?limit=') ? json({ error: 'down' }, 502) : undefined))
+  await open('/tasks/4')
+  await waitFor(editButton)
+  expect(await within(page()).findByRole('alert')).toBeInTheDocument()
 })
 
 test('with no task at all a view says so, and with nothing for today Today offers Soon', async () => {

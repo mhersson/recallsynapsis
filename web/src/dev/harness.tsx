@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, NOTES, NOW, OLDER, SECRET, SESSION, TASKS, TOKENS, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, tagsOf, version } from './fixtures.ts'
+import { AREAS, DONE, HEALTH, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -18,14 +18,15 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
 // What the page changes is kept until it reloads. empty=1 starts with the personal area alone, no token, no note and no
-// task, many=1 adds older notes, so a list holds more than it shows, today=none leaves out the tasks Today would show,
-// modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
+// task, many=1 adds older notes and done tasks, so a list holds more than it shows, today=none leaves out the tasks Today
+// would show, modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
 const empty = query.get('empty') === '1'
 const areas = empty ? AREAS.filter((a) => a.kind === 'personal') : AREAS
 const tokens = empty ? [] : TOKENS
-const notes = empty ? [] : query.get('many') === '1' ? [...NOTES, ...OLDER] : NOTES
+const many = query.get('many') === '1'
+const notes = empty ? [] : many ? [...NOTES, ...OLDER] : NOTES
 const today = query.get('today') === 'none' ? onToday(TASKS, NOW) : []
-const tasks = empty ? [] : TASKS.filter((t) => !today.includes(t.id))
+const tasks = empty ? [] : [...TASKS.filter((t) => !today.includes(t.id)), ...DONE, ...(many ? OLDER_DONE : []), ...TRASHED]
 const backups: Record<string, string | null> = { old: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(), none: null }
 const session = {
   ...SESSION,
@@ -63,16 +64,24 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   if (method === 'PATCH' && area) return json(Object.assign(area, body))
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
   if (path.startsWith('/api/tasks')) {
-    const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) => tell({ module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 }))
-    return json(answered, status)
+    const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) =>
+      tell(t ? { module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 } : { module: 'tasks', kind: 'trash', id: 0, area: 0 }),
+      notes,
+    )
+    return status === 204 ? new Response(null, { status }) : json(answered, status)
   }
   if (method !== 'GET') return json({ error: 'not found' }, 404)
   if (path === '/api/health') return json(HEALTH)
   if (path === '/api/session') return json(session)
   if (path === '/api/tokens') return json({ tokens })
   if (path === '/api/search') {
-    const hits = searchNotes(notes, url.searchParams.get('q')!, url.searchParams.get('area'))
-    return json({ groups: hits.length ? [{ module: 'notes', hits }] : [] })
+    // The server groups the hits in its own order of the modules, the notes first.
+    const q = url.searchParams.get('q')!
+    const groups = [
+      { module: 'notes', hits: searchNotes(notes, q, url.searchParams.get('area')) },
+      { module: 'tasks', hits: searchTasks(tasks, q, url.searchParams.get('area')) },
+    ]
+    return json({ groups: groups.filter((g) => session.modules.includes(g.module) && g.hits.length) })
   }
   if (path === '/api/areas') return json({ areas: areas.filter((a) => url.searchParams.get('archived') === 'true' || !a.archived) })
   return json({ error: 'not found' }, 404)
@@ -90,7 +99,7 @@ const historyOf = (n: Note) => versions.get(n.id) ?? versions.set(n.id, history(
 function answerNotes(method: string, url: URL, body: Record<string, unknown>, file?: Blob): Response | Promise<Response> {
   const told = (n: Note) => {
     tell({ module: 'notes', kind: 'note', id: n.id, area: areas.find((a) => a.slug === n.area)?.id ?? 0 })
-    return full(notes, n)
+    return full(notes, n, tasks)
   }
   const changed = (n: Note) => {
     Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() })
@@ -149,7 +158,7 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
     if (method === 'POST' && part === 'restore') return json(told(Object.assign(n, { trashed_at: null })))
     return json({ error: 'not found' }, 404)
   }
-  if (method === 'GET') return json(full(notes, n))
+  if (method === 'GET') return json(full(notes, n, tasks))
   if (method === 'DELETE') {
     if (!n.trashed_at) return json({ error: `note ${n.id} is not in the trash, and only a note in the trash is deleted: conflict` }, 409)
     notes.splice(notes.indexOf(n), 1)

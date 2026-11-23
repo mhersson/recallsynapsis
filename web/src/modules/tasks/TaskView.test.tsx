@@ -4,7 +4,7 @@ import { changeTask, task } from '../../dev/fixtures.ts'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, json, narrow, type Call } from '../../test-server.ts'
 import type { Task } from './api.ts'
-import { editButton, form, monday, taskView as view, tasksServer } from './test-tasks.ts'
+import { editButton, form, monday, taskView as view, tasksServer, trashButton } from './test-tasks.ts'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -65,6 +65,17 @@ test('on a phone a task picked opens as a page of its own, whose crumb leads bac
   expect(rows()).toHaveLength(1)
 })
 
+test('on a phone a task’s page reads the task alone, which gives the day, and the list is read once the page goes back to it', async () => {
+  narrow(true)
+  const calls = tasksServer(tasks())
+  await open('/tasks/3')
+  await waitFor(() => expect(head().getByRole('heading', { level: 1 })).toHaveTextContent('in the garden'))
+  expect(reads(calls)).toBe(0)
+  await userEvent.click(within(screen.getByRole('main').querySelector<HTMLElement>('.crumb')!).getByRole('link'))
+  await waitFor(() => expect(rows()).toHaveLength(2))
+  expect(reads(calls)).toBe(1)
+})
+
 test('the ring of the open task marks it done, which strikes its row in place, and opens it again', async () => {
   narrow(false)
   const calls = tasksServer(tasks())
@@ -83,12 +94,12 @@ test('the ring of the open task marks it done, which strikes its row in place, a
   ])
 })
 
-test('a task read has no control but its ring and Edit', async () => {
+test('a task read has no control but its ring, Edit, Trash and Add a link', async () => {
   narrow(false)
   tasksServer(tasks())
   await open('/tasks/3')
   await waitFor(editButton)
-  expect(inView().getAllByRole('button')).toEqual([ring(), editButton()])
+  expect(inView().getAllByRole('button')).toEqual([ring(), editButton(), trashButton(), view().querySelector('.sect-head .btn')])
   expect(view().querySelectorAll('input, select, textarea')).toHaveLength(0)
 })
 

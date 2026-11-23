@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, message } from '../../api/client.ts'
+import { ApiError, api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
+import type { Linked } from '../../api/types.ts'
 
 // A task's state: done, or unsorted while it is open with no list, no plan and no deadline, or else open.
 export type State = 'open' | 'unsorted' | 'done'
 
 // A task as GET /api/tasks lists it. The dates are YYYY-MM-DD and "" when it has none, a plan of one day has its to equal
-// to its from, planned_time is HH:MM, area is the slug, and source that of the last change, web or the name of a token.
+// to its from, planned_time is HH:MM, area is the slug, source that of the last change, web or the name of a token, and
+// trashed_at null unless it is in the trash.
 export type Row = {
   id: number
   ref: string
@@ -26,22 +28,24 @@ export type Row = {
   source: string
   created_at: string
   changed_at: string
+  trashed_at: string | null
 }
 
 // An entry of a task's log, the newest first: what each field was and became, as strings, an area as its slug and done as
 // "false" or "true"; the notes and the links give neither. The oldest is the making, each field it was given from "".
 export type Entry = { at: string; source: string; said: string; changes: { field: string; from?: string; to?: string }[] }
 
-// A task as GET /api/tasks/{id} gives it, in full: with its notes, the owner's own words when a client gave them, and its log.
-export type Task = Row & { notes: string; said: string; log: Entry[] }
+// A task as GET /api/tasks/{id} gives it, in full: with its notes, the owner's own words when a client gave them, its links
+// and the items that link to it, as the core resolves them, its log, and the server's today.
+export type Task = Row & { notes: string; said: string; links: Linked[]; linked_from: Linked[]; log: Entry[]; now: Now }
 
 // The server's today, in its time zone, and the first day of its week, a weekday's name in lower case.
 export type Now = { date: string; weekday: string; time: string; timezone: string; week_start: string }
 
 export type List = { tasks: Row[]; total: number; now: Now }
 
-// What a change of a task may send; a change sends only what it changes.
-export type Fields = Partial<Pick<Task, 'title' | 'notes' | 'area' | 'planned_from' | 'planned_to' | 'planned_time' | 'deadline' | 'list'>> & { done?: boolean }
+// What a change of a task may send; a change sends only what it changes, and links whole, as references.
+export type Fields = Partial<Pick<Task, 'title' | 'notes' | 'area' | 'planned_from' | 'planned_to' | 'planned_time' | 'deadline' | 'list'>> & { done?: boolean; links?: string[] }
 
 // Reads when the page mounts, when the stream opens again, on any change of a task and on any change of an area, whose
 // slug names the tasks in it.
@@ -51,13 +55,17 @@ export function useTasks(read: () => void) {
   })
 }
 
-// The open tasks, 500 at most, as useTasks reads them. took places a task as a change answered it, at once and before
-// the stream tells of it, and takes it out once done; a read asked before it is dropped. A page sorts what it shows.
-export function useOpen() {
+// The open tasks, 500 at most, as useTasks reads them while on, and again once on. took places a task as a change answered
+// it, at once and before the stream tells of it, and takes it out once done or trashed; a read asked before it is dropped.
+// A page sorts what it shows.
+export function useOpen(on = true) {
   const [list, setList] = useState<List>()
   const [failed, setFailed] = useState('')
+  const [tick, setTick] = useState(0)
   const asked = useRef(0)
-  useTasks(() => {
+  useTasks(() => setTick((n) => n + 1))
+  useEffect(() => {
+    if (!on || !tick) return
     const n = ++asked.current
     api<List>('GET', '/tasks?limit=500').then(
       (l) => {
@@ -67,20 +75,58 @@ export function useOpen() {
       },
       (e: unknown) => n === asked.current && setFailed(message(e)),
     )
-  })
+  }, [on, tick])
   const took = (t: Row) => {
     asked.current++
     setList((l) => {
       if (!l) return l
       const rest = l.tasks.filter((x) => x.id !== t.id)
-      return { ...l, tasks: t.state === 'done' ? rest : [...rest, t] }
+      return { ...l, tasks: t.state === 'done' || t.trashed_at ? rest : [...rest, t] }
     })
   }
   return { list, failed, took }
 }
 
-// The task id names, in full, read as useTasks reads and when id changes. show puts a change's answer in its place while
-// that task is the one named, and a read asked before it is dropped.
+const step = 50
+
+// The done or the trashed, as GET /tasks?asked gives them, 50 more at a time up to 500; '' reads nothing. took places a
+// task as a change answered it, or takes it out once holds says it no longer belongs, and drops a read asked before.
+export function useMore(asked: string, holds: (t: Row) => boolean) {
+  const [shown, setShown] = useState({ asked, limit: step })
+  const limit = shown.asked === asked ? shown.limit : step
+  const [got, setGot] = useState<{ asked: string; list: List }>()
+  const [failed, setFailed] = useState('')
+  const [tick, setTick] = useState(0)
+  const n = useRef(0)
+  useTasks(() => setTick((x) => x + 1))
+  useEffect(() => {
+    if (!tick || !asked) return
+    const at = ++n.current
+    api<List>('GET', `/tasks?${asked}&limit=${limit}`).then(
+      (list) => {
+        if (at !== n.current) return
+        setGot({ asked, list })
+        setFailed('')
+      },
+      (e: unknown) => at === n.current && setFailed(message(e)),
+    )
+  }, [asked, limit, tick])
+  const took = (t: Row) => {
+    n.current++
+    setGot((g) => {
+      if (!g) return g
+      const rest = g.list.tasks.filter((x) => x.id !== t.id)
+      const tasks = holds(t) ? [t, ...rest] : rest
+      return { ...g, list: { ...g.list, tasks, total: g.list.total + tasks.length - g.list.tasks.length } }
+    })
+  }
+  const more = limit < 500 ? () => setShown({ asked, limit: limit + step }) : undefined
+  return { list: got?.asked === asked ? got.list : undefined, failed, more, took, again: () => setTick((x) => x + 1) }
+}
+
+// The task id names, in full, read when the page mounts, on every change the stream tells of, since what it links to may
+// be any module's item and the core tells only of areas, and when id changes. show puts a change's answer in its place
+// while that task is the one named, and a read asked before it is dropped.
 export function useTask(id?: number) {
   const [task, setTask] = useState<Task>()
   const [failed, setFailed] = useState('')
@@ -90,7 +136,7 @@ export function useTask(id?: number) {
   useEffect(() => {
     named.current = id
   })
-  useTasks(() => setTick((n) => n + 1))
+  useStream(() => setTick((n) => n + 1))
   useEffect(() => {
     if (!tick || !id) return
     const n = ++asked.current
@@ -100,7 +146,12 @@ export function useTask(id?: number) {
         setTask(t)
         setFailed('')
       },
-      (e: unknown) => n === asked.current && setFailed(message(e)),
+      (e: unknown) => {
+        if (n !== asked.current) return
+        // A task deleted meanwhile, as by emptying the trash elsewhere, closes to say so.
+        if (e instanceof ApiError && e.status === 404) setTask(undefined)
+        setFailed(message(e))
+      },
     )
   }, [id, tick])
   const show = (t: Task) => {
@@ -111,11 +162,8 @@ export function useTask(id?: number) {
   return { task: task?.id === id ? task : undefined, failed, show }
 }
 
-// The name of the area a task names by its slug.
-export const nameOf = (areas: { slug: string; name: string }[], slug: string) => areas.find((a) => a.slug === slug)?.name ?? slug
-
 // Where a change came from, as a list shows it.
 export const from = (source: string) => (source === 'web' ? 'web' : `via ${source}`)
 
-// The class of a task's mark, a ring: open, filled once done, and in the yellow of what waits while it is to sort.
-export const ring = (state: State) => 'mk m-task' + (state === 'done' ? ' t-done' : state === 'unsorted' ? ' t-sort' : '')
+// The class of a task's mark after mk, a ring: open, filled once done, and in the yellow of what waits while it is to sort.
+export const ring = (state: State) => 'm-task' + (state === 'done' ? ' t-done' : state === 'unsorted' ? ' t-sort' : '')

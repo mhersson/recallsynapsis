@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Session } from './api/types.ts'
+import type { Group, Session } from './api/types.ts'
 import type { Item, Module } from './modules/registry.ts'
 
 // The shell provides it once read, so every page below the shell has one.
@@ -23,6 +23,13 @@ export const useModules = () => useContext(ModulesContext)
 
 // Whether Projects is a tab on a phone: while the modules' tabs, their action's and More leave it room among five.
 export const projectsTabbed = (on: Module[]) => on.flatMap((m) => m.tabs).length + (on.some((m) => m.action) ? 1 : 0) + 2 <= 5
+
+// The groups of a search in the order of the registry, which the server does not keep; a module switched off comes last.
+export function useRanked(): (groups: Group[]) => Group[] {
+  const names = useModules().map((m) => m.name)
+  const rank = (g: Group) => (names.includes(g.module) ? names.indexOf(g.module) : names.length)
+  return (groups) => [...groups].sort((a, b) => rank(a) - rank(b))
+}
 
 // The item a reference names, from the module switched on that its reference names; undefined when that module gives none.
 export function useItem(): (ref: string, kind: string, state: string) => Item | undefined {

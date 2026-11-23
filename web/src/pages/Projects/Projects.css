@@ -40,3 +40,45 @@
 .area-foot {
   margin-top: 14px;
 }
+
+/* The modules' sections of an area's page, side by side on desktop, each part under its heading, and folded on a phone. */
+.area-parts {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.area-parts .part {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.area-parts .part > .dim,
+.area-parts summary > .dim {
+  color: var(--grey1);
+  font-weight: 400;
+}
+
+.area-parts details {
+  border-top: 1px solid var(--bg2);
+}
+
+.area-parts summary {
+  padding: 11px 2px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.area-parts details > .list {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 720px) {
+  .area-parts {
+    display: block;
+  }
+}

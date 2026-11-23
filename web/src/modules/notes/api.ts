@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
-import type { Area } from '../../api/types.ts'
+import type { Linked } from '../../api/types.ts'
 
 export type Kind = 'note' | 'idea'
 
@@ -28,9 +28,6 @@ export type Row = {
   changed_at: string
   trashed_at: string | null
 }
-
-// What a link names, as the core resolves it: an item of a module switched on, unavailable once it is gone.
-export type Linked = { ref: string; kind: string; state: string; title: string; available: boolean }
 
 // A file attached to a note, of the type it was declared as.
 export type Attached = { id: number; name: string; type: string; size: number }
@@ -96,9 +93,6 @@ export function useList(asked: string) {
 
 // A count of things, as a sentence says it.
 export const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
-
-// The name of the area a note names by its slug.
-export const nameOf = (areas: Area[], slug: string) => areas.find((a) => a.slug === slug)?.name ?? slug
 
 // Where a change came from, as a list shows it.
 export const from = (source: string) => (source === 'web' ? 'web' : `via ${source}`)
