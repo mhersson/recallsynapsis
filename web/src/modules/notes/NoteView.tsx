@@ -1,19 +1,20 @@
 import { useEffect, useEffectEvent, useRef, useState, type DragEvent } from 'react'
+import { nameOf } from '../../api/areas.ts'
 import { ApiError, api, message } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
 import Dialog from '../../components/Dialog.tsx'
 import Field from '../../components/Field.tsx'
+import Links from '../../components/Links.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import { ago, when } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useUnsaved } from '../../components/useUnsaved.tsx'
-import { count, from, mark, nameOf, useNotes, type Kind, type Note, type Version } from './api.ts'
+import { count, from, mark, useNotes, type Kind, type Note, type Version } from './api.ts'
 import { Place } from './Filing.tsx'
 import Files from './Files.tsx'
 import History, { RevisionView } from './History.tsx'
 import { AttachIcon, RestoreIcon } from './icons.tsx'
 import { TrashIcon } from './nav.tsx'
-import Links from './Links.tsx'
 import TagField from './TagField.tsx'
 import { size, useUploads } from './uploads.ts'
 import './Sections.css'
@@ -363,7 +364,7 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
         )}
       </div>
       <div className="sects">
-        <Links note={note} areas={areas} trashed={trashed} sending={sending} onLinks={(links) => send('PATCH', `/notes/${id}`, { revision: note.revision, links })} />
+        <Links of={note} areas={areas} trashed={trashed} sending={sending} onLinks={(links) => send('PATCH', `/notes/${id}`, { revision: note.revision, links })} />
         <Files note={note} trashed={trashed} up={up} onRemoved={() => void read()} />
         <History note={note} fresh={restored?.as} onRead={setReading} />
       </div>

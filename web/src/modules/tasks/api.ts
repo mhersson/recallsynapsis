@@ -111,9 +111,6 @@ export function useTask(id?: number) {
   return { task: task?.id === id ? task : undefined, failed, show }
 }
 
-// The name of the area a task names by its slug.
-export const nameOf = (areas: { slug: string; name: string }[], slug: string) => areas.find((a) => a.slug === slug)?.name ?? slug
-
 // Where a change came from, as a list shows it.
 export const from = (source: string) => (source === 'web' ? 'web' : `via ${source}`)
 

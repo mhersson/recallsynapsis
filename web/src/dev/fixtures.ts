@@ -1,5 +1,5 @@
-import type { Area, Hit, Session, Token } from '../api/types.ts'
-import type { Kind, Linked, List, Note, Row, Version } from '../modules/notes/api.ts'
+import type { Area, Hit, Linked, Session, Token } from '../api/types.ts'
+import type { Kind, List, Note, Row, Version } from '../modules/notes/api.ts'
 import type { Entry, Now, List as TaskList, Row as TaskRow, Task } from '../modules/tasks/api.ts'
 import { order, sortInto } from '../modules/tasks/views.ts'
 

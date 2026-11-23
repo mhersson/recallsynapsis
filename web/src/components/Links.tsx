@@ -1,23 +1,26 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { api, message } from '../../api/client.ts'
-import type { Area, Group, Hit } from '../../api/types.ts'
-import { SearchIcon } from '../../components/icons.tsx'
-import { back } from '../../components/useClose.ts'
-import { useItem } from '../../session.ts'
-import { nameOf, type Linked, type Note } from './api.ts'
-import { LinkIcon, XIcon } from './icons.tsx'
-import Section from '../../components/Section.tsx'
+import { nameOf } from '../api/areas.ts'
+import { api, message } from '../api/client.ts'
+import type { Area, Group, Hit, Linked } from '../api/types.ts'
+import { useItem } from '../session.ts'
+import { LinkIcon, SearchIcon, XIcon } from './icons.tsx'
+import Section from './Section.tsx'
+import { back } from './useClose.ts'
+import './Links.css'
 
-type Props = { note: Note; areas: Area[]; trashed: boolean; sending: boolean; onLinks: (refs: string[]) => Promise<string> }
+// The item whose links are shown, of any module.
+type Of = { ref: string; links: Linked[]; linked_from: Linked[] }
 
-// What the note links to, each removed or added as a change of the note so its history can bring it back, and what
-// links to it. A note in the trash changes nothing, and shows the section only when it has a link.
-export default function Links({ note, areas, trashed, sending, onLinks }: Props) {
+type Props = { of: Of; areas: Area[]; trashed: boolean; sending: boolean; onLinks: (refs: string[]) => Promise<string> }
+
+// What an item links to, each removed or added at once as a change of the item, and what links to it. An item in the
+// trash changes nothing, and shows the section only when it has a link.
+export default function Links({ of, areas, trashed, sending, onLinks }: Props) {
   const item = useItem()
   const [finding, setFinding] = useState(false)
   const [refused, setRefused] = useState('')
-  const refs = note.links.map((l) => l.ref)
+  const refs = of.links.map((l) => l.ref)
   const change = (next: string[]) =>
     onLinks(next).then((line) => {
       setRefused(line)
@@ -50,7 +53,7 @@ export default function Links({ note, areas, trashed, sending, onLinks }: Props)
     )
   }
 
-  if (trashed && note.links.length + note.linked_from.length === 0) return null
+  if (trashed && of.links.length + of.linked_from.length === 0) return null
   const add = !trashed && !finding && (
     <button className="btn link" onClick={() => setFinding(true)}>
       <LinkIcon />
@@ -58,26 +61,26 @@ export default function Links({ note, areas, trashed, sending, onLinks }: Props)
     </button>
   )
   return (
-    <Section title="Links" count={note.links.length + note.linked_from.length} add={add}>
+    <Section title="Links" count={of.links.length + of.linked_from.length} add={add}>
       {refused && (
         <p role="alert" className="err">
           {refused}
         </p>
       )}
-      {note.links.length > 0 && <div className="lgrp">links to</div>}
-      {note.links.map((l) => row(l, true))}
-      {finding && !trashed && <Finder note={note} refs={refs} areas={areas} sending={sending} onPick={(ref) => void change([...refs, ref])} onClose={() => setFinding(false)} />}
-      {note.linked_from.length > 0 && <div className="lgrp">linked from</div>}
-      {note.linked_from.map((l) => row(l, false))}
+      {of.links.length > 0 && <div className="lgrp">links to</div>}
+      {of.links.map((l) => row(l, true))}
+      {finding && !trashed && <Finder self={of.ref} refs={refs} areas={areas} sending={sending} onPick={(ref) => void change([...refs, ref])} onClose={() => setFinding(false)} />}
+      {of.linked_from.length > 0 && <div className="lgrp">linked from</div>}
+      {of.linked_from.map((l) => row(l, false))}
     </Section>
   )
 }
 
-type FinderProps = { note: Note; refs: string[]; areas: Area[]; sending: boolean; onPick: (ref: string) => void; onClose: () => void }
+type FinderProps = { self: string; refs: string[]; areas: Area[]; sending: boolean; onPick: (ref: string) => void; onClose: () => void }
 
-// Finds an item to link to through search, every module and every area, leaving out the note itself; what the note
+// Finds an item to link to through search, every module and every area, leaving out the item itself, self; what it
 // links to already is shown and cannot be picked again.
-function Finder({ note, refs, areas, sending, onPick, onClose }: FinderProps) {
+function Finder({ self, refs, areas, sending, onPick, onClose }: FinderProps) {
   const item = useItem()
   const [q, setQ] = useState('')
   const query = q.trim()
@@ -91,7 +94,7 @@ function Finder({ note, refs, areas, sending, onPick, onClose }: FinderProps) {
       api<{ groups: Group[] }>('GET', '/search?' + new URLSearchParams({ q: query })).then(
         (r) => {
           if (stale) return
-          setFound({ q: query, hits: r.groups.flatMap((g) => g.hits).filter((h) => h.ref !== note.ref) })
+          setFound({ q: query, hits: r.groups.flatMap((g) => g.hits).filter((h) => h.ref !== self) })
           setFailed('')
         },
         (e: unknown) => !stale && setFailed(message(e)),
@@ -101,7 +104,7 @@ function Finder({ note, refs, areas, sending, onPick, onClose }: FinderProps) {
       stale = true
       clearTimeout(timer)
     }
-  }, [query, note.ref])
+  }, [query, self])
 
   const hits = (query && found?.hits) || []
   let said = 'Pick one to link to it.'

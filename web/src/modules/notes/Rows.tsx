@@ -1,8 +1,9 @@
 import { Link, useLocation } from 'react-router'
+import { nameOf } from '../../api/areas.ts'
 import type { Area } from '../../api/types.ts'
 import { ago } from '../../components/time.ts'
 import { back } from '../../components/useClose.ts'
-import { mark, nameOf, type List, type Row } from './api.ts'
+import { mark, type List, type Row } from './api.ts'
 
 type RowsProps = { notes: Row[]; areas: Area[]; to: (r: Row) => string; open?: number; trashed?: boolean }
 
