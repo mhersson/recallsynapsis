@@ -92,9 +92,9 @@ After a change to `web/`, look at the screen before you finish.
   `web/src/dev/fixtures.ts`, whose tasks are on a fixed day, Monday 23
   November 2026. Its `palette` is `copper` or `catppuccin`, its
   `theme` is `dark` or `light`, and its `path` picks the route, for example
-  `path=/settings`. `click=TEXT` clicks the first button, link or summary
-  whose text, or label, starts with TEXT, in the dialog open last when one
-  is, `type=TEXT` types TEXT into the field that has the focus, and
+  `path=/settings`. `click=TEXT` clicks the first button, link, summary or
+  label whose text, or label, starts with TEXT, in the dialog open last when
+  one is, `type=TEXT` types TEXT into the field that has the focus, and
   `choose=N` chooses an image of N bytes in the file picker of the note
   being read; given more than once, they run
   in the order given, and `end=1` then scrolls the page, and what is open
