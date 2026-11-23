@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"unicode/utf8"
 
 	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
@@ -99,7 +98,8 @@ type updateIn struct {
 // createNote files the note in the area it names, keeps an idea that names
 // none in the personal area, and puts any other in the inbox.
 func (n notes) createNote(ctx context.Context, in captureIn) (row, error) {
-	if err := cmp.Or(n.capped("text", &in.Text), n.capped("said", &in.Said)); err != nil {
+	limit := n.settings.CaptureMaxChars
+	if err := cmp.Or(module.Capped("text", &in.Text, limit), module.Capped("said", &in.Said, limit)); err != nil {
 		return row{}, err
 	}
 
@@ -125,7 +125,8 @@ func (n notes) getNote(ctx context.Context, in refIn) (note, error) {
 }
 
 func (n notes) updateNote(ctx context.Context, in updateIn) (note, error) {
-	if err := cmp.Or(n.capped("body", in.Body), n.capped("append", in.Append)); err != nil {
+	limit := n.settings.CaptureMaxChars
+	if err := cmp.Or(module.Capped("body", in.Body, limit), module.Capped("append", in.Append, limit)); err != nil {
 		return note{}, err
 	}
 
@@ -164,18 +165,4 @@ func (n notes) open(ctx context.Context, ref module.Ref) (int64, error) {
 	}
 
 	return id, err
-}
-
-// capped refuses a text given to a tool as field when it is longer than
-// capture_max_chars, which counts characters, not bytes.
-func (n notes) capped(field string, text *string) error {
-	if text == nil {
-		return nil
-	}
-
-	if count := utf8.RuneCountInString(*text); count > n.settings.CaptureMaxChars {
-		return fmt.Errorf("%s is %d characters, over the cap of %d on a text a tool keeps: %w", field, count, n.settings.CaptureMaxChars, store.ErrInvalid)
-	}
-
-	return nil
 }
