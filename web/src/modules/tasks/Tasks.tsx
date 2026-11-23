@@ -1,44 +1,36 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import { nameOf, useAreas } from '../../api/areas.ts'
 import { AddIcon } from '../../components/icons.tsx'
 import PageHead from '../../components/PageHead.tsx'
-import { ago } from '../../components/time.ts'
 import { back } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { from, useOpen, useTask, type Fields, type Now, type Row, type Task } from './api.ts'
-import Check from './Check.tsx'
-import { day, period, week } from './dates.ts'
+import { useMore, useOpen, useTask, type Fields, type Now, type Row, type Task } from './api.ts'
+import { add, clock, day, week } from './dates.ts'
+import { line, project } from './line.tsx'
+import TaskRow from './TaskRow.tsx'
 import TaskView from './TaskView.tsx'
-import { order, sortInto, views, type Group, type View } from './views.ts'
+import { groupNames, latest, order, sortInto, views, type View } from './views.ts'
 import './Tasks.css'
-
-const groupNames: Record<Group, string> = {
-  sort: 'To sort',
-  left: 'Left from earlier',
-  late: 'Overdue',
-  today: 'Today',
-  week: 'This week',
-  later: 'Later',
-  soon: 'Soon',
-  someday: 'Someday',
-}
 
 // What the head of a view says of it.
 function about(view: View, now: Now) {
   if (view === 'today') return `Today is ${day(now.date)}.`
   if (view === 'week') return `The rest of this week, to ${day(week(now)[1])}, and what lies beyond it.`
+  if (view === 'done') return 'The most recently done first, by the day each was done.'
   return 'By the first date each has, then those with none, the oldest first.'
 }
 
-// Tasks: a row of views over the open tasks, read once and sorted into each view's groups by the server's today. The view,
-// the area chosen and the task open live in the address, so a reload keeps them.
+// The heading of a day in Done.
+const dayName = (date: string, now: Now) => (date === now.date ? 'Today' : date === add(now.date, -1) ? 'Yesterday' : day(date))
+
+// Tasks: a row of views over the open tasks, read once and sorted into each view's groups by the server's today, and Done,
+// a list of its own. The view, the area chosen and the task open live in the address, so a reload keeps them.
 export default function Tasks() {
   const narrow = useNarrow()
   const navigate = useNavigate()
   const id = Number(useParams().id) || undefined
-  const { state } = useLocation()
   const [params, setParams] = useSearchParams()
   const view = views.find(([v]) => v === params.get('view'))?.[0] ?? 'today'
   const area = params.get('area') ?? ''
@@ -50,17 +42,29 @@ export default function Tasks() {
   const opened = useTask(id)
   const [refused, setRefused] = useState('')
   const [added, setAdded] = useState<number>()
-  // The tasks marked done in this view, as they were, so each stays where it stood, struck through, until the view is left.
-  const [struck, setStruck] = useState<{ view: View; rows: Row[] }>({ view, rows: [] })
-  if (struck.view !== view) setStruck({ view, rows: [] })
-  const done = struck.rows
-
   const here = (t: Row) => !area || t.area === area
   const open = list?.tasks.filter(here) ?? []
-  const shown = [...open, ...done.filter((t) => here(t) && !open.some((x) => x.id === t.id))].sort(order)
+  const done = useMore(view === 'done' && !alone ? new URLSearchParams({ done: 'true', ...(area && { area }) }).toString() : '', (t) => t.state === 'done')
+  // What the server gives the view, and the rows a ring changed in it, as they stood, so each stays where it stood until the
+  // view is left: struck through once done, and in Done no longer once opened again. A row the server still gives shows as
+  // it gives it, so a change made since shows, but in Done one done again stays under the time it stood under.
+  const given = view === 'done' ? (done.list?.tasks ?? []) : open
+  const [kept, setKept] = useState<{ view: View; rows: Row[] }>({ view, rows: [] })
+  if (kept.view !== view) setKept({ view, rows: [] })
+  // The render that resets them still has another view's.
+  const rows = kept.view === view ? kept.rows : []
+  const shown = [
+    ...given.map((t) => {
+      const k = view === 'done' && rows.find((x) => x.id === t.id)
+      return k ? { ...t, done_at: k.done_at } : t
+    }),
+    ...rows.filter((k) => here(k) && !given.some((x) => x.id === k.id)),
+  ].sort(view === 'done' ? latest : order)
+  // A row is done while Done holds it, and while a view of the open lacks it.
+  const isDone = (t: Row) => given.some((x) => x.id === t.id) === (view === 'done')
   const groups = list ? sortInto(view, shown, list.now) : []
   // On desktop the view opens its first task by naming it in the address.
-  const first = groups.flatMap(([, ts]) => ts)[0]?.id
+  const first = (view === 'done' ? shown : groups.flatMap(([, ts]) => ts))[0]?.id
   useEffect(() => {
     if (!narrow && !id && first) void navigate(`/tasks/${first}${search}`, { replace: true })
   }, [narrow, id, first, search, navigate])
@@ -84,17 +88,17 @@ export default function Tasks() {
       )
     )
   }
-  const isDone = (t: Row) => done.some((x) => x.id === t.id) && !open.some((x) => x.id === t.id)
 
-  // Sends a change of a task and places the task as the answer has it, a task marked done staying where it is shown;
+  // Sends a change of a task and places the task as the answer has it, a row the ring changed staying where it is shown;
   // gives the server's line when it is refused.
   async function change(t: Row, fields: Fields): Promise<string> {
     const as = shown.find((x) => x.id === t.id)
     try {
       const answer = await api<Task>('PATCH', `/tasks/${t.id}`, fields)
       took(answer)
+      done.took(answer)
       opened.show(answer)
-      if (fields.done !== undefined) setStruck((s) => ({ ...s, rows: [...s.rows.filter((x) => x.id !== t.id), ...(fields.done && as ? [as] : [])] }))
+      if (fields.done !== undefined && as) setKept((k) => (k.view === view ? { ...k, rows: [...k.rows.filter((x) => x.id !== t.id), as] } : k))
       return ''
     } catch (e) {
       return message(e)
@@ -104,38 +108,45 @@ export default function Tasks() {
     setRefused('')
     setRefused(await change(t, fields))
   }
-
-  const row = (t: Row, g: Group) => {
-    const struckOut = isDone(t)
-    const one = t.planned_to === t.planned_from
-    const bits = [
-      !area && areas.find((a) => a.slug === t.area)?.kind === 'project' && nameOf(areas, t.area),
-      g === 'sort' && from(t.source),
-      g === 'sort' && ago(t.created_at),
-      t.planned_from && (g === 'today' && one ? t.planned_time : `${period(t.planned_from, t.planned_to)}${t.planned_time && ' ' + t.planned_time}`),
-      t.deadline && <span className={t.deadline < now.date ? 'late' : undefined}>due {day(t.deadline)}</span>,
-      t.list && t.list !== g && t.list,
-    ].filter(Boolean)
-    return (
-      <div key={t.id} className={'row task-row' + (t.id === id ? ' on' : '') + (struckOut ? ' done' : '') + (t.id === added ? ' new' : '')}>
-        <Check done={struckOut} sort={t.state === 'unsorted'} onClick={() => void tap(t, { done: !struckOut })} />
-        <Link to={`/tasks/${t.id}${search}`} state={t.id === id ? state : back} aria-current={t.id === id || undefined}>
-          <span className="t1">{t.title}</span>
-          {bits.length > 0 && (
-            <span className="t2">
-              {bits.map((b, i) => (
-                <span key={i}>{b}</span>
-              ))}
-            </span>
-          )}
-        </Link>
-      </div>
-    )
-  }
+  const row = (t: Row, bits: ReturnType<typeof line>) => (
+    <TaskRow key={t.id} t={t} to={`/tasks/${t.id}${search}`} bits={bits} on={t.id === id} done={isDone(t)} added={t.id === added} onRing={() => void tap(t, { done: !isDone(t) })} />
+  )
 
   let listed
-  if (!list) listed = null
-  else if (list.tasks.length === 0 && done.length === 0)
+  if (view === 'done') {
+    // The days the tasks shown were done, the newest first, as the order of the done has them.
+    const days: [string, Row[]][] = []
+    for (const t of shown) {
+      const date = clock(t.done_at!, now)[0]
+      if (days.at(-1)?.[0] === date) days.at(-1)![1].push(t)
+      else days.push([date, [t]])
+    }
+    listed = !done.list ? null : shown.length === 0 ? (
+      <div className="empty">
+        <b>Nothing done yet.</b>A task marked done shows here, by the day it was done.
+      </div>
+    ) : (
+      <>
+        {days.map(([date, ts]) => (
+          <section key={date} data-day={date}>
+            <h2 className="tgrp">{dayName(date, now)}</h2>
+            <div className="list">{ts.map((t) => row(t, [!area && project(t, areas), `done ${clock(t.done_at!, now)[1]}`].filter(Boolean)))}</div>
+          </section>
+        ))}
+        {done.list.total > done.list.tasks.length && (
+          <div className="list-end">
+            <span>These are the {done.list.tasks.length} most recently done. There are more.</span>
+            {done.more && (
+              <button className="btn" onClick={done.more}>
+                Show 50 more
+              </button>
+            )}
+          </div>
+        )}
+      </>
+    )
+  } else if (!list) listed = null
+  else if (list.tasks.length === 0 && rows.length === 0)
     listed = (
       <div className="empty">
         <b>No open tasks.</b>
@@ -149,7 +160,7 @@ export default function Tasks() {
           <h2 className="tgrp">
             {groupNames[g]} <span className="dim">{ts.length}</span>
           </h2>
-          <div className="list">{ts.map((t) => row(t, g))}</div>
+          <div className="list">{ts.map((t) => row(t, line(t, g, now, areas, !!area)))}</div>
         </section>
       ) : (
         g === 'today' && (
@@ -213,7 +224,7 @@ export default function Tasks() {
                 )
               })}
             </div>
-            {view !== 'week' && (
+            {view !== 'week' && view !== 'done' && (
               <AddLine
                 key={view}
                 view={view}
@@ -227,9 +238,9 @@ export default function Tasks() {
                 }}
               />
             )}
-            {(refused || failed) && (
+            {(refused || done.failed || failed) && (
               <p role="alert" className="err">
-                {refused || failed}
+                {refused || done.failed || failed}
               </p>
             )}
             {listed}

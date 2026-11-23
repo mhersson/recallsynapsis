@@ -52,7 +52,7 @@ test('each view shows the open tasks its question gives by the server’s today,
   // What was left keeps the dates it had, and a deadline passed is in the danger look.
   expect(rowOf('last weekend').querySelector('.t2')).toHaveTextContent('Sat-Sun 21-22 Nov')
   expect(rowOf('overdue').querySelector('.late')).not.toBeNull()
-  expect(counts()).toEqual(['4', '1', '1', '1'])
+  expect(counts()).toEqual(['4', '1', '1', '1', ''])
 
   await userEvent.click(viewLinks()[1])
   await waitFor(() => expect(where()).toBe('/tasks?view=week'))
@@ -79,9 +79,9 @@ test('the area chosen narrows every view and count and is kept in the address wi
   const area = within(page()).getByRole('combobox')
   await userEvent.selectOptions(area, 'garden')
   await waitFor(() => expect(view.where()).toBe('/tasks?view=week&area=garden'))
-  expect(counts()).toEqual(['', '1', '', ''])
+  expect(counts()).toEqual(['', '1', '', '', ''])
   await userEvent.selectOptions(area, '')
-  await waitFor(() => expect(counts()).toEqual(['4', '1', '1', '1']))
+  await waitFor(() => expect(counts()).toEqual(['4', '1', '1', '1', '']))
   view.unmount()
 
   const calls = tasksServer(week())
@@ -199,6 +199,20 @@ test('a task marked done stays in place, struck through, until the view is left,
   await user.click(viewLinks()[0])
   await waitFor(() => expect(shown().late).toBeUndefined())
   expect(counts()[0]).toBe('3')
+})
+
+test('a row marked done and opened again shows a change saved on its page since', async () => {
+  narrow(false)
+  tasksServer(week())
+  await open('/tasks/4')
+  await userEvent.click(ringOf('today'))
+  await waitFor(() => expect(ringOf('today')).toHaveAttribute('aria-pressed', 'true'))
+  await userEvent.click(ringOf('today'))
+  await waitFor(() => expect(ringOf('today')).toHaveAttribute('aria-pressed', 'false'))
+  await userEvent.click(await waitFor(editButton))
+  await userEvent.type(within(taskView().querySelector<HTMLElement>('.task-head')!).getByRole('textbox'), ' again')
+  await userEvent.click(form().save)
+  await waitFor(() => expect(rowOf('today again')).toBeDefined())
 })
 
 test('two tasks marked done before either answer lands both stay struck through in place', async () => {

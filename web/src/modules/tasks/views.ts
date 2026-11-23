@@ -1,9 +1,20 @@
 import type { Now, Row } from './api.ts'
 import { week } from './dates.ts'
 
-export type View = 'today' | 'week' | 'soon' | 'someday'
+export type View = 'today' | 'week' | 'soon' | 'someday' | 'done'
 
 export type Group = 'sort' | 'left' | 'late' | 'today' | 'week' | 'later' | 'soon' | 'someday'
+
+export const groupNames: Record<Group, string> = {
+  sort: 'To sort',
+  left: 'Left from earlier',
+  late: 'Overdue',
+  today: 'Today',
+  week: 'This week',
+  later: 'Later',
+  soon: 'Soon',
+  someday: 'Someday',
+}
 
 // The views in the order of their row, each with its name and its groups in order.
 export const views: [View, string, Group[]][] = [
@@ -11,6 +22,7 @@ export const views: [View, string, Group[]][] = [
   ['week', 'Week', ['week', 'later']],
   ['soon', 'Soon', ['soon']],
   ['someday', 'Someday', ['someday']],
+  ['done', 'Done', []],
 ]
 
 // Whether a task belongs in a group on the server's today, end being the last day of its week.
@@ -54,3 +66,6 @@ export function sortInto(view: View, tasks: Row[], now: Now): [Group, Row[]][] {
 // tasks made in one call share their time of making.
 const key = (t: Row) => `${t.planned_from || t.deadline || '~'} ${t.planned_time || '~'}`
 export const order = (a: Row, b: Row) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : a.id - b.id)
+
+// The order of the done: the most recently done first.
+export const latest = (a: Row, b: Row) => Date.parse(b.done_at!) - Date.parse(a.done_at!)

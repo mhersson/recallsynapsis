@@ -1,6 +1,7 @@
 import type { Area, Hit, Linked, Session, Token } from '../api/types.ts'
 import type { Kind, List, Note, Row, Version } from '../modules/notes/api.ts'
 import type { Entry, Now, List as TaskList, Row as TaskRow, Task } from '../modules/tasks/api.ts'
+import { add } from '../modules/tasks/dates.ts'
 import { order, sortInto } from '../modules/tasks/views.ts'
 
 // What the API serves, in its shapes; the harness answers from it. Times are counted back from when the page loads.
@@ -295,7 +296,8 @@ const settled = (t: Task): Task => ({
   state: t.done_at ? 'done' : t.planned_from || t.deadline || t.list ? 'open' : 'unsorted',
 })
 
-// A task of the personal area made minutes ago, a from alone planning that one day; its log is its making unless t gives one.
+// A task of the personal area made minutes ago, a from alone planning that one day; its log is its making, and its marking
+// done once it is, unless t gives one.
 export function task(id: number, minutes: number, t: Partial<Task>): Task {
   const made: Task = {
     id,
@@ -329,7 +331,8 @@ export function task(id: number, minutes: number, t: Partial<Task>): Task {
     said: made.said,
     changes: FIELDS.filter((f) => made[f]).map((f) => (f === 'notes' ? { field: f } : { field: f, from: '', to: made[f] })),
   }
-  return settled({ ...made, log: t.log ?? [making] })
+  const marked: Entry[] = made.done_at ? [{ at: made.done_at, source: made.source, said: '', changes: [{ field: 'done', from: 'false', to: 'true' }] }] : []
+  return settled({ ...made, log: t.log ?? [...marked, making] })
 }
 
 // A task as a list gives it.
@@ -444,6 +447,30 @@ export function searchTasks(tasks: Task[], q: string, area: string | null): Hit[
     .filter((t) => has(t) && (!area || t.area === area))
     .map((t) => ({ ref: t.ref, kind: 'task', title: t.title, snippet: t.notes, area: t.area, state: t.state, changed_at: t.changed_at }))
 }
+
+// The done tasks of the harness, the most recently done first, each done at the time of Oslo given on a day of the week
+// of NOW: Done lists them by day.
+const oslo = (date: string, time: string) => new Date(`${date}T${time}:00+01:00`).toISOString()
+export const DONE: Task[] = (
+  [
+    [{ title: 'Kjøpe frostvæske', list: 'soon', notes: 'Den blå, til minus 25.' }, '2026-11-23', '09:10'],
+    [{ title: 'Bestille brøyting til hytta', area: 'hytta' }, '2026-11-22', '19:30'],
+    [{ title: 'Rense sluket på badet' }, '2026-11-22', '11:05'],
+    [{ title: 'Skifte lyspærer i gangen' }, '2026-11-21', '15:40'],
+    [{ title: 'Bære inn utemøblene' }, '2026-11-21', '12:20'],
+    [{ title: 'Kjøpe hyllekonsoller', list: 'soon' }, '2026-11-20', '17:05'],
+    [{ title: 'Smøre garasjeporten' }, '2026-11-19', '18:40'],
+    [{ title: 'Hente vinterhjulene på dekkhotellet' }, '2026-11-19', '10:15'],
+    [{ title: 'Kappe ved til peisen', area: 'hytta' }, '2026-11-18', '20:05'],
+  ] as [Partial<Task>, string, string][]
+).map(([t, date, time], i) => task(101 + i, (12 + i) * 24 * 60, { ...t, done_at: oslo(date, time), changed_at: oslo(date, time) }))
+
+// What many=1 adds to the done: sixty more, two a day from the Tuesday before NOW back, so Done holds more than it shows.
+const CHORES = ['Spyle terrassen', 'Bytte lås på boden', 'Sjekke oljen på bilen', 'Rydde kjøleskapet', 'Kjøpe ny dørmatte', 'Skifte batteri i dørklokka']
+export const OLDER_DONE: Task[] = Array.from({ length: 60 }, (_, i) => {
+  const at = oslo(add('2026-11-17', -Math.floor(i / 2)), i % 2 ? '10:15' : '18:40')
+  return task(201 + i, (20 + i) * 24 * 60, { title: CHORES[i % CHORES.length], area: i % 3 ? 'personal' : 'hytta', done_at: at, changed_at: at })
+})
 
 // What Today would show of tasks, which today=none leaves out.
 export const onToday = (tasks: Task[], now: Now) => sortInto('today', tasks.map(taskRow), now).flatMap(([, ts]) => ts.map((t) => t.id))

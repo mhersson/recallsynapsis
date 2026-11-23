@@ -84,6 +84,43 @@ export function useOpen(on = true) {
   return { list, failed, took }
 }
 
+const step = 50
+
+// The done or the trashed, as GET /tasks?asked gives them, 50 more at a time up to 500; '' reads nothing. took places a
+// task as a change answered it, or takes it out once holds says it no longer belongs, and drops a read asked before.
+export function useMore(asked: string, holds: (t: Row) => boolean) {
+  const [shown, setShown] = useState({ asked, limit: step })
+  const limit = shown.asked === asked ? shown.limit : step
+  const [got, setGot] = useState<{ asked: string; list: List }>()
+  const [failed, setFailed] = useState('')
+  const [tick, setTick] = useState(0)
+  const n = useRef(0)
+  useTasks(() => setTick((x) => x + 1))
+  useEffect(() => {
+    if (!tick || !asked) return
+    const at = ++n.current
+    api<List>('GET', `/tasks?${asked}&limit=${limit}`).then(
+      (list) => {
+        if (at !== n.current) return
+        setGot({ asked, list })
+        setFailed('')
+      },
+      (e: unknown) => at === n.current && setFailed(message(e)),
+    )
+  }, [asked, limit, tick])
+  const took = (t: Row) => {
+    n.current++
+    setGot((g) => {
+      if (!g) return g
+      const rest = g.list.tasks.filter((x) => x.id !== t.id)
+      const tasks = holds(t) ? [t, ...rest] : rest
+      return { ...g, list: { ...g.list, tasks, total: g.list.total + tasks.length - g.list.tasks.length } }
+    })
+  }
+  const more = limit < 500 ? () => setShown({ asked, limit: limit + step }) : undefined
+  return { list: got?.asked === asked ? got.list : undefined, failed, more, took }
+}
+
 // The task id names, in full, read as useTasks reads and when id changes. show puts a change's answer in its place while
 // that task is the one named, and a read asked before it is dropped.
 export function useTask(id?: number) {

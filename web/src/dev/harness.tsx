@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, HEALTH, NOTES, NOW, OLDER, SECRET, SESSION, TASKS, TOKENS, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
+import { AREAS, DONE, HEALTH, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -18,14 +18,15 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
 // What the page changes is kept until it reloads. empty=1 starts with the personal area alone, no token, no note and no
-// task, many=1 adds older notes, so a list holds more than it shows, today=none leaves out the tasks Today would show,
-// modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
+// task, many=1 adds older notes and done tasks, so a list holds more than it shows, today=none leaves out the tasks Today
+// would show, modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
 const empty = query.get('empty') === '1'
 const areas = empty ? AREAS.filter((a) => a.kind === 'personal') : AREAS
 const tokens = empty ? [] : TOKENS
-const notes = empty ? [] : query.get('many') === '1' ? [...NOTES, ...OLDER] : NOTES
+const many = query.get('many') === '1'
+const notes = empty ? [] : many ? [...NOTES, ...OLDER] : NOTES
 const today = query.get('today') === 'none' ? onToday(TASKS, NOW) : []
-const tasks = empty ? [] : TASKS.filter((t) => !today.includes(t.id))
+const tasks = empty ? [] : [...TASKS.filter((t) => !today.includes(t.id)), ...DONE, ...(many ? OLDER_DONE : [])]
 const backups: Record<string, string | null> = { old: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(), none: null }
 const session = {
   ...SESSION,

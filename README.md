@@ -34,7 +34,8 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   what waits to be sorted. Its views sort the open tasks by the server's today:
   Today holds what waits to be sorted, what was left from earlier, what is
   overdue and what today holds; Week the rest of the week and what lies beyond
-  it; Soon and Someday their lists. A task is added where one stands, and opens
+  it; Soon and Someday their lists. Done lists what was done, the newest
+  first, by the day it was done. A task is added where one stands, and opens
   beside the list, or as a page on a phone, where it is read first and edited in
   one form that saves nothing before Save: its title, notes, plan, with
   shortcuts for today, tomorrow, the weekend and next week, deadline, list and

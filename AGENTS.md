@@ -101,9 +101,9 @@ After a change to `web/`, look at the screen before you finish.
   `login=wrong` refuses a sign-in and `login=wait` makes it wait;
   `lapsed=1` ends the access to the page; `empty=1` starts with the
   personal area alone, no token, no note and no task; `many=1` adds older
-  notes, so a list holds more than it shows; `today=none` leaves out the
-  tasks Today would show; `save=moved` refuses the first save of
-  each note's text, as if a client had saved the note meanwhile;
+  notes and done tasks, so a list holds more than it shows; `today=none`
+  leaves out the tasks Today would show; `save=moved` refuses the first
+  save of each note's text, as if a client had saved the note meanwhile;
   `upload=wait` holds every upload, so it stays under way;
   `modules=tasks,notes` switches the named modules on, so Tasks and Search
   find the fixed tasks, and the Inbox, Notes and Search the fixed notes;

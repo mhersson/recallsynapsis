@@ -94,6 +94,20 @@
   margin-bottom: 4px;
 }
 
+/* The end of a list that holds more than it shows. */
+.list-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 10px;
+  color: var(--grey2);
+  font-size: 13px;
+}
+
+.list-end > span {
+  flex: 1;
+}
+
 /* A field to search with, its icon before it. */
 .search-field {
   flex: 1;
@@ -311,5 +325,16 @@ a.row[aria-current] {
   .acts.stack > .btn {
     padding: 9px 12px;
     text-align: center;
+  }
+
+  .list-end {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px 0;
+    text-align: center;
+  }
+
+  .list-end .btn {
+    padding: 9px 12px;
   }
 }
