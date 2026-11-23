@@ -1,33 +1,16 @@
 import { useSyncExternalStore } from 'react'
+import { store, stored } from '../components/stored.ts'
 
 export type Look = { theme: 'system' | 'dark' | 'light'; palette: 'copper' | 'catppuccin' }
 
 const dark = window.matchMedia('(prefers-color-scheme: dark)')
 const listeners = new Set<() => void>()
 
-// Browsers that block site data throw on access; the look then is not kept.
-function read(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function write(key: string, value: string | null) {
-  try {
-    if (value === null) localStorage.removeItem(key)
-    else localStorage.setItem(key, value)
-  } catch {
-    // not kept
-  }
-}
-
 function load(): Look {
-  const theme = read('theme')
+  const theme = stored('theme')
   return {
     theme: theme === 'dark' || theme === 'light' ? theme : 'system',
-    palette: read('palette') === 'catppuccin' ? 'catppuccin' : 'copper',
+    palette: stored('palette') === 'catppuccin' ? 'catppuccin' : 'copper',
   }
 }
 
@@ -41,8 +24,8 @@ function apply() {
 
 function setLook(next: Look) {
   look = { ...next }
-  write('theme', look.theme === 'system' ? null : look.theme)
-  write('palette', look.palette)
+  store('theme', look.theme === 'system' ? null : look.theme)
+  store('palette', look.palette)
   apply()
   listeners.forEach((l) => l())
 }
