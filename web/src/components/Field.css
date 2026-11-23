@@ -1,3 +1,10 @@
+.field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .field textarea {
   min-height: 120px;
 }

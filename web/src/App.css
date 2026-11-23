@@ -152,6 +152,10 @@
   align-items: center;
 }
 
+.acts.end {
+  justify-content: flex-end;
+}
+
 .acts > .spacer {
   flex: 1;
 }

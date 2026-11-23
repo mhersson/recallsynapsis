@@ -35,8 +35,12 @@ const lists = (calls: Call[]) => calls.filter((c) => c.path.startsWith('/api/not
 const writes = (calls: Call[]) => calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path, c.body])
 // Edit and Trash, in the head of a note on desktop and at its foot on a phone.
 const tools = () => [...screen.getByRole('main').querySelectorAll<HTMLElement>('.note-read > .page-head .btn, .note-foot .btn')]
-// The editor's buttons come last on the note: Save and Cancel, or, after a refused save, Save mine over it and Give up mine.
-const acts = () => note1().getAllByRole('button').slice(-2)
+// The editor's buttons come last on the note, the save first here: Save and Cancel, or, after a refused save, Save mine
+// over it and Give up mine. On desktop the save stands last, at the right, and on a phone first.
+const acts = () => {
+  const [a, b] = note1().getAllByRole('button').slice(-2)
+  return window.matchMedia('(max-width: 720px)').matches ? [a, b] : [b, a]
+}
 
 test('the Notes list asks for the filed notes, and opens the newest beside them, or the one picked', async () => {
   narrow(false)
