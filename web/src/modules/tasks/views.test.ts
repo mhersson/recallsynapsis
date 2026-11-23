@@ -11,7 +11,7 @@ const tasks: Task[] = [
   task(3, 7, { title: 'due Friday 20', deadline: '2026-11-20' }),
   task(4, 6, { title: 'Monday', planned_from: '2026-11-23' }),
   task(5, 5, { title: 'due Monday', deadline: '2026-11-23' }),
-  task(6, 4, { title: 'this weekend', planned_from: '2026-11-28', planned_to: '2026-11-29', list: 'next' }),
+  task(6, 4, { title: 'this weekend', planned_from: '2026-11-28', planned_to: '2026-11-29', list: 'soon' }),
   task(7, 3, { title: 'Monday 30', planned_from: '2026-11-30' }),
   task(8, 2, { title: 'due Wednesday 25, planned Monday 30', planned_from: '2026-11-30', deadline: '2026-11-25' }),
   task(9, 1, { title: 'last weekend, due Sunday 29', planned_from: '2026-11-21', deadline: '2026-11-29', list: 'someday' }),
@@ -32,7 +32,7 @@ test('on a Monday, Today holds what waits, what was left, what is overdue and th
     week: ['this weekend', 'due Wednesday 25, planned Monday 30', 'last weekend, due Sunday 29'],
     later: ['Monday 30'],
   })
-  expect(sorted('next', now)).toEqual({ next: ['this weekend'] })
+  expect(sorted('soon', now)).toEqual({ soon: ['this weekend'] })
   expect(sorted('someday', now)).toEqual({ someday: ['last weekend, due Sunday 29'] })
 })
 

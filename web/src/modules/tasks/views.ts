@@ -1,15 +1,15 @@
 import type { Now, Row } from './api.ts'
 import { week } from './dates.ts'
 
-export type View = 'today' | 'week' | 'next' | 'someday'
+export type View = 'today' | 'week' | 'soon' | 'someday'
 
-export type Group = 'sort' | 'left' | 'late' | 'today' | 'week' | 'later' | 'next' | 'someday'
+export type Group = 'sort' | 'left' | 'late' | 'today' | 'week' | 'later' | 'soon' | 'someday'
 
 // The views in the order of their row, each with its name and its groups in order.
 export const views: [View, string, Group[]][] = [
   ['today', 'Today', ['sort', 'left', 'late', 'today']],
   ['week', 'Week', ['week', 'later']],
-  ['next', 'Next', ['next']],
+  ['soon', 'Soon', ['soon']],
   ['someday', 'Someday', ['someday']],
 ]
 

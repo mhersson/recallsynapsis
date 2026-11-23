@@ -21,7 +21,7 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   `list_notes`, `get_note`, `update_note` and `trash_note`, and what it saves
   without naming an area or calling it an idea waits in the inbox.
 - Tasks keeps tasks in the areas, each with its notes, a planned period of days
-  with an optional time on its first, a deadline, the list Next or Someday, when
+  with an optional time on its first, a deadline, the list Soon or Someday, when
   it was done, and a log of its changes. Its REST API, at `/api/tasks`, makes
   several at once, all or none, lists them by area, list, state and a span of
   dates, and tells which day it is in the configured time zone. In the web app
@@ -29,7 +29,7 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   what waits to be sorted. Its views sort the open tasks by the server's today:
   Today holds what waits to be sorted, what was left from earlier, what is
   overdue and what today holds; Week the rest of the week and what lies beyond
-  it; Next and Someday their lists. A task is added where one stands, and
+  it; Soon and Someday their lists. A task is added where one stands, and
   planned, put on a list or marked done from its row. A task opens beside the
   list, or as a page on a phone, where its plan, with shortcuts for today,
   tomorrow, the weekend and next week, its deadline, list and area save as they

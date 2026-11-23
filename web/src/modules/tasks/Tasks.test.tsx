@@ -30,7 +30,7 @@ const week = (): Task[] => [
   task(3, 40, { title: 'overdue', deadline: '2026-11-20' }),
   task(4, 30, { title: 'today', planned_from: '2026-11-23', planned_time: '14:00' }),
   task(5, 20, { title: 'the weekend', planned_from: '2026-11-28', planned_to: '2026-11-29', area: 'garden' }),
-  task(6, 10, { title: 'next', list: 'next' }),
+  task(6, 10, { title: 'soon', list: 'soon' }),
   task(7, 5, { title: 'someday', list: 'someday' }),
 ]
 
@@ -53,7 +53,7 @@ test('each view shows the open tasks its question gives by the server’s today,
   await waitFor(() => expect(where()).toBe('/tasks?view=week'))
   expect(shown()).toEqual({ week: ['the weekend'] })
   await userEvent.click(viewLinks()[2])
-  await waitFor(() => expect(shown()).toEqual({ next: ['next'] }))
+  await waitFor(() => expect(shown()).toEqual({ soon: ['soon'] }))
   await userEvent.click(viewLinks()[3])
   await waitFor(() => expect(shown()).toEqual({ someday: ['someday'] }))
   expect(reads(calls)).toBe(1)
@@ -89,7 +89,7 @@ test('the area chosen narrows every view and count and is kept in the address wi
 
 test.each([
   ['/tasks', { planned_from: '2026-11-23' }, 'today'],
-  ['/tasks?view=next', { list: 'next' }, 'next'],
+  ['/tasks?view=soon', { list: 'soon' }, 'soon'],
   ['/tasks?view=someday&area=garden', { list: 'someday', area: 'garden' }, 'someday'],
 ])('the add line on %s sends one task with %j, which then stands in its group without a reload and opens beside it', async (path, fields, group) => {
   narrow(false)
@@ -121,7 +121,7 @@ test('a quick button sends only what it changes, and the row then stands where i
 })
 
 test.each([
-  [1, { list: 'next' }, 'next'],
+  [1, { list: 'soon' }, 'soon'],
   [2, { list: 'someday' }, 'someday'],
 ])('the quick button %i of a task to sort sends %j and takes it to %s', async (n, fields, to) => {
   narrow(true)
@@ -207,21 +207,21 @@ test('a change made elsewhere shows without a reload, and a refusal shows the se
   narrow(false)
   const tasks = week()
   const calls = tasksServer(tasks, monday, (c) => (c.method === 'PATCH' ? json({ error: 'the line the server gave' }, 400) : undefined))
-  await open('/tasks?view=next')
+  await open('/tasks?view=soon')
   const es = FakeEventSource.all[0]
   await act(async () => es.open())
-  tasks.push(task(8, 0, { title: 'made by a client', list: 'next' }))
+  tasks.push(task(8, 0, { title: 'made by a client', list: 'soon' }))
   act(() => es.send({ module: 'tasks', kind: 'task', id: 8, area: 1 }))
   await act(() => vi.advanceTimersByTimeAsync(2000))
-  expect(shown().next).toEqual(['next', 'made by a client'])
+  expect(shown().soon).toEqual(['soon', 'made by a client'])
 
-  await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(ringOf('next'))
+  await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(ringOf('soon'))
   expect(await within(page()).findByRole('alert')).toHaveTextContent('the line the server gave')
-  expect(ringOf('next')).toHaveAttribute('aria-pressed', 'false')
+  expect(ringOf('soon')).toHaveAttribute('aria-pressed', 'false')
   expect(reads(calls)).toBe(2)
 })
 
-test('with no task at all a view says so, and with nothing for today Today offers Next', async () => {
+test('with no task at all a view says so, and with nothing for today Today offers Soon', async () => {
   narrow(true)
   const none = tasksServer([])
   const view = await open('/tasks')
@@ -230,9 +230,9 @@ test('with no task at all a view says so, and with nothing for today Today offer
   expect(writes(none)).toEqual([])
   view.unmount()
 
-  tasksServer([task(6, 10, { title: 'next', list: 'next' })])
+  tasksServer([task(6, 10, { title: 'soon', list: 'soon' })])
   const { where } = await open('/tasks')
   expect(shown()).toEqual({ today: [] })
   await userEvent.click(within(page().querySelector<HTMLElement>('[data-group=today]')!).getByRole('link'))
-  await waitFor(() => expect(where()).toBe('/tasks?view=next'))
+  await waitFor(() => expect(where()).toBe('/tasks?view=soon'))
 })

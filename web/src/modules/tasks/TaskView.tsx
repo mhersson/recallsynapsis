@@ -159,7 +159,7 @@ export default function TaskView({ task, now, areas, onChange }: Props) {
             label="List"
             options={[
               ['', 'None'],
-              ['next', 'Next'],
+              ['soon', 'Soon'],
               ['someday', 'Someday'],
             ]}
             value={task.list}

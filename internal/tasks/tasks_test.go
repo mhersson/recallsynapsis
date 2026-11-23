@@ -252,7 +252,7 @@ func TestTasksMadeInOneCallReadBackWithTheirPeriod(t *testing.T) {
 	code, got := f.do(t, http.MethodPost, "/api/tasks", `{"said":"`+said+`","tasks":[
 		{"title":"Tidy the garage","planned_from":"2026-11-28","planned_to":"2026-11-29"},
 		{"title":"Wash the car","planned_from":"2026-11-28","planned_to":"2026-11-29","area":"Garden"},
-		{"title":"Buy materials","planned_from":"2026-11-28","planned_to":"2026-11-29","list":"next","notes":"Screws"}]}`, f.laptop)
+		{"title":"Buy materials","planned_from":"2026-11-28","planned_to":"2026-11-29","list":"soon","notes":"Screws"}]}`, f.laptop)
 	require.Equal(t, http.StatusCreated, code, got)
 	assert.Equal(t, "2026-11-24", got["now"].(object)["date"])
 
@@ -260,7 +260,7 @@ func TestTasksMadeInOneCallReadBackWithTheirPeriod(t *testing.T) {
 	require.Len(t, made, 3)
 
 	for i, want := range []struct{ title, area, list string }{
-		{"Tidy the garage", "personal", ""}, {"Wash the car", "garden", ""}, {"Buy materials", "personal", "next"},
+		{"Tidy the garage", "personal", ""}, {"Wash the car", "garden", ""}, {"Buy materials", "personal", "soon"},
 	} {
 		r := made[i]
 		assert.Equal(t, "tasks:"+fmt.Sprint(r["id"]), r["ref"])
@@ -297,7 +297,7 @@ func TestTasksMadeInOneCallReadBackWithTheirPeriod(t *testing.T) {
 	assert.Equal(t, "Screws", full["notes"])
 	assert.Equal(t, []any{object{"at": made[2]["created_at"], "source": "laptop", "said": said, "changes": []any{
 		field("title", "", "Buy materials"), field("area", "", "personal"), field("planned_from", "", "2026-11-28"),
-		field("planned_to", "", "2026-11-29"), field("list", "", "next"),
+		field("planned_to", "", "2026-11-29"), field("list", "", "soon"),
 		object{"field": "notes"},
 	}}}, full["log"], "the making lists each field the task was given")
 
@@ -382,9 +382,9 @@ func TestASpanGivesTheTasksOfItsDays(t *testing.T) {
 
 	for _, draft := range []string{
 		`{"title":"Last weekend","planned_from":"2026-11-21","planned_to":"2026-11-22"}`,
-		`{"title":"Plan the trip","list":"next"}`,
+		`{"title":"Plan the trip","list":"soon"}`,
 		`{"title":"Garage","planned_from":"2026-11-28","planned_to":"2026-11-29"}`,
-		`{"title":"Car","planned_from":"2026-11-28","planned_to":"2026-11-29","list":"next","area":"garden"}`,
+		`{"title":"Car","planned_from":"2026-11-28","planned_to":"2026-11-29","list":"soon","area":"garden"}`,
 		`{"title":"Shop","planned_from":"2026-11-24"}`,
 		`{"title":"Dentist","planned_from":"2026-11-24","planned_time":"14:00"}`,
 		`{"title":"Call","planned_from":"2026-11-24","planned_time":"09:00"}`,
@@ -408,8 +408,8 @@ func TestASpanGivesTheTasksOfItsDays(t *testing.T) {
 		{"?from=2026-11-25&to=2026-11-27", []string{"Invoice", "Report"}},
 		{"?from=2026-12-01", []string{"Report"}},
 		{"?from=2026-12-08", []string{}},
-		{"?list=next", []string{"Car", "Plan the trip"}},
-		{"?list=next&from=2026-11-28&to=2026-11-29", []string{"Car"}},
+		{"?list=soon", []string{"Car", "Plan the trip"}},
+		{"?list=soon&from=2026-11-28&to=2026-11-29", []string{"Car"}},
 		{"?list=someday", []string{"Sail"}},
 		{"?list=none", []string{"Last weekend", "Call", "Dentist", "Shop", "Invoice", "Garage", "Report", "Loose end"}},
 		{"?area=Garden", []string{"Car"}},
@@ -453,7 +453,7 @@ func TestATaskIsUnsortedUntilItHasAListAPlanOrADeadline(t *testing.T) {
 	assert.Equal(t, []string{"Garage", "Loose end"}, got, "false asks for nothing")
 
 	for _, tt := range []struct{ body, state string }{
-		{`{"list":"next"}`, "open"},
+		{`{"list":"soon"}`, "open"},
 		{`{"list":""}`, "unsorted"},
 		{`{"deadline":"2026-12-01"}`, "open"},
 		{`{"deadline":""}`, "unsorted"},
@@ -476,7 +476,7 @@ func TestATaskMarkedDoneKeepsItsPlace(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	garage := f.one(t, `{"title":"Garage","planned_from":"2026-11-28","planned_to":"2026-11-29","planned_time":"10:00","list":"next","deadline":"2026-11-30"}`)
+	garage := f.one(t, `{"title":"Garage","planned_from":"2026-11-28","planned_to":"2026-11-29","planned_time":"10:00","list":"soon","deadline":"2026-11-30"}`)
 	car := f.one(t, `{"title":"Car","planned_from":"2026-11-28","planned_to":"2026-11-29"}`)
 
 	done := f.change(t, garage, `{"done":true}`, f.laptop)
@@ -491,7 +491,7 @@ func TestATaskMarkedDoneKeepsItsPlace(t *testing.T) {
 		assert.Equal(t, garage[k], done[k], "done keeps %s", k)
 	}
 
-	for _, query := range []string{"", "?list=next", "?from=2026-11-28&to=2026-11-29", "?to=2026-11-30", "?done=false"} {
+	for _, query := range []string{"", "?list=soon", "?from=2026-11-28&to=2026-11-29", "?to=2026-11-30", "?done=false"} {
 		got, _ := f.titles(t, query, f.phone)
 		assert.NotContains(t, got, "Garage", query)
 	}
@@ -511,7 +511,7 @@ func TestATaskMarkedDoneKeepsItsPlace(t *testing.T) {
 	got, _ = f.titles(t, "?done=true", f.phone)
 	assert.Equal(t, []string{"Car", "Tidy the garage"}, got, "the most recently done first")
 
-	got, _ = f.titles(t, "?done=true&list=next", f.phone)
+	got, _ = f.titles(t, "?done=true&list=soon", f.phone)
 	assert.Equal(t, []string{"Tidy the garage"}, got)
 
 	opened := f.change(t, garage, `{"done":false}`, f.laptop)
@@ -522,7 +522,7 @@ func TestATaskMarkedDoneKeepsItsPlace(t *testing.T) {
 		assert.Equal(t, garage[k], opened[k], "opened again, %s is as it was", k)
 	}
 
-	got, _ = f.titles(t, "?list=next", f.phone)
+	got, _ = f.titles(t, "?list=soon", f.phone)
 	assert.Equal(t, []string{"Tidy the garage"}, got)
 
 	assert.Equal(t, []any{

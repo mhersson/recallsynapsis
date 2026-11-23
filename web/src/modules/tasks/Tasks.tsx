@@ -21,7 +21,7 @@ const groupNames: Record<Group, string> = {
   today: 'Today',
   week: 'This week',
   later: 'Later',
-  next: 'Next',
+  soon: 'Soon',
   someday: 'Someday',
 }
 
@@ -117,7 +117,7 @@ export default function Tasks() {
       g === 'sort'
         ? [
             ['Today', { planned_from: now.date }],
-            ['Next', { list: 'next' }],
+            ['Soon', { list: 'soon' }],
             ['Someday', { list: 'someday' }],
           ]
         : g === 'left'
@@ -156,7 +156,7 @@ export default function Tasks() {
     listed = (
       <div className="empty">
         <b>No open tasks.</b>
-        {view === 'week' ? 'Add one on Today, Next or Someday' : 'Type one above'}, or ask an AI client to make one.
+        {view === 'week' ? 'Add one on Today, Soon or Someday' : 'Type one above'}, or ask an AI client to make one.
       </div>
     )
   else
@@ -174,7 +174,7 @@ export default function Tasks() {
             <h2 className="tgrp">{groupNames[g]}</h2>
             <div className="empty">
               <b>Nothing planned for today.</b>
-              <Link to={to('next')}>Pick one from Next</Link>
+              <Link to={to('soon')}>Pick one from Soon</Link>
             </div>
           </section>
         )

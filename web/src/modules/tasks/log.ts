@@ -2,7 +2,7 @@ import type { Area } from '../../api/types.ts'
 import { nameOf, type Entry } from './api.ts'
 import { day, period } from './dates.ts'
 
-const lists: Record<string, string> = { next: 'Next', someday: 'Someday' }
+const lists: Record<string, string> = { soon: 'Soon', someday: 'Someday' }
 
 // What an entry of a task's log did, in words; the making says what the task was made with.
 export function words(e: Entry, making: boolean, areas: Area[]): string {

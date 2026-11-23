@@ -1,6 +1,6 @@
 // Package tasks keeps each user's tasks: each in one of the user's areas,
 // with its notes, a planned period of days with an optional time on its
-// first, a deadline, a list, next or someday, and when it was done. It lists
+// first, a deadline, a list, soon or someday, and when it was done. It lists
 // them by area, list, state and a span of dates, tells which day it is in the
 // configured time zone, and keeps a log of every change of a task's fields.
 // It owns the tables tasks and task_changes.
@@ -71,7 +71,7 @@ const (
 )
 
 var (
-	lists    = []string{"", "next", "someday"}
+	lists    = []string{"", "soon", "someday"}
 	weekdays = []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 
 	errLimit = fmt.Errorf("limit is 1 to %d: %w", maxLimit, store.ErrInvalid)
@@ -212,7 +212,7 @@ type change struct {
 // filter is what a list asks for; a zero field asks for nothing.
 type filter struct {
 	area     string // a slug or a name
-	list     string // "next", "someday" or "none"
+	list     string // "soon", "someday" or "none"
 	from, to string // the span of dates, each side open when ""
 	unsorted bool
 	done     bool // the done tasks, else the open ones
@@ -283,7 +283,7 @@ func (f fields) check() error {
 	case f.title == "" || utf8.RuneCountInString(f.title) > maxTitle || strings.ContainsFunc(f.title, unicode.IsControl):
 		return fmt.Errorf("a title is 1 to %d characters, with no control characters: %w", maxTitle, store.ErrInvalid)
 	case !slices.Contains(lists, f.list):
-		return fmt.Errorf(`a list is "next", "someday" or "": %w`, store.ErrInvalid)
+		return fmt.Errorf(`a list is "soon", "someday" or "": %w`, store.ErrInvalid)
 	}
 
 	for _, v := range []struct{ key, value string }{{"planned_from", f.from}, {"planned_to", f.to}, {"deadline", f.deadline}} {
@@ -529,10 +529,10 @@ func (t tasks) list(ctx context.Context, f filter) (page, error) {
 	case "":
 	case "none":
 		list = ""
-	case "next", "someday":
+	case "soon", "someday":
 		list = f.list
 	default:
-		return page{}, fmt.Errorf(`list is "next", "someday" or "none": %w`, store.ErrInvalid)
+		return page{}, fmt.Errorf(`list is "soon", "someday" or "none": %w`, store.ErrInvalid)
 	}
 
 	if err := checkDate("from", f.from); err != nil {

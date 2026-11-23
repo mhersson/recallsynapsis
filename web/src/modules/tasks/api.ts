@@ -19,7 +19,7 @@ export type Row = {
   planned_time: string
   deadline: string
   deadline_day: string
-  list: '' | 'next' | 'someday'
+  list: '' | 'soon' | 'someday'
   state: State
   done_at: string | null
   has_notes: boolean
