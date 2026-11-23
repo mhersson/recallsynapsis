@@ -236,7 +236,7 @@ Every package states its one responsibility in its package comment, and
   hands every package the one handle. It owns no table but the migration ledger.
 - `internal/tasks`: the tasks module. It keeps each user's tasks, each in one of
   the user's areas, named by the area's slug, with its notes, a planned period,
-  a deadline, a list, `next` or `someday`, and when it was done. A date is text,
+  a deadline, a list, `soon` or `someday`, and when it was done. A date is text,
   `YYYY-MM-DD` or `""` for none, so dates compare as text, and an answer gives
   each date's weekday beside it. A from alone plans one day, a to before its
   from and a time without a plan are refused, and a from cleared clears the

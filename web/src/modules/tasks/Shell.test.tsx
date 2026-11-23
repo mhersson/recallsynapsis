@@ -12,7 +12,7 @@ const links = () => nav().map((a) => a.getAttribute('href'))
 const counted = () => nav().map((a) => a.querySelector('.cnt')?.textContent ?? '')
 
 // The real modules, with notes' inbox holding two captures and tasks holding one to sort.
-function server(modules: string[], tasks = [task(1, 5, { title: 'to sort' }), task(2, 5, { title: 'next', list: 'next' })]) {
+function server(modules: string[], tasks = [task(1, 5, { title: 'to sort' }), task(2, 5, { title: 'soon', list: 'soon' })]) {
   if (!modules.includes('tasks')) {
     const session: Session = { user: { name: 'ada' }, modules, version: '1.2.3', timezone: 'UTC', last_backup: null }
     return fakeServer((c) => (c.path === '/api/session' ? json(session) : c.path.startsWith('/api/areas') ? json({ areas }) : c.path.startsWith('/api/notes?inbox=true') ? json({ notes: [], total: 2 }) : undefined))
@@ -76,7 +76,7 @@ test('the count beside Tasks is read again on a change of a task, and is gone wh
     const es = FakeEventSource.all[0]
     await act(async () => es.open())
     expect(counted()[0]).toBe('1')
-    Object.assign(tasks[0], { list: 'next', state: 'open' })
+    Object.assign(tasks[0], { list: 'soon', state: 'open' })
     act(() => es.send({ module: 'tasks', kind: 'task', id: 1, area: 1 }))
     await act(() => vi.advanceTimersByTimeAsync(2000))
     expect(counted()[0]).toBe('')
