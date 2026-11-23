@@ -666,10 +666,21 @@ func TestNowIsTodayInTheConfiguredZone(t *testing.T) {
 	assert.Equal(t, object{"date": "2026-11-24", "weekday": "Tuesday", "time": "00:30", "timezone": "Europe/Helsinki", "week_start": "monday"},
 		got["now"], "Tuesday in Helsinki while it is still Monday in UTC")
 
+	now := got["now"]
+	garage := f.one(t, `{"title":"Garage"}`)
+
+	for _, full := range []object{
+		f.read(t, garage, f.phone), f.change(t, garage, `{"title":"Tidy the garage"}`, f.laptop),
+		f.trash(t, garage, "/trash", f.laptop), f.trash(t, garage, "/restore", f.laptop),
+	} {
+		assert.Equal(t, now, full["now"], "a task in full, read, changed, trashed or restored, tells it too")
+	}
+
 	f.load(t, object{"enabled": true, "week_start": "sunday"})
 
 	_, got = f.do(t, http.MethodGet, "/api/tasks", "", f.phone)
 	assert.Equal(t, "sunday", got["now"].(object)["week_start"])
+	assert.Equal(t, "sunday", f.read(t, garage, f.phone)["now"].(object)["week_start"])
 
 	for _, start := range []any{"someday", "Monday", "", int64(1)} {
 		for _, table := range []object{{"enabled": true, "week_start": start}, {"week_start": start}} {

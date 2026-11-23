@@ -178,7 +178,7 @@ type row struct {
 }
 
 // task is a task in full, with its links and the items that link to it,
-// and its log, the newest entry first.
+// its log, the newest entry first, and which day it is.
 type task struct {
 	row
 	Notes      string        `json:"notes"`
@@ -186,6 +186,7 @@ type task struct {
 	Links      []module.Item `json:"links"`
 	LinkedFrom []module.Item `json:"linked_from"`
 	Log        []entry       `json:"log"`
+	Now        clock         `json:"now"`
 }
 
 // entry is one change of a task as its log keeps it; the first is its making.
@@ -517,7 +518,8 @@ func (t tasks) get(ctx context.Context, id int64) (task, error) {
 }
 
 // read gives the user's task with the id in full, its links and the items
-// that link to it each as the core resolves it for the caller.
+// that link to it each as the core resolves it for the caller, and which day
+// it is, so the page of a task tells it without reading a list.
 func (t tasks) read(ctx context.Context, slugs map[int64]string, userID, id int64) (task, error) {
 	var (
 		out   task
@@ -587,7 +589,7 @@ func (t tasks) read(ctx context.Context, slugs map[int64]string, userID, id int6
 		return task{}, fmt.Errorf("tasks: task %d has no log", id)
 	}
 
-	out.Said = out.Log[len(out.Log)-1].Said
+	out.Said, out.Now = out.Log[len(out.Log)-1].Said, t.today()
 
 	return out, nil
 }
