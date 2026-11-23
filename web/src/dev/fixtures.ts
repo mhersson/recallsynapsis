@@ -319,6 +319,7 @@ export function task(id: number, minutes: number, t: Partial<Task>): Task {
     notes: '',
     said: '',
     log: [],
+    now: NOW,
     ...t,
   }
   made.planned_to ||= made.planned_from
@@ -332,7 +333,7 @@ export function task(id: number, minutes: number, t: Partial<Task>): Task {
 }
 
 // A task as a list gives it.
-export const taskRow = ({ notes: _, said: __, log: ___, ...r }: Task): TaskRow => r
+export const taskRow = ({ notes: _, said: __, log: ___, now: ____, ...r }: Task): TaskRow => r
 
 // GET /api/tasks from tasks, as the server answers it: the open tasks, or the done with done=true, of the area and the
 // list asked, or those to sort, in the server's order, as many as its limit, how many it asked for in all, and now.
@@ -463,9 +464,9 @@ export function answerTasks(tasks: Task[], method: string, url: URL, body: Recor
   }
   const t = tasks.find((x) => url.pathname === `/api/tasks/${x.id}`)
   if (!t || !['GET', 'PATCH'].includes(method)) return [404, { error: 'not found' }]
-  if (method === 'GET') return [200, t]
+  if (method === 'GET') return [200, { ...t, now }]
   const changed = changeTask(t, body)
   if (Array.isArray(changed)) return [changed[0], { error: changed[1] }]
   if (changed !== t) tell(Object.assign(t, changed))
-  return [200, t]
+  return [200, { ...t, now }]
 }

@@ -65,6 +65,17 @@ test('on a phone a task picked opens as a page of its own, whose crumb leads bac
   expect(rows()).toHaveLength(1)
 })
 
+test('on a phone a task’s page reads the task alone, which gives the day, and the list is read once the page goes back to it', async () => {
+  narrow(true)
+  const calls = tasksServer(tasks())
+  await open('/tasks/3')
+  await waitFor(() => expect(head().getByRole('heading', { level: 1 })).toHaveTextContent('in the garden'))
+  expect(reads(calls)).toBe(0)
+  await userEvent.click(within(screen.getByRole('main').querySelector<HTMLElement>('.crumb')!).getByRole('link'))
+  await waitFor(() => expect(rows()).toHaveLength(2))
+  expect(reads(calls)).toBe(1)
+})
+
 test('the ring of the open task marks it done, which strikes its row in place, and opens it again', async () => {
   narrow(false)
   const calls = tasksServer(tasks())

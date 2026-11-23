@@ -237,6 +237,14 @@ test('a change made elsewhere shows without a reload, and a refusal shows the se
   expect(reads(calls)).toBe(2)
 })
 
+test('a list that cannot be read says why, though the task open beside it is read', async () => {
+  narrow(false)
+  tasksServer(week(), monday, (c) => (c.path.startsWith('/api/tasks?limit=') ? json({ error: 'down' }, 502) : undefined))
+  await open('/tasks/4')
+  await waitFor(editButton)
+  expect(await within(page()).findByRole('alert')).toBeInTheDocument()
+})
+
 test('with no task at all a view says so, and with nothing for today Today offers Soon', async () => {
   narrow(true)
   const none = tasksServer([])

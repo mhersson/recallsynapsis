@@ -32,8 +32,9 @@ export type Row = {
 // "false" or "true"; the notes and the links give neither. The oldest is the making, each field it was given from "".
 export type Entry = { at: string; source: string; said: string; changes: { field: string; from?: string; to?: string }[] }
 
-// A task as GET /api/tasks/{id} gives it, in full: with its notes, the owner's own words when a client gave them, and its log.
-export type Task = Row & { notes: string; said: string; log: Entry[] }
+// A task as GET /api/tasks/{id} gives it, in full: with its notes, the owner's own words when a client gave them, its log,
+// and the server's today.
+export type Task = Row & { notes: string; said: string; log: Entry[]; now: Now }
 
 // The server's today, in its time zone, and the first day of its week, a weekday's name in lower case.
 export type Now = { date: string; weekday: string; time: string; timezone: string; week_start: string }
@@ -51,13 +52,17 @@ export function useTasks(read: () => void) {
   })
 }
 
-// The open tasks, 500 at most, as useTasks reads them. took places a task as a change answered it, at once and before
-// the stream tells of it, and takes it out once done; a read asked before it is dropped. A page sorts what it shows.
-export function useOpen() {
+// The open tasks, 500 at most, as useTasks reads them while on, and again once on. took places a task as a change answered
+// it, at once and before the stream tells of it, and takes it out once done; a read asked before it is dropped. A page
+// sorts what it shows.
+export function useOpen(on = true) {
   const [list, setList] = useState<List>()
   const [failed, setFailed] = useState('')
+  const [tick, setTick] = useState(0)
   const asked = useRef(0)
-  useTasks(() => {
+  useTasks(() => setTick((n) => n + 1))
+  useEffect(() => {
+    if (!on || !tick) return
     const n = ++asked.current
     api<List>('GET', '/tasks?limit=500').then(
       (l) => {
@@ -67,7 +72,7 @@ export function useOpen() {
       },
       (e: unknown) => n === asked.current && setFailed(message(e)),
     )
-  })
+  }, [on, tick])
   const took = (t: Row) => {
     asked.current++
     setList((l) => {

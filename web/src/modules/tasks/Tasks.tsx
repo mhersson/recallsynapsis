@@ -44,7 +44,9 @@ export default function Tasks() {
   const area = params.get('area') ?? ''
   const search = params.toString() ? `?${params}` : ''
   const areas = useAreas(true)
-  const { list, failed, took } = useOpen()
+  // A task open as a page of its own on a phone shows no list, and gives the server's today itself.
+  const alone = narrow && !!id
+  const { list, failed, took } = useOpen(!alone)
   const opened = useTask(id)
   const [refused, setRefused] = useState('')
   const [added, setAdded] = useState<number>()
@@ -52,8 +54,6 @@ export default function Tasks() {
   const [struck, setStruck] = useState<{ view: View; rows: Row[] }>({ view, rows: [] })
   if (struck.view !== view) setStruck({ view, rows: [] })
   const done = struck.rows
-  // A task open as a page of its own on a phone shows no list; the list still gives the server's today.
-  const alone = narrow && !!id
 
   const here = (t: Row) => !area || t.area === area
   const open = list?.tasks.filter(here) ?? []
@@ -70,17 +70,20 @@ export default function Tasks() {
     return q.size ? `/tasks?${q}` : '/tasks'
   }
 
-  if (!list)
+  // Until the list is read the task open gives the day, so a phone turned keeps the task in place.
+  const now = (!alone && list?.now) || opened.task?.now
+  if (!now) {
+    const why = alone ? opened.failed : failed
     return (
-      failed && (
+      why && (
         <div className="page">
           <p role="alert" className="err">
-            {failed}
+            {why}
           </p>
         </div>
       )
     )
-  const now = list.now
+  }
   const isDone = (t: Row) => done.some((x) => x.id === t.id) && !open.some((x) => x.id === t.id)
 
   // Sends a change of a task and places the task as the answer has it, a task marked done staying where it is shown;
@@ -131,7 +134,8 @@ export default function Tasks() {
   }
 
   let listed
-  if (list.tasks.length === 0 && done.length === 0)
+  if (!list) listed = null
+  else if (list.tasks.length === 0 && done.length === 0)
     listed = (
       <div className="empty">
         <b>No open tasks.</b>
@@ -223,9 +227,9 @@ export default function Tasks() {
                 }}
               />
             )}
-            {refused && (
+            {(refused || failed) && (
               <p role="alert" className="err">
-                {refused}
+                {refused || failed}
               </p>
             )}
             {listed}
