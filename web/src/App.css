@@ -40,6 +40,7 @@
   line-height: 1.25;
   margin: 0;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 .page-head .spacer {
@@ -50,6 +51,7 @@
   color: var(--grey2);
   font-size: 13px;
   margin: 0 0 16px;
+  overflow-wrap: anywhere;
 }
 
 /* What the pages share. */
@@ -72,6 +74,7 @@
 .err {
   color: var(--red);
   margin: 0 0 14px;
+  overflow-wrap: anywhere;
 }
 
 .empty {
@@ -81,6 +84,7 @@
   color: var(--grey2);
   text-align: center;
   margin-top: 16px;
+  overflow-wrap: anywhere;
 }
 
 .empty b {
@@ -216,6 +220,7 @@ a.row[aria-current] {
   display: block;
   color: var(--grey2);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .tag {
