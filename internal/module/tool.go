@@ -2,8 +2,12 @@ package module
 
 import (
 	"context"
+	"fmt"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
 // Tool is one MCP tool of a module. NewTool makes one. Only an API token
@@ -41,3 +45,17 @@ func NewTool[In, Out any](name, description string, access Access, do func(conte
 
 // AddTo adds t to srv, with each of its calls run by guard.
 func (t Tool) AddTo(srv *mcp.Server, guard Guard) { t.add(srv, guard) }
+
+// Capped refuses a text given to a tool as field when it is longer than
+// limit, which counts characters, not bytes. A nil text was not given.
+func Capped(field string, text *string, limit int) error {
+	if text == nil {
+		return nil
+	}
+
+	if count := utf8.RuneCountInString(*text); count > limit {
+		return fmt.Errorf("%s is %d characters, over the cap of %d on a text a tool keeps: %w", field, count, limit, store.ErrInvalid)
+	}
+
+	return nil
+}
