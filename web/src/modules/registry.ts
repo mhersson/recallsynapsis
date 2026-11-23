@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react'
 import type { Area, Linked } from '../api/types.ts'
 import { notes } from './notes/index.tsx'
+import { push } from './push/index.tsx'
 import { tasks } from './tasks/index.tsx'
 
 // A place the shell links to: an entry of the side bar, a phone tab or a row of More. count renders the number the
@@ -36,6 +37,9 @@ export type Maker = {
 // to show.
 export type Item = { to: string; mark: string; state?: string }
 
+// A part of the Settings page: its anchor, its title and what it holds.
+export type Part = { id: string; title: string; body: ReactNode }
+
 // What a module adds to the web app; the shell shows it only while GET /api/session names it.
 export type Module = {
   name: string
@@ -59,7 +63,13 @@ export type Module = {
   make?: Maker
   // An item of the module, given its reference, kind and state, as a hit or a link names it.
   item?: (ref: string, kind: string, state: string) => Item
+  // A part of Settings, after Backups.
+  settings?: Part
+  // Its kinds of notification, which the part Notifications shows under this browser's lines.
+  notify?: ComponentType
+  // What it does before the session ends, as a person signs out; the session ends whether it worked or not.
+  signOut?: () => Promise<unknown>
 }
 
 // Every module, one line each, in the order the navigation shows them.
-export const modules: Module[] = [tasks, notes]
+export const modules: Module[] = [tasks, notes, push]

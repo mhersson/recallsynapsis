@@ -1,4 +1,4 @@
-import { ago, clock, when } from './time.ts'
+import { ago, clock, moment, when } from './time.ts'
 
 const min = 60_000
 const now = Date.parse('2026-11-22T12:00:00Z')
@@ -35,4 +35,12 @@ test('when names the day only when it is not today', () => {
   expect(when(today.toISOString())).toMatch(/ 03:00$/)
   expect(when(before.toISOString())).toMatch(/ 03:00$/)
   expect(when(before.toISOString())).not.toBe(when(today.toISOString()))
+})
+
+test('moment says today before the time, and names another day instead', () => {
+  const today = new Date(now)
+  today.setHours(14, 0)
+  const before = new Date(today.getTime() - 3 * 24 * 60 * min)
+  expect(moment(today.toISOString())).toBe('today 14:00')
+  expect(moment(before.toISOString())).toBe(clock(before.toISOString()))
 })

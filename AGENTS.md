@@ -109,8 +109,13 @@ After a change to `web/`, look at the screen before you finish.
   `modules=tasks,notes` switches the named modules on, so Tasks and Search
   find the fixed tasks, and the Inbox, Notes and Search the fixed notes;
   `backup=old` makes the last backup three days old and `backup=none`
-  leaves none. What the page changes holds until it reloads, and a change
-  of a note or a task reaches the event stream, as the server's does.
+  leaves none; with `push` among `modules=`, `push=off`, `on`, `failed`,
+  `home`, `refused` or `none` makes this browser one whose notifications
+  are off, on, or on with the last one failed, an iPhone's Safari tab, one
+  that refuses notifications, or one with no Web Push, with two other
+  browsers on but for `off`. What the page changes holds until it reloads,
+  and a change of a note, a task or a browser reaches the event stream, as
+  the server's does.
 - Read the PNG and say what you see. Fix what looks wrong and shoot again.
 - Stop Vite by the pid you recorded, never by port or name.
 
@@ -306,7 +311,14 @@ Every package states its one responsibility in its package comment, and
   package that embeds its build from `web/dist/app` and serves it in front of
   the API. A binary built without the app serves the committed
   `web/dist/placeholder.html` in its place. Each module of the web app is one
-  folder under `web/src/modules/`, listed in `web/src/modules/registry.ts`.
+  folder under `web/src/modules/`, listed in `web/src/modules/registry.ts`,
+  where a module may also give a part of Settings, shown after Backups, its
+  kinds of notification, which the part Notifications shows, and what it
+  does before a person signs out, which never keeps the session open. The
+  push module gives no page, only the part Notifications, and turns this
+  browser's notifications off as a person signs out. The service worker,
+  `web/public/sw.js`, shows each notification pushed to the browser, and a
+  tap on one takes an open window to its path, or opens one there.
 - `scripts/`: the scans and the line count that `make` runs.
 - `Dockerfile`: Node builds the web app, Go builds the binary with it
   embedded, and a distroless static image runs it as user 65532. Every base

@@ -57,8 +57,8 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   a note shows its ring and leads to its page.
 - Push sends a module's notifications as Web Push to every browser of the
   owner's in which they are turned on, encrypted for each browser, and a
-  browser is turned on or off with the session cookie alone. No module of this
-  build sends one.
+  browser is turned on or off in Settings, under Notifications, with the
+  session cookie alone. No module of this build sends one.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and Tasks the tasks, done or
