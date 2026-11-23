@@ -16,6 +16,7 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/notes"
 	"github.com/mhersson/recallsynapsis/internal/store"
+	"github.com/mhersson/recallsynapsis/internal/tasks"
 )
 
 // migrations are auth's and core's, auth's first: core's areas belong to its
@@ -24,7 +25,7 @@ var migrations = slices.Concat(auth.Migrations, core.Migrations)
 
 // modules builds each feature module of the binary, in the order search
 // groups them and the session names them.
-var modules = []func(module.Deps) module.Module{notes.New}
+var modules = []func(module.Deps) module.Module{notes.New, tasks.New}
 
 // dataFlags adds --data-dir and --config to flags.
 func dataFlags(flags *flag.FlagSet) (dirFlag, configFlag *string) {
@@ -56,6 +57,12 @@ func openData(ctx context.Context, dirFlag, configFlag string, changed func(cont
 		return nil, err
 	}
 
+	// The configuration has refused a timezone that does not load.
+	zone, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := privateDataDir(dir); err != nil {
 		return nil, err
 	}
@@ -67,7 +74,7 @@ func openData(ctx context.Context, dirFlag, configFlag string, changed func(cont
 
 	areas := core.New(st)
 
-	ms, err := areas.LoadModules(ctx, modules, cfg, module.Deps{Now: time.Now, Dir: dir, Changed: changed})
+	ms, err := areas.LoadModules(ctx, modules, cfg, module.Deps{Now: time.Now, Zone: zone, Dir: dir, Changed: changed})
 	if err != nil {
 		_ = st.Close()
 

@@ -51,7 +51,7 @@ verb starts, so a change takes effect at the next start.
 | --- | --- | --- |
 | `listen` | `127.0.0.1:7119` | the host and port served on, in plain HTTP |
 | `public_url` | none, required | the address people reach Recall Synapsis at: `http` or `https`, with a host and no path, query or user, such as `https://recall.example.org` |
-| `timezone` | `UTC` | the time zone the nightly backup's time and a snapshot's day are read in, such as `Europe/Oslo` |
+| `timezone` | `UTC` | the time zone the nightly backup's time and a snapshot's day are read in, and in which tasks tell which day it is, such as `Europe/Oslo` |
 | `owner` | none, required | the name the owner signs in with |
 | `backup.dir` | none | the directory backups go to; with none there are no nightly backups |
 | `backup.at` | `03:00` | the time of day of the nightly backup, as `HH:MM` on a 24-hour clock |
@@ -79,8 +79,17 @@ filed, and the trash.
 | `capture_max_chars` | `4000` | the longest text an MCP tool of notes keeps, in characters, at least 1: `text` and `said` of `create_note`, and `body` and `append` of `update_note`, each on its own; REST, and so the web app, has no such cap; checked whether notes is on or not |
 | `file_max_mib` | `15` | the largest file that can be attached, in MiB, at least 1; checked whether notes is on or not |
 
-A whole file, with `listen`, `backup.at`, `backup.keep`, `capture_max_chars`
-and `file_max_mib` at their defaults:
+`[modules.tasks]` is the tasks module: tasks in the areas, each with its notes,
+a planned period of days with an optional time on its first, a deadline, the
+list Next or Someday, when it was done, and a log of its changes.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | whether tasks is on |
+| `week_start` | `monday` | the first day of the week, which tasks give beside today's date: a weekday's name in lower case, such as `sunday`; checked whether tasks is on or not |
+
+A whole file, with `listen`, `backup.at`, `backup.keep`, `capture_max_chars`,
+`file_max_mib` and `week_start` at their defaults:
 
 ```toml
 listen     = "127.0.0.1:7119"
@@ -97,4 +106,8 @@ keep = 14
 enabled           = true
 capture_max_chars = 4000
 file_max_mib      = 15
+
+[modules.tasks]
+enabled    = true
+week_start = "monday"
 ```
