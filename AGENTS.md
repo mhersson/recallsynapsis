@@ -113,9 +113,11 @@ After a change to `web/`, look at the screen before you finish.
   `home`, `refused` or `none` makes this browser one whose notifications
   are off, on, or on with the last one failed, an iPhone's Safari tab, one
   that refuses notifications, or one with no Web Push, with two other
-  browsers on but for `off`. What the page changes holds until it reloads,
-  and a change of a note, a task or a browser reaches the event stream, as
-  the server's does.
+  browsers on but for `off`; with `tasks` and `push` among `modules=`,
+  Settings shows the kinds of notification at their first values, and
+  `notify=refused` refuses every change of them. What the page changes holds
+  until it reloads, and a change of a note, a task, a browser or a kind of
+  notification reaches the event stream, as the server's does.
 - Read the PNG and say what you see. Fix what looks wrong and shoot again.
 - Stop Vite by the pid you recorded, never by port or name.
 
@@ -332,7 +334,9 @@ Every package states its one responsibility in its package comment, and
   kinds of notification, which the part Notifications shows, and what it
   does before a person signs out, which never keeps the session open. The
   push module gives no page, only the part Notifications, and turns this
-  browser's notifications off as a person signs out. The service worker,
+  browser's notifications off as a person signs out. The tasks module gives
+  its four kinds of notification, each a switch applied as it is flipped,
+  three with an hour that waits for Save. The service worker,
   `web/public/sw.js`, shows each notification pushed to the browser, and a
   tap on one takes an open window to its path, or opens one there.
 - `scripts/`: the scans and the line count that `make` runs.

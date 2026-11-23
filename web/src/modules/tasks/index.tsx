@@ -3,6 +3,7 @@ import { made, make, ring, split, type State } from './api.ts'
 import AreaTasks from './AreaTasks.tsx'
 import MakeTask from './MakeTask.tsx'
 import { TasksIcon, Unsorted } from './nav.tsx'
+import Notify from './Notify.tsx'
 import Tasks from './Tasks.tsx'
 import Trashed from './Trashed.tsx'
 import When from './When.tsx'
@@ -28,4 +29,5 @@ export const tasks: Module = {
     mark: ring(state as State),
     state: state === 'done' ? 'done' : state === 'unsorted' ? 'to sort' : undefined,
   }),
+  notify: Notify,
 }

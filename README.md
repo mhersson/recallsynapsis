@@ -62,7 +62,9 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   at a task's start time, and what the day holds at a morning hour, both on at
   first; and, once switched on, the tasks due tomorrow and those planned for
   today with no start time today, each at its own hour. Each kind is switched,
-  and its hour set, with the session cookie alone.
+  and its hour set, in Settings under Notifications too, with the session
+  cookie alone: a switch applies the moment it is flipped, and an hour waits
+  for Save.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and Tasks the tasks, done or

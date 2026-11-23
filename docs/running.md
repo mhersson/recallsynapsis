@@ -287,9 +287,10 @@ outside the trash, it names:
 A kind with no task to name sends nothing. Its hour is read in `timezone`. At
 first the start time and the morning, at 07:00, are on, and the deadline, at
 18:00, and the planned today, at 09:00, are off. Each kind is switched on or
-off, and its hour set, for every browser of the user at once, with the session
-cookie alone: `GET /api/tasks/notify` reads the four and their hours, and
-`PATCH /api/tasks/notify` changes those it is given.
+off, and its hour set, in Settings under Notifications, for every browser of
+the user at once, with the session cookie alone: `GET /api/tasks/notify` reads
+the four and their hours, and `PATCH /api/tasks/notify` changes those it is
+given.
 
 The server looks every 30 seconds and keeps the moment it has notified up to,
 so each notification is sent once. One whose time passed while the server was
