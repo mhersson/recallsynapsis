@@ -1,9 +1,9 @@
 # Running Recall Synapsis
 
 This document covers building Recall Synapsis, the verbs, the password, the API
-tokens, running it from the image, what stands in front of it, backups and
-upgrading. The data directory and every key of `recallsynapsis.toml` are in
-[configuration.md](configuration.md).
+tokens, running it from the image, what stands in front of it, notifications,
+backups and upgrading. The data directory and every key of
+`recallsynapsis.toml` are in [configuration.md](configuration.md).
 
 ## Building
 
@@ -263,6 +263,36 @@ can make the owner wait by trying the owner's name. That is why the web app
 belongs behind an access layer, such as Cloudflare Access over the whole
 hostname.
 
+## Notifications
+
+With `[modules.push]` on ([configuration.md](configuration.md#recallsynapsistoml)),
+the server sends notifications to the owner's browsers as Web Push, with
+`public_url`, which must be `https`, as its contact. They are turned on in each
+browser, for that browser, with the session cookie alone: no API token turns a
+browser on or off. On an iPhone or iPad only the app added to the Home Screen
+can turn them on, since a Safari tab there has no Web Push. A message goes to
+every browser that has them on.
+
+The server must be able to reach, on port 443, the push service of each
+browser in use, which the browser names as it turns notifications on:
+`web.push.apple.com` for Safari, `updates.push.services.mozilla.com` for
+Firefox, and `fcm.googleapis.com` for Chrome, Brave and Android, as their
+makers run them today.
+
+A message is encrypted for the browser alone. Its push service sees when it is
+sent, its size, the server's address and `public_url`, and its tag, which
+names what it is about so that a newer one replaces it; never its words. It
+waits there until the day ends in `timezone`.
+
+A browser whose push service says it no longer knows it is forgotten. Any
+other failure is logged and kept on the browser, with the push service's host
+and when, until a message to it goes through; a failed message is not sent
+again.
+
+The server makes its signing key the first time push needs it and keeps it in
+the database, so a snapshot holds it, and a restore keeps every browser that
+had notifications on when the snapshot was taken.
+
 ## Backups
 
 ### Switching them on
@@ -287,9 +317,9 @@ against losing the disk. In the image, that is the second volume, with
 
 The backup directory is made with mode 0700 when it is absent, and a backup
 into one the group or others have any permission on is refused, as the data
-directory is: a snapshot holds the password hash and the token hashes, and
-whoever could write there could plant a snapshot to restore. A share whose
-mount sets the modes, as SMB's does, is mounted with
+directory is: a snapshot holds the password hash, the token hashes and push's
+signing key, and whoever could write there could plant a snapshot to restore.
+A share whose mount sets the modes, as SMB's does, is mounted with
 `dir_mode=0700,file_mode=0600` and the server's user as its owner.
 
 The web app asks for its session as it loads and each time its event stream
@@ -299,9 +329,10 @@ answers.
 
 ### What a backup holds
 
-- `recallsynapsis-YYYYMMDD.db`: a snapshot of the whole database, taken while
-  the server serves, named by its day in `timezone`. A second backup the same
-  day replaces that day's snapshot. The newest `keep` snapshots are kept.
+- `recallsynapsis-YYYYMMDD.db`: a snapshot of the whole database, push's
+  signing key with it, taken while the server serves, named by its day in
+  `timezone`. A second backup the same day replaces that day's snapshot. The
+  newest `keep` snapshots are kept.
 - `files/`: the contents of the attached files that the data directory's
   `files/` holds. A backup copies only those the backup lacks, and never
   removes one, so this one `files/` serves every snapshot, and the contents
@@ -384,9 +415,11 @@ docker run --rm -it -u 65532:65532 \
 docker start recallsynapsis
 ```
 
-A restore brings back the password and the tokens the snapshot holds: revoke
-again in Settings any token revoked since it was taken, and set the password
-again if it was changed since.
+A restore brings back the password, the tokens, push's signing key and the
+browsers with notifications on that the snapshot holds: revoke again in
+Settings any token revoked since it was taken, set the password again if it
+was changed since, turn notifications on again in a browser that turned them
+on since, and off again in one that turned them off since.
 
 ## Upgrading
 

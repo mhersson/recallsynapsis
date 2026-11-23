@@ -122,10 +122,10 @@ Every package states its one responsibility in its package comment, and
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
   verb registers itself from an `init` in its own file. `datadir.go` holds
-  `modules`, the list of the binary's feature modules, which is notes and
-  tasks, with the fake after it in the tests, and every verb that opens the
-  database builds them all, with the configuration's `public_url`, so every
-  module's migrations run whether it is on or not.
+  `modules`, the list of the binary's feature modules, which is notes, tasks
+  and push, with the fake after it in the tests, and every verb that opens the
+  database builds them all, so every module's migrations run whether it is on
+  or not, and gives them the configuration's `public_url`.
   `serve` gives the modules the hub of the event streams, whose streams end
   as a signal begins the shutdown, runs the jobs of the modules switched on
   and the nightly backup, and stops them before the store closes.
@@ -239,6 +239,23 @@ Every package states its one responsibility in its package comment, and
   it names, an idea that names none in the personal area and any other in the
   inbox, and keeps its `said` on the first revision. It owns the tables `notes`,
   `note_tags`, `note_revisions`, `note_links`, `notes_fts` and `note_files`.
+- `internal/push`: the push module. It delivers a message to every browser of
+  its user, one after the other, as Web Push with no push library: encrypted
+  for the browser's keys (RFC 8291), its JSON at most 2048 bytes, its text cut
+  at a character boundary to fit, and posted with a token signed with the
+  server's key (RFC 8292) that names `public_url` as the contact, at high
+  urgency, to wait until the day ends in the configured `timezone`, with its
+  tag as the topic. The client waits at most 30 seconds and follows no redirect. A push
+  service answering 404 or 410 means the browser is gone, and it is forgotten;
+  any other failure is logged and kept on the browser's row as one line that
+  names the push service's host and never the address, which is a capability,
+  until a message goes through. The key is one P-256 key, made the first time
+  it is needed and kept in the database. Its routes, all for the session
+  cookie alone, give the public key, the count of the caller's browsers and
+  one of them by its id, register a browser by its address, unique, which
+  makes it the caller's, and turn one or all of the caller's off, each change
+  told to the caller's open streams. It owns the tables `push_subscriptions`
+  and `push_key`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. Beside it is what the modules' searches
@@ -297,4 +314,4 @@ Every package states its one responsibility in its package comment, and
 - `README.md` and `docs/`: the documents for whoever runs it.
   `configuration.md` holds the data directory and every key; `running.md`
   building, the verbs, the password, the API tokens, the image, what stands
-  in front, backups and restoring, and upgrading.
+  in front, notifications, backups and restoring, and upgrading.

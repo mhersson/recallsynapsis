@@ -3,7 +3,7 @@
 Recall Synapsis keeps what it owns in one data directory and reads its settings
 from `recallsynapsis.toml`, which is in that directory unless `--config` names
 another file. This document covers both. Building, the password, the tokens, the
-image, what stands in front, backups and upgrading are in
+image, what stands in front, notifications, backups and upgrading are in
 [running.md](running.md).
 
 ## The data directory
@@ -18,8 +18,8 @@ these that is set:
 
 The directory is made with mode 700 when it is absent. A verb refuses to work
 when the group or others have any permission on it, and prints the `chmod 700`
-that fixes it: the password's hash and the token hashes live in the database
-there.
+that fixes it: the password's hash, the token hashes and push's signing key
+live in the database there.
 
 The directory holds:
 
@@ -51,7 +51,7 @@ verb starts, so a change takes effect at the next start.
 | --- | --- | --- |
 | `listen` | `127.0.0.1:7119` | the host and port served on, in plain HTTP |
 | `public_url` | none, required | the address people reach Recall Synapsis at: `http` or `https`, with a host and no path, query or user, such as `https://recall.example.org` |
-| `timezone` | `UTC` | the time zone the nightly backup's time and a snapshot's day are read in, and in which tasks tell which day it is, such as `Europe/Oslo` |
+| `timezone` | `UTC` | the time zone the nightly backup's time and a snapshot's day are read in, in which tasks tell which day it is, and at whose midnight a notification stops waiting at a push service, such as `Europe/Oslo` |
 | `owner` | none, required | the name the owner signs in with |
 | `backup.dir` | none | the directory backups go to; with none there are no nightly backups |
 | `backup.at` | `03:00` | the time of day of the nightly backup, as `HH:MM` on a 24-hour clock |
@@ -90,6 +90,17 @@ the trash.
 | `week_start` | `monday` | the first day of the week, which tasks give beside today's date: a weekday's name in lower case, such as `sunday`; checked whether tasks is on or not |
 | `capture_max_chars` | `4000` | the longest text an MCP tool of tasks keeps, in characters, at least 1: the `notes` of each task and `said` of `create_tasks`, and `notes` of `update_task`, each on its own; a title has its own cap of 200 characters everywhere; REST, and so the web app, has no such cap; checked whether tasks is on or not |
 
+`[modules.push]` is the push module: notifications sent to each browser of
+the owner's in which they are turned on, as Web Push
+([running.md](running.md#notifications)). It has no key but `enabled`, and no
+other module's table has a key for it. Push signs what it sends with
+`public_url` as its contact, so with push on `public_url` must be `https`;
+nothing checks that, and a push service may refuse what an `http` one signs.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | whether push is on |
+
 A whole file, with `listen`, `backup.at`, `backup.keep`, both
 `capture_max_chars`, `file_max_mib` and `week_start` at their defaults:
 
@@ -113,4 +124,7 @@ file_max_mib      = 15
 enabled           = true
 week_start        = "monday"
 capture_max_chars = 4000
+
+[modules.push]
+enabled = true
 ```

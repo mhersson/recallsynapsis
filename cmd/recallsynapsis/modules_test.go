@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/ecdh"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -67,6 +70,8 @@ func TestEveryVerbAppliesTheMigrationsOfAModuleThatIsOff(t *testing.T) {
 			assert.True(t, hasTable(t, dir, "fake_items"))
 			assert.True(t, hasTable(t, dir, "notes"), "the binary's own modules are built too")
 			assert.True(t, hasTable(t, dir, "tasks"))
+			assert.True(t, hasTable(t, dir, "push_subscriptions"))
+			assert.True(t, hasTable(t, dir, "push_key"))
 		})
 	}
 }
@@ -118,6 +123,53 @@ func TestAModuleTellsTheDayInTheConfiguredZone(t *testing.T) {
 	var got struct{ Now struct{ Timezone string } }
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got), rec.Body.String())
 	assert.Equal(t, "Pacific/Kiritimati", got.Now.Timezone)
+}
+
+func TestPushSignsWithThePublicURL(t *testing.T) {
+	t.Parallel()
+
+	got := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get("Authorization")
+
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(srv.Close)
+
+	config := writeConfig(t, t.TempDir(), validConfig+"[modules.push]\nenabled = true\n")
+
+	d, err := openData(t.Context(), filepath.Join(t.TempDir(), "data"), config, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.store.Close() })
+
+	browser, err := ecdh.P256().GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	// A browser at a push service of the test, in plain HTTP, which a registration would refuse.
+	b64 := base64.RawURLEncoding
+	_, err = d.store.ExecContext(t.Context(), `INSERT INTO users (id, name, created_at) VALUES (1, 'ada', 0)`)
+	require.NoError(t, err)
+	_, err = d.store.ExecContext(t.Context(), `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at) VALUES (1, ?, ?, ?, 0)`,
+		srv.URL+"/push/one", b64.EncodeToString(browser.PublicKey().Bytes()), b64.EncodeToString(make([]byte, 16)))
+	require.NoError(t, err)
+
+	d.modules.Notify(t.Context(), 1, module.Message{Title: "Rake"})
+
+	var header string
+
+	select {
+	case header = <-got:
+	default:
+		require.FailNow(t, "push sent nothing")
+	}
+
+	token, _, _ := strings.Cut(strings.TrimPrefix(header, "vapid t="), ", k=")
+	claims, err := b64.DecodeString(strings.Split(token, ".")[1])
+	require.NoError(t, err)
+
+	var c struct{ Sub string }
+	require.NoError(t, json.Unmarshal(claims, &c))
+	assert.Equal(t, "https://recall.example.org", c.Sub)
 }
 
 // fakeRoute is the status of a POST with no authority to the fake module's
