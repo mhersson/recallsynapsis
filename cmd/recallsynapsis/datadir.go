@@ -56,6 +56,12 @@ func openData(ctx context.Context, dirFlag, configFlag string, changed func(cont
 		return nil, err
 	}
 
+	// The configuration has refused a timezone that does not load.
+	zone, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := privateDataDir(dir); err != nil {
 		return nil, err
 	}
@@ -67,7 +73,7 @@ func openData(ctx context.Context, dirFlag, configFlag string, changed func(cont
 
 	areas := core.New(st)
 
-	ms, err := areas.LoadModules(ctx, modules, cfg, module.Deps{Now: time.Now, Dir: dir, Changed: changed})
+	ms, err := areas.LoadModules(ctx, modules, cfg, module.Deps{Now: time.Now, Zone: zone, Dir: dir, Changed: changed})
 	if err != nil {
 		_ = st.Close()
 
