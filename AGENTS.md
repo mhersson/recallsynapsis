@@ -233,7 +233,11 @@ Every package states its one responsibility in its package comment, and
   `note_tags`, `note_revisions`, `note_links`, `notes_fts` and `note_files`.
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
-  hands every package the one handle. It owns no table but the migration ledger.
+  hands every package the one handle. Beside it is what the modules' searches
+  share: a search's text parted into its words, each of three characters or
+  more quoted as a phrase for an FTS5 index with the trigram tokenizer and
+  each shorter one looked for in the text read back, in any case, and a hit's
+  snippet, placed by those words. It owns no table but the migration ledger.
 - `internal/tasks`: the tasks module. It keeps each user's tasks, each in one of
   the user's areas, named by the area's slug, with its notes, a planned period,
   a deadline, a list, `soon` or `someday`, and when it was done. A date is text,
