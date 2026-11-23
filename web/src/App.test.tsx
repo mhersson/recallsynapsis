@@ -4,9 +4,10 @@ import type { Session } from './api/types.ts'
 import { open } from './test-app.tsx'
 import { FakeEventSource, fakeServer, json, narrow, redirected } from './test-server.ts'
 
-// Stand-in modules, each on while the session names it: plain adds nothing, and things has a home, a page that shows
+// Stand-in modules, each on while the session names it: plain adds nothing, things has a home, a page that shows
 // the signed-in user's name, an entry with a count of 7, and an action whose form is a button that tells the area it was
-// given and whether it is in a dialog, and closes it. The factory is hoisted above the imports, so it makes its elements without JSX.
+// given and whether it is in a dialog, and closes it, and crowd has two tabs. The factory is hoisted above the imports,
+// so it makes its elements without JSX.
 vi.mock('./modules/registry.ts', async () => {
   const { createElement } = await import('react')
   const { useSession } = await import('./session.ts')
@@ -28,6 +29,16 @@ vi.mock('./modules/registry.ts', async () => {
           { path: '/things', element: createElement(Things) },
           { path: '/odds', element: createElement(Things) },
         ],
+      },
+      {
+        name: 'crowd',
+        nav: [],
+        tabs: [
+          { to: '/one', label: 'One', icon: null },
+          { to: '/two', label: 'Two', icon: null },
+        ],
+        more: [],
+        routes: [],
       },
     ],
   }
@@ -230,6 +241,20 @@ test('a phone has the tabs of the modules that are on, then Projects and More', 
   signedIn(['things'])
   await show()
   expect(links()).toEqual(['/things', '/act', '/projects', '/more'])
+})
+
+test('a phone with no room among five tabs has Projects under More, which stays current on its pages', async () => {
+  narrow(true)
+  signedIn(['things', 'crowd'])
+  const view = await show('/projects')
+  expect(links()).toEqual(['/things', '/one', '/act', '/two', '/more'])
+  expect(current()).toEqual(['/more'])
+  expect(within(screen.getByRole('main')).getAllByRole('link')[0]).toHaveAttribute('href', '/more')
+  view.unmount()
+
+  signedIn(['things', 'crowd'])
+  await show('/areas/2')
+  expect(current()).toEqual(['/more'])
 })
 
 test.each([
