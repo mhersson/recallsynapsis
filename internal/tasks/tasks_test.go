@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,13 +29,26 @@ import (
 
 type object = map[string]any
 
+const password = "correct horse battery"
+
+// passwordHash is password's hash, made once since each costs an argon2 run.
+var passwordHash = sync.OnceValue(func() string {
+	h, err := auth.HashPassword(password)
+	if err != nil {
+		panic(err)
+	}
+
+	return h
+})
+
 // start is the fixture's clock: late on Monday 23 November 2026 in UTC, when
 // Tuesday has begun in the fixture's zone.
 var start = time.Date(2026, 11, 23, 22, 30, 0, 0, time.UTC)
 
 // fixture serves a database whose user ada has her personal area and the
-// project Garden, and whose user grace has her personal area alone, each
-// reached by the Authorization header of a token.
+// project Garden, and whose user grace has her personal area alone. Each
+// user is reached by the Authorization header of a token, and only a test of
+// what no token may do signs in, since each sign-in spends an argon2 run.
 type fixture struct {
 	h      http.Handler
 	store  *store.Store
@@ -41,6 +56,7 @@ type fixture struct {
 	core   *core.Service
 	hub    *api.Hub
 	tick   atomic.Int64
+	ada    int64
 	laptop string // ada's write token
 	desk   string // another write token of ada's
 	phone  string // ada's read token
@@ -83,14 +99,15 @@ func newDatabase(t *testing.T) *fixture {
 		return "Bearer " + text
 	}
 
-	ada, grace := user("ada"), user("grace")
-	f.laptop, f.desk, f.phone, f.grace = token(ada, "laptop", "write"), token(ada, "desk", "write"), token(ada, "phone", "read"),
+	f.ada = user("ada")
+	grace := user("grace")
+	f.laptop, f.desk, f.phone, f.grace = token(f.ada, "laptop", "write"), token(f.ada, "desk", "write"), token(f.ada, "phone", "read"),
 		token(grace, "tablet", "write")
 
-	garden, err := f.core.CreateProject(t.Context(), ada, "Garden", "")
+	garden, err := f.core.CreateProject(t.Context(), f.ada, "Garden", "")
 	require.NoError(t, err)
 
-	personal, err := f.core.Find(t.Context(), ada, "personal")
+	personal, err := f.core.Find(t.Context(), f.ada, "personal")
 	require.NoError(t, err)
 
 	f.areas["garden"], f.areas["personal"] = garden.ID, personal.ID
@@ -126,15 +143,46 @@ func (f *fixture) loadModules(t *testing.T, table object) (*core.Modules, error)
 		module.Deps{Now: now, Zone: zone, Changed: f.hub.Changed})
 }
 
-// do serves one request with auth and decodes its answer.
+// signIn gives ada's session, as do takes it.
+func (f *fixture) signIn(t *testing.T) string {
+	t.Helper()
+
+	require.NoError(t, f.auth.SetPasswordHash(t.Context(), f.ada, passwordHash()))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/login",
+		strings.NewReader(`{"name":"ada","password":"`+password+`"}`))
+	rec := httptest.NewRecorder()
+	f.h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+
+	cookies := rec.Result().Cookies()
+	require.Len(t, cookies, 1)
+
+	return "Cookie " + cookies[0].Name + "=" + cookies[0].Value
+}
+
+// do serves one request with auth, the Authorization header of a token or a
+// session as signIn gives it, and decodes its answer, nil for a 204.
 func (f *fixture) do(t *testing.T, method, target, body, auth string) (int, object) {
 	t.Helper()
 
 	req := httptest.NewRequestWithContext(t.Context(), method, target, strings.NewReader(body))
-	req.Header.Set("Authorization", auth)
+	if cookie, ok := strings.CutPrefix(auth, "Cookie "); ok {
+		req.Header.Set("Cookie", cookie)
+		req.Header.Set("X-Recallsynapsis-CSRF", "1")
+	} else {
+		req.Header.Set("Authorization", auth)
+	}
 
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusNoContent {
+		assert.Empty(t, rec.Body.String())
+
+		return rec.Code, nil
+	}
+
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
 	var got object
@@ -668,9 +716,11 @@ func TestATaskOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
 
 	for _, r := range []struct{ method, target, body string }{
 		{http.MethodGet, "/api/tasks?area=garden", ""},
+		{http.MethodGet, "/api/tasks?trashed=true&area=garden", ""},
 		{http.MethodGet, path(mine), ""},
 		{http.MethodPatch, path(mine), `{"title":"Mine now"}`},
 		{http.MethodPatch, path(mine), `{"done":false}`},
+		{http.MethodPost, path(mine) + "/trash", ""},
 		{http.MethodPost, "/api/tasks", `{"tasks":[{"title":"Lost","area":"garden"}]}`},
 	} {
 		code, answer := f.do(t, r.method, r.target, r.body, f.grace)
@@ -713,6 +763,10 @@ func TestAModuleSwitchedOffKeepsItsTasks(t *testing.T) {
 			{http.MethodPost, "/api/tasks", `{"tasks":[{"title":"Lost"}]}`},
 			{http.MethodGet, path(made[0]), ""},
 			{http.MethodPatch, path(made[0]), `{"title":"Lost"}`},
+			{http.MethodPost, path(made[0]) + "/trash", ""},
+			{http.MethodPost, path(made[0]) + "/restore", ""},
+			{http.MethodDelete, path(made[0]), ""},
+			{http.MethodDelete, "/api/tasks/trash", ""},
 		} {
 			code, got := f.do(t, r.method, r.target, r.body, f.laptop)
 			refused(t, http.StatusNotFound, code, got)
@@ -801,4 +855,188 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	expect(f.change(t, made[0], `{"area":"garden"}`, f.laptop), "garden")
 	f.change(t, made[0], `{"area":"garden"}`, f.laptop)
 	expect(f.change(t, made[1], `{"done":true}`, f.desk), "garden") // and not the change that changed nothing
+
+	expect(f.trash(t, made[0], "/trash", f.laptop), "garden")
+	f.trash(t, made[0], "/trash", f.laptop)
+	expect(f.trash(t, made[0], "/restore", f.laptop), "garden") // and not the trashing that changed nothing
+	f.trash(t, made[0], "/restore", f.laptop)
+	expect(f.trash(t, made[0], "/trash", f.laptop), "garden") // nor the restoring
+
+	session := f.signIn(t)
+	code, got = f.do(t, http.MethodDelete, path(made[0]), "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+	expect(made[0], "garden")
+
+	expect(f.trash(t, made[1], "/trash", f.laptop), "garden")
+
+	code, got = f.do(t, http.MethodDelete, "/api/tasks/trash", "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+	assert.JSONEq(t, `{"module":"tasks","kind":"trash","id":0,"area":0}`, strings.TrimPrefix(next(), "data: "), "emptying tells once")
+}
+
+// trash sends task to the trash, or out of it with "/restore", and returns the task it answers.
+func (f *fixture) trash(t *testing.T, task object, to, auth string) object {
+	t.Helper()
+
+	code, got := f.do(t, http.MethodPost, path(task)+to, "", auth)
+	require.Equal(t, http.StatusOK, code, got)
+
+	return got
+}
+
+func TestATrashedTaskIsInNoListButTheTrash(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	garage := f.change(t, f.one(t, `{"title":"Garage","planned_from":"2026-11-28","list":"soon","area":"garden"}`), `{"notes":"Shelves"}`, f.desk)
+	car := f.change(t, f.one(t, `{"title":"Car"}`), `{"done":true}`, f.laptop)
+	f.one(t, `{"title":"Shop","planned_from":"2026-11-28"}`)
+	loose := f.one(t, `{"title":"Loose end"}`)
+
+	assert.Nil(t, garage["trashed_at"], "null unless the task is in the trash")
+
+	f.trash(t, loose, "/trash", f.laptop)
+	f.trash(t, car, "/trash", f.laptop)
+
+	trashed := f.trash(t, garage, "/trash", f.laptop)
+	require.NotNil(t, trashed["trashed_at"])
+
+	at, err := time.Parse(time.RFC3339, trashed["trashed_at"].(string))
+	require.NoError(t, err)
+	assert.Equal(t, time.UTC, at.Location())
+
+	want := maps.Clone(garage)
+	want["trashed_at"] = trashed["trashed_at"]
+	assert.Equal(t, want, trashed, "trashing changes nothing else: no entry of the log, source or time of change")
+	assert.Equal(t, trashed, f.trash(t, garage, "/trash", f.desk), "trashing a trashed task changes nothing")
+
+	for _, tt := range []struct {
+		query string
+		want  []string
+	}{
+		{"", []string{"Shop"}},
+		{"?list=soon", []string{}},
+		{"?area=garden", []string{}},
+		{"?unsorted=true", []string{}},
+		{"?from=2026-11-28&to=2026-11-28", []string{"Shop"}},
+		{"?done=true", []string{}},
+		{"?trashed=false", []string{"Shop"}},
+		{"?trashed=true", []string{"Garage", "Car", "Loose end"}},
+		{"?trashed=true&done=true", []string{"Car"}},
+		{"?trashed=true&area=garden", []string{"Garage"}},
+		{"?trashed=true&list=soon", []string{"Garage"}},
+		{"?trashed=true&from=2026-11-28&to=2026-11-28", []string{"Garage"}},
+		{"?trashed=true&unsorted=true", []string{"Loose end"}},
+	} {
+		listed, total := f.titles(t, tt.query, f.phone)
+		assert.Equal(t, tt.want, listed, tt.query)
+		assert.Equal(t, len(tt.want), total, tt.query)
+	}
+
+	listed, total := f.titles(t, "?trashed=true&limit=1", f.phone)
+	assert.Equal(t, []string{"Garage"}, listed, "the most recently trashed first")
+	assert.Equal(t, 3, total, "the trash's count, done and open alike")
+
+	assert.Equal(t, trashed, f.read(t, garage, f.phone), "a trashed task is still read")
+
+	for _, body := range []string{`{"title":"Lost"}`, `{"done":true}`, `{"title":"Garage"}`} {
+		code, got := f.do(t, http.MethodPatch, path(garage), body, f.laptop)
+		refused(t, http.StatusConflict, code, got)
+	}
+
+	code, got := f.do(t, http.MethodGet, "/api/tasks?trashed=yes", "", f.phone)
+	refused(t, http.StatusBadRequest, code, got)
+
+	restored := f.trash(t, garage, "/restore", f.laptop)
+	assert.Equal(t, garage, restored, "restored, it is as it was, with its log")
+	assert.Equal(t, restored, f.trash(t, garage, "/restore", f.desk), "restoring a task outside the trash changes nothing")
+	assert.Len(t, restored["log"], 2, "trashing and restoring write no entry")
+
+	listed, _ = f.titles(t, "?list=soon", f.phone)
+	assert.Equal(t, []string{"Garage"}, listed, "back in its list")
+
+	for _, to := range []string{"/trash", "/restore"} {
+		code, got = f.do(t, http.MethodPost, path(garage)+to, "", f.phone)
+		refused(t, http.StatusForbidden, code, got)
+
+		code, got = f.do(t, http.MethodPost, path(garage)+to, "", f.grace)
+		refused(t, http.StatusNotFound, code, got)
+
+		code, got = f.do(t, http.MethodPost, "/api/tasks/9999"+to, "", f.laptop)
+		refused(t, http.StatusNotFound, code, got)
+	}
+
+	assert.Equal(t, garage, f.read(t, garage, f.phone), "the refused tries changed nothing")
+}
+
+func TestOnlyASessionDeletesFromTheTrash(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	session := f.signIn(t)
+
+	garage := f.change(t, f.one(t, `{"title":"Garage"}`), `{"notes":"Shelves"}`, f.laptop)
+	car := f.one(t, `{"title":"Car","area":"garden"}`)
+	shop := f.change(t, f.one(t, `{"title":"Shop"}`), `{"done":true}`, f.laptop)
+	f.one(t, `{"title":"Kept"}`)
+	theirs := f.create(t, `{"tasks":[{"title":"Theirs"}]}`, f.grace)[0]
+
+	code, got := f.do(t, http.MethodDelete, path(garage), "", session)
+	refused(t, http.StatusConflict, code, got)
+
+	for _, task := range []object{garage, car, shop} {
+		f.trash(t, task, "/trash", f.laptop)
+	}
+
+	f.trash(t, theirs, "/trash", f.grace)
+
+	for _, token := range []string{f.laptop, f.phone} {
+		for _, target := range []string{path(garage), "/api/tasks/trash"} {
+			code, got := f.do(t, http.MethodDelete, target, "", token)
+			refused(t, http.StatusForbidden, code, got)
+		}
+	}
+
+	listed, _ := f.titles(t, "?trashed=true", f.phone)
+	assert.Equal(t, []string{"Shop", "Car", "Garage"}, listed, "no token deleted anything")
+
+	code, got = f.do(t, http.MethodDelete, path(garage), "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+
+	code, got = f.do(t, http.MethodGet, path(garage), "", f.phone)
+	refused(t, http.StatusNotFound, code, got)
+
+	var entries int
+	require.NoError(t, f.store.QueryRowContext(t.Context(), `SELECT count(*) FROM task_changes WHERE task_id = ?`, garage["id"]).Scan(&entries))
+	assert.Zero(t, entries, "its log goes with it")
+
+	for _, target := range []string{path(garage), "/api/tasks/9999", "/api/tasks/garage", path(theirs)} {
+		code, got = f.do(t, http.MethodDelete, target, "", session)
+		refused(t, http.StatusNotFound, code, got)
+	}
+
+	code, got = f.do(t, http.MethodDelete, "/api/tasks/trash", "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+
+	listed, total := f.titles(t, "?trashed=true", f.phone)
+	assert.Equal(t, []string{}, listed)
+	assert.Zero(t, total)
+
+	listed, _ = f.titles(t, "", f.phone)
+	assert.Equal(t, []string{"Kept"}, listed, "emptying deletes no task outside the trash")
+
+	listed, _ = f.titles(t, "?trashed=true", f.grace)
+	assert.Equal(t, []string{"Theirs"}, listed, "nor another user's trash")
+
+	assert.Equal(t, 2, f.count(t, "tasks"))
+	assert.Equal(t, 2, f.count(t, "task_changes"))
+
+	code, _ = f.do(t, http.MethodDelete, "/api/tasks/trash", "", session)
+	assert.Equal(t, http.StatusNoContent, code, "an empty trash empties")
+
+	last := f.trash(t, f.one(t, `{"title":"Last"}`), "/trash", f.laptop)
+
+	code, got = f.do(t, http.MethodDelete, path(last), "", session)
+	require.Equal(t, http.StatusNoContent, code, got)
+	assert.NotEqual(t, last["id"], f.one(t, `{"title":"Next"}`)["id"], "the id of a task deleted for good is never given again")
 }

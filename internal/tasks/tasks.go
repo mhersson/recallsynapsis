@@ -2,8 +2,9 @@
 // with its notes, a planned period of days with an optional time on its
 // first, a deadline, a list, soon or someday, and when it was done. It lists
 // them by area, list, state and a span of dates, tells which day it is in the
-// configured time zone, and keeps a log of every change of a task's fields.
-// It owns the tables tasks and task_changes.
+// configured time zone, and keeps a log of every change of a task's fields. A
+// task in the trash is in no list but the trash's, and kept unchanged until it
+// is restored or deleted for good. It owns the tables tasks and task_changes.
 package tasks
 
 import (
@@ -74,7 +75,8 @@ var (
 	lists    = []string{"", "soon", "someday"}
 	weekdays = []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 
-	errLimit = fmt.Errorf("limit is 1 to %d: %w", maxLimit, store.ErrInvalid)
+	errLimit   = fmt.Errorf("limit is 1 to %d: %w", maxLimit, store.ErrInvalid)
+	errTrashed = fmt.Errorf("the task is in the trash, and is restored before it is changed: %w", store.ErrConflict)
 )
 
 // settings are the module's keys of [modules.tasks] beside enabled.
@@ -109,6 +111,10 @@ func New(d module.Deps) module.Module {
 			{Pattern: "POST /api/tasks", Access: module.Write, Serve: t.serveCreate},
 			{Pattern: "GET /api/tasks/{id}", Access: module.Read, Serve: t.serveGet},
 			{Pattern: "PATCH /api/tasks/{id}", Access: module.Write, Serve: t.serveChange},
+			{Pattern: "POST /api/tasks/{id}/trash", Access: module.Write, Serve: t.serveTrash(true)},
+			{Pattern: "POST /api/tasks/{id}/restore", Access: module.Write, Serve: t.serveTrash(false)},
+			{Pattern: "DELETE /api/tasks/{id}", Access: module.Owner, Serve: t.serveDelete},
+			{Pattern: "DELETE /api/tasks/trash", Access: module.Owner, Serve: t.serveEmpty},
 		},
 	}
 }
@@ -144,6 +150,7 @@ type row struct {
 	Source         string     `json:"source"` // that of the last change
 	CreatedAt      time.Time  `json:"created_at"`
 	ChangedAt      time.Time  `json:"changed_at"`
+	TrashedAt      *time.Time `json:"trashed_at"` // null unless the task is in the trash
 }
 
 // task is a task in full, with its log, the newest entry first.
@@ -216,6 +223,7 @@ type filter struct {
 	from, to string // the span of dates, each side open when ""
 	unsorted bool
 	done     bool // the done tasks, else the open ones
+	trashed  bool // the trash alone, else none of it
 	limit    int  // defaultLimit when 0
 }
 
@@ -361,7 +369,8 @@ func diff(from, to fields, slugs map[int64]string) []delta {
 }
 
 // columns are a row's, in the order scanRow reads them.
-const columns = `id, area_id, title, planned_from, planned_to, planned_time, deadline, list, done_at, notes <> '', source, created_at, changed_at`
+const columns = `id, area_id, title, planned_from, planned_to, planned_time, deadline, list, done_at, notes <> '', source, created_at, changed_at,
+	trashed_at`
 
 // scanRow reads a row of columns, and extra after it, naming its area by
 // its slug in slugs.
@@ -369,12 +378,12 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 	var (
 		r                      row
 		area, created, changed int64
-		done                   sql.NullInt64
+		done, trashed          sql.NullInt64
 	)
 
 	err := sc.Scan(append([]any{
 		&r.ID, &area, &r.Title, &r.PlannedFrom, &r.PlannedTo, &r.PlannedTime, &r.Deadline, &r.List,
-		&done, &r.HasNotes, &r.Source, &created, &changed,
+		&done, &r.HasNotes, &r.Source, &created, &changed, &trashed,
 	}, extra...)...)
 	if err != nil {
 		return row{}, err
@@ -389,6 +398,10 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 	r.Ref, r.Area = module.NewRef(name, r.ID), slug
 	r.PlannedFromDay, r.PlannedToDay, r.DeadlineDay = weekday(r.PlannedFrom), weekday(r.PlannedTo), weekday(r.Deadline)
 	r.CreatedAt, r.ChangedAt = time.UnixMilli(created).UTC(), time.UnixMilli(changed).UTC()
+
+	if trashed.Valid {
+		r.TrashedAt = new(time.UnixMilli(trashed.Int64).UTC())
+	}
 
 	switch {
 	case done.Valid:
@@ -508,10 +521,11 @@ func (t tasks) read(ctx context.Context, slugs map[int64]string, userID, id int6
 // first, by time; and the oldest first among equals.
 const openOrder = `coalesce(nullif(planned_from, ''), nullif(deadline, '')) NULLS LAST, nullif(planned_time, '') NULLS LAST, created_at, id`
 
-// list gives the caller's tasks that f asks for, the open ones in openOrder
-// or the done ones the most recently done first, and how many there are in
-// all. A span gives the tasks whose plan overlaps it or whose deadline lies
-// in it, and with no from it gives those of every day before its to.
+// list gives the caller's tasks that f asks for, the open ones in openOrder,
+// the done ones the most recently done first or the trash the most recently
+// trashed first, and how many there are in all. A span gives the tasks whose
+// plan overlaps it or whose deadline lies in it, and with no from it gives
+// those of every day before its to.
 func (t tasks) list(ctx context.Context, f filter) (page, error) {
 	c, _ := module.CallerFrom(ctx)
 
@@ -568,15 +582,24 @@ func (t tasks) list(ctx context.Context, f filter) (page, error) {
 		done, order = "done_at IS NOT NULL", "done_at DESC, id DESC"
 	}
 
+	// The trash holds open and done tasks alike: done narrows it, and leaving it out does not.
+	if f.trashed {
+		order = "trashed_at DESC, id DESC"
+
+		if !f.done {
+			done = "true"
+		}
+	}
+
 	// The window counts every row the query matches, before the limit cuts
 	// them. A side of the span left out is open: '' is before every date.
 	rows, err := t.Store.QueryContext(ctx, `SELECT `+columns+`, count(*) OVER () FROM tasks
-		WHERE user_id = ?1 AND `+done+` AND ?2 IN (0, area_id) AND (?3 IS NULL OR list = ?3)
+		WHERE user_id = ?1 AND (trashed_at IS NOT NULL) = ?8 AND `+done+` AND ?2 IN (0, area_id) AND (?3 IS NULL OR list = ?3)
 			AND (NOT ?4 OR done_at IS NULL AND list = '' AND planned_from = '' AND deadline = '')
 			AND (?5 = '' AND ?6 = ''
 				OR planned_from <> '' AND (?6 = '' OR planned_from <= ?6) AND planned_to >= ?5
 				OR deadline <> '' AND (?6 = '' OR deadline <= ?6) AND deadline >= ?5)
-		ORDER BY `+order+` LIMIT ?7`, c.UserID, area, list, f.unsorted, f.from, f.to, f.limit)
+		ORDER BY `+order+` LIMIT ?7`, c.UserID, area, list, f.unsorted, f.from, f.to, f.limit, f.trashed)
 	if err != nil {
 		return page{}, fmt.Errorf("tasks: list: %w", err)
 	}
@@ -678,7 +701,7 @@ func (t tasks) create(ctx context.Context, b batch) (made, error) {
 // change sets what ch gives on the caller's task with the id, and logs each
 // field it changes. A change that leaves every field as it was logs nothing
 // and tells no page. Marking a task done keeps when it was first done until
-// it is opened again.
+// it is opened again. A change of a task in the trash is ErrConflict.
 func (t tasks) change(ctx context.Context, id int64, ch change) (task, error) {
 	c, _ := module.CallerFrom(ctx)
 
@@ -708,14 +731,19 @@ func (t tasks) change(ctx context.Context, id int64, ch change) (task, error) {
 	)
 
 	err = t.Store.Tx(ctx, func(tx *sql.Tx) error {
-		err := tx.QueryRowContext(ctx, `SELECT title, notes, area_id, planned_from, planned_to, planned_time, deadline, list, done_at IS NOT NULL
-			FROM tasks WHERE user_id = ? AND id = ?`, c.UserID, id).Scan(&f.title, &f.notes, &f.area, &f.from, &f.to, &f.at, &f.deadline, &f.list, &f.done)
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("task %d: %w", id, store.ErrNotFound)
-		}
+		var trashed bool
 
-		if err != nil {
+		err := tx.QueryRowContext(ctx, `SELECT title, notes, area_id, planned_from, planned_to, planned_time, deadline, list, done_at IS NOT NULL,
+			trashed_at IS NOT NULL FROM tasks WHERE user_id = ? AND id = ?`, c.UserID, id).Scan(
+			&f.title, &f.notes, &f.area, &f.from, &f.to, &f.at, &f.deadline, &f.list, &f.done, &trashed)
+
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return fmt.Errorf("task %d: %w", id, store.ErrNotFound)
+		case err != nil:
 			return fmt.Errorf("tasks: change: %w", err)
+		case trashed:
+			return errTrashed
 		}
 
 		was := f
@@ -752,6 +780,90 @@ func (t tasks) change(ctx context.Context, id int64, ch change) (task, error) {
 	}
 
 	return t.read(ctx, slugs, c.UserID, id)
+}
+
+// trash puts the caller's task with the id in the trash, or takes it out
+// when trashed is false. Neither writes an entry of the log or moves the task
+// in its list, and finding the task where it is asked to be changes nothing.
+func (t tasks) trash(ctx context.Context, id int64, trashed bool) (task, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	slugs, _, err := t.places(ctx, c.UserID)
+	if err != nil {
+		return task{}, err
+	}
+
+	var (
+		at   any // null takes the task out
+		area int64
+	)
+
+	if trashed {
+		at = t.Now().UnixMilli()
+	}
+
+	err = t.Store.QueryRowContext(ctx, `UPDATE tasks SET trashed_at = ?1 WHERE user_id = ?2 AND id = ?3 AND (trashed_at IS NULL) = ?4
+		RETURNING area_id`, at, c.UserID, id, trashed).Scan(&area)
+
+	switch {
+	case err == nil:
+		t.Changed(ctx, module.Change{Module: name, Kind: "task", ID: id, Area: area})
+	case !errors.Is(err, sql.ErrNoRows):
+		return task{}, fmt.Errorf("tasks: trash: %w", err)
+	}
+
+	return t.read(ctx, slugs, c.UserID, id)
+}
+
+// remove deletes the caller's task with the id for good, with its log. A
+// task outside the trash is ErrConflict.
+func (t tasks) remove(ctx context.Context, id int64) error {
+	c, _ := module.CallerFrom(ctx)
+
+	var area int64
+
+	err := t.Store.Tx(ctx, func(tx *sql.Tx) error {
+		var trashed bool
+
+		err := tx.QueryRowContext(ctx, `SELECT area_id, trashed_at IS NOT NULL FROM tasks WHERE user_id = ? AND id = ?`,
+			c.UserID, id).Scan(&area, &trashed)
+
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return fmt.Errorf("task %d: %w", id, store.ErrNotFound)
+		case err != nil:
+			return fmt.Errorf("tasks: delete: %w", err)
+		case !trashed:
+			return fmt.Errorf("task %d is not in the trash, and only a task in the trash is deleted: %w", id, store.ErrConflict)
+		}
+
+		if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE user_id = ? AND id = ?`, c.UserID, id); err != nil {
+			return fmt.Errorf("tasks: delete: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	t.Changed(ctx, module.Change{Module: name, Kind: "task", ID: id, Area: area})
+
+	return nil
+}
+
+// empty deletes every task in the caller's trash for good, as remove does.
+func (t tasks) empty(ctx context.Context) error {
+	c, _ := module.CallerFrom(ctx)
+
+	if _, err := t.Store.ExecContext(ctx, `DELETE FROM tasks WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
+		return fmt.Errorf("tasks: empty the trash: %w", err)
+	}
+
+	// One change for them all, since a stream that falls behind is ended.
+	t.Changed(ctx, module.Change{Module: name, Kind: "trash"})
+
+	return nil
 }
 
 // logChange writes the entry of a change of the task id at the time at.
