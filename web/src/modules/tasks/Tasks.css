@@ -1,0 +1,231 @@
+/* The mark of a task, a ring: open, filled grey once done, and filled in the yellow of what waits while it is to sort. */
+.mk.m-task {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.6px solid var(--orange);
+}
+
+.mk.m-task.t-done {
+  background: var(--grey0);
+  border-color: var(--grey0);
+}
+
+.mk.m-task.t-sort {
+  background: var(--wait-yellow);
+  border-color: var(--wait-yellow);
+}
+
+/* The ring before a task that marks it done. */
+.chk {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--grey0);
+  background: none;
+  color: var(--bg0);
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.chk.sort {
+  border-color: var(--wait-yellow);
+}
+
+.chk.done {
+  background: var(--grey0);
+}
+
+.chk svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chk.big {
+  width: 22px;
+  height: 22px;
+  margin-top: 3px;
+}
+
+.chk.big svg {
+  width: 14px;
+  height: 14px;
+}
+
+.task-area {
+  background: var(--bg0);
+  color: var(--fg);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 12.5px;
+}
+
+.tasks .empty {
+  margin-top: 0;
+}
+
+.views {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.views a {
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: var(--grey2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.views a:hover {
+  background: var(--bg1);
+  text-decoration: none;
+}
+
+.views a[aria-current] {
+  background: var(--bg2);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.views .dim {
+  color: var(--grey1);
+  font-weight: 400;
+}
+
+.addl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.addl-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--bg0);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  color: var(--grey1);
+}
+
+.addl-field:focus-within {
+  outline: 2px solid var(--aqua);
+  outline-offset: 2px;
+}
+
+.addl-field .ic {
+  width: 14px;
+  height: 14px;
+}
+
+.addl-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13.5px;
+  padding: 6px 0;
+}
+
+.addl-field input::placeholder {
+  color: var(--grey0);
+}
+
+.addl .err {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.tgrp {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--grey1);
+  margin: 0;
+  padding: 16px 0 6px;
+}
+
+.tgrp .dim {
+  color: inherit;
+}
+
+.task-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bg2);
+}
+
+.task-row:hover,
+.task-row.on {
+  background: var(--bg1);
+}
+
+.task-row.new {
+  background: var(--bg-visual);
+}
+
+.task-row .bd {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-row .tl {
+  display: block;
+  color: var(--fg);
+}
+
+.task-row .tl:hover {
+  text-decoration: none;
+}
+
+.task-row .t1 {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.task-row.done .t1 {
+  text-decoration: line-through;
+  color: var(--grey1);
+  font-weight: 400;
+}
+
+.qa {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.late {
+  color: var(--red);
+}
+
+@media (max-width: 720px) {
+  .views {
+    gap: 0;
+    justify-content: space-between;
+  }
+
+  .views a {
+    padding: 5px 8px;
+  }
+}

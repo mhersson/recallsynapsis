@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react'
 import type { Area } from '../api/types.ts'
 import { notes } from './notes/index.tsx'
+import { tasks } from './tasks/index.tsx'
 
 // A place the shell links to: an entry of the side bar, a phone tab or a row of More. count renders the number the
 // shell shows beside an entry or a tab, or nothing.
@@ -35,4 +36,4 @@ export type Module = {
 }
 
 // Every module, one line each, in the order the navigation shows them.
-export const modules: Module[] = [notes]
+export const modules: Module[] = [tasks, notes]

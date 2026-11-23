@@ -1,5 +1,7 @@
 import type { Area, Hit, Session, Token } from '../api/types.ts'
 import type { Kind, Linked, List, Note, Row, Version } from '../modules/notes/api.ts'
+import type { Entry, Now, List as TaskList, Row as TaskRow, Task } from '../modules/tasks/api.ts'
+import { order, sortInto } from '../modules/tasks/views.ts'
 
 // What the API serves, in its shapes; the harness answers from it. Times are counted back from when the page loads.
 const before = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
@@ -14,6 +16,7 @@ export const AREAS: Area[] = [
   { id: 5, kind: 'project', name: 'aim', slug: 'aim', description: 'The terminal multiplexer the coding agents work in.', archived: false },
   { id: 3, kind: 'project', name: 'cavu', slug: 'cavu', description: 'Runs coding tasks in containers and asks when it needs me.', archived: false },
   { id: 6, kind: 'project', name: 'homelander', slug: 'homelander', description: 'The first home cluster, retired in October.', archived: true },
+  { id: 7, kind: 'project', name: 'Hytta', slug: 'hytta', description: 'Hytta i Valdres: vedlikehold, annekset og veden.', archived: false },
   { id: 4, kind: 'project', name: 'portal', slug: 'portal', description: 'Relays AI clients to the services at home.', archived: false },
   {
     id: 2,
@@ -271,4 +274,186 @@ export function searchNotes(notes: Note[], q: string, area: string | null): Hit[
       state: n.inbox ? 'inbox' : 'filed',
       changed_at: n.changed_at,
     }))
+}
+
+// The day GET /api/tasks gives the harness: Monday 23 November 2026 in Oslo, with weeks that begin on a Monday.
+export const NOW: Now = { date: '2026-11-23', weekday: 'Monday', time: '10:00', timezone: 'Europe/Oslo', week_start: 'monday' }
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const weekday = (date: string) => (date ? WEEKDAYS[new Date(date + 'T00:00:00Z').getUTCDay()] : '')
+
+// The fields of a task its log tells of, as the wire names them; done is told of apart.
+const FIELDS = ['title', 'area', 'planned_from', 'planned_to', 'planned_time', 'deadline', 'list', 'notes'] as const
+
+// A task with what follows from what it holds: the weekday of each date, its state and whether it has notes.
+const settled = (t: Task): Task => ({
+  ...t,
+  planned_from_day: weekday(t.planned_from),
+  planned_to_day: weekday(t.planned_to),
+  deadline_day: weekday(t.deadline),
+  has_notes: t.notes !== '',
+  state: t.done_at ? 'done' : t.planned_from || t.deadline || t.list ? 'open' : 'unsorted',
+})
+
+// A task of the personal area made minutes ago, a from alone planning that one day; its log is its making unless t gives one.
+export function task(id: number, minutes: number, t: Partial<Task>): Task {
+  const made: Task = {
+    id,
+    ref: `tasks:${id}`,
+    area: 'personal',
+    title: '',
+    planned_from: '',
+    planned_from_day: '',
+    planned_to: '',
+    planned_to_day: '',
+    planned_time: '',
+    deadline: '',
+    deadline_day: '',
+    list: '',
+    state: 'open',
+    done_at: null,
+    has_notes: false,
+    source: 'web',
+    created_at: before(minutes),
+    changed_at: before(minutes),
+    trashed_at: null,
+    notes: '',
+    said: '',
+    log: [],
+    ...t,
+  }
+  made.planned_to ||= made.planned_from
+  const making: Entry = {
+    at: made.created_at,
+    source: made.source,
+    said: made.said,
+    changes: FIELDS.filter((f) => made[f]).map((f) => (f === 'notes' ? { field: f } : { field: f, from: '', to: made[f] })),
+  }
+  return settled({ ...made, log: t.log ?? [making] })
+}
+
+// A task as a list gives it.
+export const taskRow = ({ notes: _, said: __, log: ___, ...r }: Task): TaskRow => r
+
+// GET /api/tasks from tasks, as the server answers it: the open tasks, or the done with done=true, of the area and the
+// list asked, or those to sort, in the server's order, as many as its limit, how many it asked for in all, and now.
+export function listTasks(tasks: Task[], q: URLSearchParams, now: Now): TaskList {
+  const done = q.get('done') === 'true'
+  const list = q.get('list') === 'none' ? '' : q.get('list')
+  const found = tasks
+    .filter((t) => !t.trashed_at && !!t.done_at === done && (!q.has('area') || t.area === q.get('area')) && (list === null || t.list === list) && (q.get('unsorted') !== 'true' || t.state === 'unsorted'))
+    .sort(done ? (a, b) => b.done_at!.localeCompare(a.done_at!) : order)
+  return { tasks: found.slice(0, Number(q.get('limit')) || 50).map(taskRow), total: found.length, now }
+}
+
+// POST /api/tasks for one task, as the server makes it, or its refusal.
+export function makeTask(id: number, body: Record<string, unknown>, said: string): Task | [number, string] {
+  const title = String(body.title ?? '')
+  if (!title || [...title].length > 200) return [400, 'title: give 1 to 200 characters']
+  const given = Object.fromEntries(Object.entries(body).map(([k, v]) => [k, String(v)]))
+  return task(id, 0, { ...given, said, list: (given.list ?? '') as Task['list'] })
+}
+
+// PATCH /api/tasks/{id}, as the server applies it: a from alone plans that one day, a to of "" makes the plan one day,
+// a from of "" clears the plan whole. A change of what the task holds writes an entry of its log.
+export function changeTask(t: Task, body: Record<string, unknown>): Task | [number, string] {
+  if (t.trashed_at) return [409, 'the task is in the trash, and is restored before it is changed: conflict']
+  if (Object.keys(body).length === 0) return [400, 'nothing to change']
+  const next: Task = { ...t }
+  for (const k of ['title', 'notes', 'area', 'planned_time', 'deadline', 'list'] as const) if (k in body) Object.assign(next, { [k]: String(body[k]) })
+  if ('planned_from' in body) Object.assign(next, { planned_from: String(body.planned_from), planned_to: String(body.planned_to ?? '') })
+  else if ('planned_to' in body) next.planned_to = String(body.planned_to)
+  next.planned_to ||= next.planned_from
+  if (!next.planned_from) Object.assign(next, { planned_to: '', planned_time: '' })
+  if ('done' in body) next.done_at = body.done ? (t.done_at ?? new Date().toISOString()) : null
+  if (!next.title || [...next.title].length > 200) return [400, 'title: give 1 to 200 characters']
+  if ('planned_to' in body && !next.planned_from) return [400, 'planned_to: give planned_from too']
+  if (next.planned_to < next.planned_from) return [400, `planned_to: ${next.planned_to} is before planned_from ${next.planned_from}`]
+  if (next.planned_time && !next.planned_from) return [400, 'planned_time: give planned_from too']
+  const changes: Entry['changes'] = FIELDS.filter((f) => next[f] !== t[f]).map((f) => (f === 'notes' ? { field: f } : { field: f, from: t[f], to: next[f] }))
+  if (!!next.done_at !== !!t.done_at) changes.push({ field: 'done', from: String(!!t.done_at), to: String(!!next.done_at) })
+  if (changes.length === 0) return t
+  const at = new Date().toISOString()
+  return settled({ ...next, source: 'web', changed_at: at, log: [{ at, source: 'web', said: '', changes }, ...t.log] })
+}
+
+// The open tasks of the harness, as the tasks screens are drawn: dates from the Monday of NOW, made in the order listed.
+export const TASKS: Task[] = (
+  [
+    [{ title: 'Fikse lyset i garasjen', source: 'portal', said: 'Lyset i garasjen blinker igjen. Legg inn at det må fikses.' }, 12],
+    [{ title: 'Skifte til vinterdekk', planned_from: '2026-11-21' }],
+    [{ title: 'Stenge vannet på hytta', area: 'hytta', planned_from: '2026-11-21', planned_to: '2026-11-22' }],
+    [{ title: 'Betale fakturaen fra elektrikeren', deadline: '2026-11-20' }],
+    [{ title: 'Ringe rørleggeren', planned_from: '2026-11-23', planned_time: '14:00' }],
+    [{ title: 'Hente pakke på posten', planned_from: '2026-11-23' }],
+    [{ title: 'Ringe snekkeren om annekset', area: 'hytta', planned_from: '2026-11-23' }],
+    [{ title: 'Søke om byggetillatelse for annekset', area: 'hytta', deadline: '2026-11-27' }],
+    [
+      {
+        title: 'Rydde garasjen',
+        planned_from: '2026-11-28',
+        planned_to: '2026-11-29',
+        notes: '- kaste gammel maling\n- sortere skruene\n- få plass til bilen før snøen',
+        log: [
+          { at: before(2 * 60), source: 'web', said: '', changes: [{ field: 'notes' }] },
+          {
+            at: before(14 * 60),
+            source: 'web',
+            said: '',
+            changes: [
+              { field: 'planned_from', from: '2026-11-21', to: '2026-11-28' },
+              { field: 'planned_to', from: '2026-11-21', to: '2026-11-29' },
+            ],
+          },
+          {
+            at: before(4 * 24 * 60),
+            source: 'portal',
+            said: 'Legg inn at jeg må rydde garasjen på lørdag.',
+            changes: [
+              { field: 'title', from: '', to: 'Rydde garasjen' },
+              { field: 'area', from: '', to: 'personal' },
+              { field: 'planned_from', from: '', to: '2026-11-21' },
+              { field: 'planned_to', from: '', to: '2026-11-21' },
+            ],
+          },
+        ],
+      },
+    ],
+    [{ title: 'Vaske bilen', planned_from: '2026-11-28', planned_to: '2026-11-29' }],
+    [{ title: 'Handle materialer', area: 'hytta', planned_from: '2026-11-28', planned_to: '2026-11-29', list: 'next' }],
+    [{ title: 'Kjøre ved til hytta', area: 'hytta', planned_from: '2026-12-05', planned_to: '2026-12-06' }],
+    [{ title: 'Bytte olje på bilen', planned_from: '2026-12-09', planned_time: '08:30' }],
+    [{ title: 'Bestille EU-kontroll', deadline: '2026-12-14', list: 'next' }],
+    [{ title: 'Måle opp kjøkkenet på hytta', area: 'hytta', list: 'next' }],
+    [{ title: 'Bytte pakning i kjøkkenkrana', list: 'next' }],
+    [{ title: 'Bygge vedskjul', area: 'hytta', list: 'someday' }],
+    [{ title: 'Male gjerdet', list: 'someday' }],
+    [{ title: 'Legge inn fiber på hytta', area: 'hytta', list: 'someday', notes: 'Spør kommunen om graving langs veien.' }],
+  ] as [Partial<Task>, number?][]
+).map(([t, minutes], i) => task(i + 1, minutes ?? (40 - i) * 24 * 60, t))
+
+// What Today would show of tasks, which today=none leaves out.
+export const onToday = (tasks: Task[], now: Now) => sortInto('today', tasks.map(taskRow), now).flatMap(([, ts]) => ts.map((t) => t.id))
+
+// The tasks routes from tasks, as the server answers them, as a status and a body; tell hears of each task made or changed.
+export function answerTasks(tasks: Task[], method: string, url: URL, body: Record<string, unknown>, now: Now, tell: (t: Task) => void): [number, unknown] {
+  if (url.pathname === '/api/tasks' && method === 'GET') return [200, listTasks(tasks, url.searchParams, now)]
+  if (url.pathname === '/api/tasks' && method === 'POST') {
+    const made: Task[] = []
+    for (const b of body.tasks as Record<string, unknown>[]) {
+      const t = makeTask(Math.max(0, ...tasks.map((x) => x.id), ...made.map((x) => x.id)) + 1, b, String(body.said ?? ''))
+      if (Array.isArray(t)) return [t[0], { error: t[1] }]
+      made.push(t)
+    }
+    tasks.push(...made)
+    made.forEach(tell)
+    return [201, { tasks: made.map(taskRow), now }]
+  }
+  const t = tasks.find((x) => url.pathname === `/api/tasks/${x.id}`)
+  if (!t || !['GET', 'PATCH'].includes(method)) return [404, { error: 'not found' }]
+  if (method === 'GET') return [200, t]
+  const changed = changeTask(t, body)
+  if (Array.isArray(changed)) return [changed[0], { error: changed[1] }]
+  if (changed !== t) tell(Object.assign(t, changed))
+  return [200, t]
 }
