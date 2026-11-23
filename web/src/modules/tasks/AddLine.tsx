@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { api, message } from '../../api/client.ts'
+import { message } from '../../api/client.ts'
 import { AddIcon } from '../../components/icons.tsx'
-import type { Fields, Row } from './api.ts'
+import { make, type Fields, type Row } from './api.ts'
 
 type Props = { placeholder: string; fields: Fields; onAdded: (t: Row) => void }
 
@@ -15,9 +15,9 @@ export default function AddLine({ placeholder, fields, onAdded }: Props) {
     setRefused('')
     setSending(true)
     try {
-      const r = await api<{ tasks: Row[] }>('POST', '/tasks', { tasks: [{ title: title.trim(), ...fields }] })
+      const t = await make({ title: title.trim(), ...fields })
       setTitle('')
-      onAdded(r.tasks[0])
+      onAdded(t)
     } catch (err) {
       setRefused(message(err))
     }

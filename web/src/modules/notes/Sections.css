@@ -318,7 +318,9 @@
   margin: 2px 0 2px 86px;
 }
 
-.note-read .notice.restored {
+/* A notice above the head of a note. */
+.note-read .notice.restored,
+.note-read .notice.made {
   margin: 0 0 16px;
 }
 

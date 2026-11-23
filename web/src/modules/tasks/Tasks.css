@@ -389,6 +389,19 @@
   justify-self: start;
 }
 
+/* The shortcuts for when in Capture, with the plan they make or the word that none makes a task to sort. */
+.when {
+  margin: 0 0 14px;
+}
+
+.dialog .when {
+  margin: 10px 0 12px;
+}
+
+.when .note {
+  margin: 0;
+}
+
 /* An entry of the log: when, from where, and what changed, with what the owner said under it. */
 .lg {
   display: grid;
@@ -465,4 +478,28 @@
   .lg .said {
     grid-column: 1 / -1;
   }
+}
+
+/* Make a task: the title above its field, the rest beside their labels. */
+.task-make .title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.dialog .task-make {
+  margin: 0;
+}
+
+.task-make .ta {
+  min-height: 52px;
+}
+
+.task-make .note {
+  margin: 0 0 4px;
+}
+
+/* The dialog sets its own row of buttons at its end, and no other. */
+.dialog .task-fields .acts {
+  justify-content: flex-start;
+  margin: 0;
 }

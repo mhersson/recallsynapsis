@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ApiError, api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 import type { Linked } from '../../api/types.ts'
+import type { Named } from '../registry.ts'
 
 // A task's state: done, or unsorted while it is open with no list, no plan and no deadline, or else open.
 export type State = 'open' | 'unsorted' | 'done'
@@ -46,6 +47,31 @@ export type List = { tasks: Row[]; total: number; now: Now }
 
 // What a change of a task may send; a change sends only what it changes, and links whole, as references.
 export type Fields = Partial<Pick<Task, 'title' | 'notes' | 'area' | 'planned_from' | 'planned_to' | 'planned_time' | 'deadline' | 'list'>> & { done?: boolean; links?: string[] }
+
+// Makes one task, with the owner's words when given, and gives it as a list gives it; a refusal throws.
+export const make = (t: Fields, said = '') => api<{ tasks: Row[] }>('POST', '/tasks', { tasks: [t], ...(said && { said }) }).then((r) => r.tasks[0])
+
+// The server's today, read once with a list of one task, for a form that reads no task.
+export function useNow() {
+  const [now, setNow] = useState<Now>()
+  useEffect(() => {
+    api<List>('GET', '/tasks?limit=1').then(
+      (l) => setNow(l.now),
+      () => {},
+    )
+  }, [])
+  return now
+}
+
+// A task as a link names it.
+export const made = (t: Row): Named => ({ ref: t.ref, kind: 'task', state: t.state, title: t.title })
+
+// A text as a task takes it: its first line the title, and what follows the notes.
+export function split(text: string): { title: string; notes?: string } {
+  const [title, ...rest] = text.trim().split('\n')
+  const notes = rest.join('\n').trim()
+  return { title: title.trim(), ...(notes && { notes }) }
+}
 
 // Reads when the page mounts, when the stream opens again, on any change of a task and on any change of an area, whose
 // slug names the tasks in it.

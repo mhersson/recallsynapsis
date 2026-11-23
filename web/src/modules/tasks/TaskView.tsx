@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { nameOf } from '../../api/areas.ts'
 import type { Area } from '../../api/types.ts'
 import Dialog from '../../components/Dialog.tsx'
@@ -7,12 +7,12 @@ import Links from '../../components/Links.tsx'
 import { TrashIcon } from '../../components/icons.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import Section from '../../components/Section.tsx'
-import Seg from '../../components/Seg.tsx'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useUnsaved } from '../../components/useUnsaved.tsx'
 import { from, ring, type Fields, type Now, type Task } from './api.ts'
 import Check from './Check.tsx'
-import { day, period, shortcuts, stamp } from './dates.ts'
+import { day, period, stamp } from './dates.ts'
+import { AreaField, PlanFields } from './fields.tsx'
 import { words } from './log.ts'
 
 // Each callback sends what its button asks and gives the server's refusal; a button shows only when its callback is given.
@@ -60,7 +60,6 @@ export default function TaskView({ task, now, areas, onChange, onTrash, onRestor
   const [refused, setRefused] = useState('')
   const [deleting, setDeleting] = useState(false)
   const leaving = useUnsaved(!!draft && Object.keys(changeOf(draft)).length > 0, 'the task')
-  const ids = { planned: useId(), deadline: useId(), area: useId() }
 
   async function send(act: () => Promise<string>) {
     setRefused('')
@@ -136,90 +135,8 @@ export default function TaskView({ task, now, areas, onChange, onTrash, onRestor
           <textarea className="ta" value={draft.notes} onChange={(e) => set({ notes: e.target.value })} />
         </Field>
         <div className="task-fields">
-          <div className="tf">
-            <span className="lb" id={ids.planned}>
-              Planned
-            </span>
-            <div role="group" aria-labelledby={ids.planned}>
-              <div className="scs">
-                {shortcuts(now).map(([label, a, b]) => {
-                  const on = draft.planned_from === a && draft.planned_to === b
-                  return (
-                    <button key={label} type="button" className={on ? 'sc on' : 'sc'} aria-current={on || undefined} onClick={() => set({ planned_from: a, planned_to: b })}>
-                      <b>{label}</b>
-                      <span>{period(a, b)}</span>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="dts">
-                <label>
-                  From
-                  {/* A one-day plan stays one day, and a span keeps its to: a date typed a part at a time passes through others. */}
-                  <input
-                    type="date"
-                    value={draft.planned_from}
-                    onChange={(e) => set({ planned_from: e.target.value, planned_to: draft.planned_to === draft.planned_from ? e.target.value : draft.planned_to })}
-                  />
-                </label>
-                <label>
-                  To
-                  <input type="date" value={draft.planned_to} min={draft.planned_from} disabled={!draft.planned_from} onChange={(e) => set({ planned_to: e.target.value })} />
-                </label>
-                <label>
-                  Starts at
-                  <input type="time" value={draft.planned_time} disabled={!draft.planned_from} onChange={(e) => set({ planned_time: e.target.value })} />
-                </label>
-                {draft.planned_from && (
-                  <button type="button" className="btn link" onClick={() => set({ planned_from: '', planned_to: '', planned_time: '' })}>
-                    Clear the plan
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="tf">
-            <label className="lb" htmlFor={ids.deadline}>
-              Deadline
-            </label>
-            <div className="acts">
-              <input id={ids.deadline} type="date" value={draft.deadline} onChange={(e) => set({ deadline: e.target.value })} />
-              {draft.deadline && (
-                <button type="button" className="btn link" aria-label="Clear the deadline" onClick={() => set({ deadline: '' })}>
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="tf">
-            <span className="lb">List</span>
-            <Seg
-              label="List"
-              options={[
-                ['', 'None'],
-                ['soon', 'Soon'],
-                ['someday', 'Someday'],
-              ]}
-              value={draft.list}
-              onChange={(list) => set({ list })}
-            />
-          </div>
-          <div className="tf">
-            <label className="lb" htmlFor={ids.area}>
-              Area
-            </label>
-            <div>
-              <select id={ids.area} value={draft.area} onChange={(e) => set({ area: e.target.value })}>
-                {areas
-                  .filter((a) => !a.archived || a.slug === draft.from.area)
-                  .map((a) => (
-                    <option key={a.slug} value={a.slug}>
-                      {a.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          </div>
+          <PlanFields value={draft} now={now} onChange={set} />
+          <AreaField value={draft.area} areas={areas.filter((a) => !a.archived || a.slug === draft.from.area)} onChange={(area) => set({ area })} />
         </div>
         {alert}
         {/* Save is last on desktop and first on a phone in the DOM too, so the focus moves in the order shown. */}

@@ -34,3 +34,8 @@
 .dialog .note {
   margin: 0 0 14px;
 }
+
+/* A dialog that holds a form of fields beside their labels. */
+.dialog.wide {
+  width: 640px;
+}

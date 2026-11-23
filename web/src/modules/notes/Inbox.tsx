@@ -4,8 +4,10 @@ import { useAreas } from '../../api/areas.ts'
 import PageHead from '../../components/PageHead.tsx'
 import { ago } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
+import type { Named } from '../registry.ts'
 import { from, useNotes, type List, type Note, type Row } from './api.ts'
 import Filing from './Filing.tsx'
+import MadeNotice from './MadeNotice.tsx'
 import './Inbox.css'
 
 function count(n: number, narrow: boolean) {
@@ -25,6 +27,8 @@ export default function Inbox() {
   const open = list?.notes.find((r) => r.id === chosen)
   // It is read in full again whenever the list shows it at a new revision.
   const [note, setNote] = useState<Note>()
+  // What was last made of a capture here, until the page is left.
+  const [made, setMade] = useState<Named>()
   const [id, revision] = [open?.id, open?.revision]
   useEffect(() => {
     if (!id) return
@@ -46,7 +50,7 @@ export default function Inbox() {
   useNotes(read)
 
   if (!list) return null
-  const filing = note && note.id === id && <Filing key={note.id} note={note} areas={areas} narrow={narrow} onDone={read} />
+  const filing = note && note.id === id && <Filing key={note.id} note={note} areas={areas} narrow={narrow} onDone={read} onMade={setMade} />
   const text = (r: Row) => r.title || r.excerpt
   const meta = (r: Row) => (
     <span className="t2">
@@ -65,6 +69,7 @@ export default function Inbox() {
     <div className="page inbox">
       <PageHead title="Inbox" />
       <p className="sub">{count(list.total, narrow)}</p>
+      {made && <MadeNotice made={made}>The capture is in the trash.</MadeNotice>}
       {narrow ? (
         <>
           {empty}

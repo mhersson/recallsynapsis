@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import type { Area } from '../api/types.ts'
+import type { Area, Linked } from '../api/types.ts'
 import { notes } from './notes/index.tsx'
 import { tasks } from './tasks/index.tsx'
 
@@ -10,6 +10,27 @@ export type Entry = { to: string; label: string; icon: ReactNode; count?: Compon
 // A module's one action, such as Capture. The shell opens form in a dialog over the page on desktop, and as a page at
 // to on a phone. Opened from an area's page, it is given that area's id, which the page takes as ?area=.
 export type Action = Pick<Entry, 'to' | 'label' | 'icon'> & { form: ComponentType<{ area?: number; dialog?: boolean; onClose: () => void }> }
+
+// A kind a module adds to Capture beside Note and Idea. Chosen, Capture goes to an area, never to the Inbox, and shows more
+// under its text, which keeps what is chosen there; save sends the text to the area with it, and throws a refusal.
+export type CaptureKind = {
+  name: string
+  label: string
+  more: ComponentType<{ value: Record<string, string>; onChange: (v: Record<string, string>) => void }>
+  save: (text: string, area: string, more: Record<string, string>) => Promise<unknown>
+}
+
+// An item, as a link names it.
+export type Named = Pick<Linked, 'ref' | 'kind' | 'state' | 'title'>
+
+// What a module makes of another module's item, such as a task of a note: its label; its form, given the item, its text,
+// its area and the areas, which tells whether anything is entered and closes with what it made, if anything; and atOnce,
+// which makes one of a text in an area, with the owner's words, or throws a refusal.
+export type Maker = {
+  label: string
+  form: ComponentType<{ of: Named; text: string; area: string; areas: Area[]; onEntered: (entered: boolean) => void; onClose: (made?: Named) => void }>
+  atOnce: (text: string, area: string, said: string) => Promise<Named>
+}
 
 // Where an item leads, the class of the small mark that shows what it is, and its state in words when it has one
 // to show.
@@ -22,6 +43,8 @@ export type Module = {
   home?: string
   // The green button of the side bar and the centre tab on a phone, when this is the first enabled module that has one.
   action?: Action
+  // What it adds to Capture.
+  capture?: CaptureKind[]
   // In the side bar, above Search.
   nav: Entry[]
   // On a phone, before Projects and More.
@@ -32,6 +55,8 @@ export type Module = {
   // What it holds in an area, shown on that area's page beside the other modules' on desktop; first when it comes first
   // there, so on a phone it opens.
   section?: ComponentType<{ area: Area; first: boolean }>
+  // What it makes from another module's item, offered where that item is shown.
+  make?: Maker
   // An item of the module, given its reference, kind and state, as a hit or a link names it.
   item?: (ref: string, kind: string, state: string) => Item
 }

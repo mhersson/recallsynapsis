@@ -230,7 +230,8 @@ export function Apply() {
   return null
 }
 
-// click=TEXT clicks the first button, link or summary whose text, or label, starts with TEXT, type=TEXT types TEXT into
+// click=TEXT clicks the first button, link or summary whose text, or label, starts with TEXT, in the dialog open last when
+// one is, as a person can reach nothing else then, type=TEXT types TEXT into
 // the field that has the focus, and choose=N chooses an image of N bytes in the file picker of the note being read.
 // Each waits until the page shows what it needs, and given more than once they run in order. end=1 then scrolls the
 // page, and what is open beside a list, to their end.
@@ -252,7 +253,8 @@ function step(kind: string, text: string): boolean {
     field.dispatchEvent(new Event('input', { bubbles: true }))
     return true
   }
-  const target = [...document.querySelectorAll<HTMLElement>('button:enabled, a, summary')].find((e) => (e.textContent || e.getAttribute('aria-label'))?.startsWith(text))
+  const scope = [...document.querySelectorAll('dialog[open]')].pop() ?? document
+  const target = [...scope.querySelectorAll<HTMLElement>('button:enabled, a, summary')].find((e) => (e.textContent || e.getAttribute('aria-label'))?.startsWith(text))
   target?.click()
   target?.scrollIntoView()
   return !!target
