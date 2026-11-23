@@ -316,7 +316,6 @@ export function task(id: number, minutes: number, t: Partial<Task>): Task {
     source: 'web',
     created_at: before(minutes),
     changed_at: before(minutes),
-    trashed_at: null,
     notes: '',
     said: '',
     log: [],
@@ -341,37 +340,40 @@ export function listTasks(tasks: Task[], q: URLSearchParams, now: Now): TaskList
   const done = q.get('done') === 'true'
   const list = q.get('list') === 'none' ? '' : q.get('list')
   const found = tasks
-    .filter((t) => !t.trashed_at && !!t.done_at === done && (!q.has('area') || t.area === q.get('area')) && (list === null || t.list === list) && (q.get('unsorted') !== 'true' || t.state === 'unsorted'))
+    .filter((t) => !!t.done_at === done && (!q.has('area') || t.area === q.get('area')) && (list === null || t.list === list) && (q.get('unsorted') !== 'true' || t.state === 'unsorted'))
     .sort(done ? (a, b) => b.done_at!.localeCompare(a.done_at!) : order)
   return { tasks: found.slice(0, Number(q.get('limit')) || 50).map(taskRow), total: found.length, now }
 }
 
 // POST /api/tasks for one task, as the server makes it, or its refusal.
 export function makeTask(id: number, body: Record<string, unknown>, said: string): Task | [number, string] {
-  const title = String(body.title ?? '')
+  const title = String(body.title ?? '').trim()
   if (!title || [...title].length > 200) return [400, 'title: give 1 to 200 characters']
   const given = Object.fromEntries(Object.entries(body).map(([k, v]) => [k, String(v)]))
-  return task(id, 0, { ...given, said, list: (given.list ?? '') as Task['list'] })
+  return task(id, 0, { ...given, title, said, list: (given.list ?? '') as Task['list'] })
 }
 
-// PATCH /api/tasks/{id}, as the server applies it: a from alone plans that one day, a to of "" makes the plan one day,
-// a from of "" clears the plan whole. A change of what the task holds writes an entry of its log.
+// PATCH /api/tasks/{id}, as the server applies it: a from sets the plan, one day unless a to comes with it, and a from of
+// "" clears the plan whole; a to of "" makes the plan one day; then the time. A change of what the task holds writes an
+// entry of its log.
 export function changeTask(t: Task, body: Record<string, unknown>): Task | [number, string] {
-  if (t.trashed_at) return [409, 'the task is in the trash, and is restored before it is changed: conflict']
   if (Object.keys(body).length === 0) return [400, 'nothing to change']
   const next: Task = { ...t }
-  for (const k of ['title', 'notes', 'area', 'planned_time', 'deadline', 'list'] as const) if (k in body) Object.assign(next, { [k]: String(body[k]) })
-  if ('planned_from' in body) Object.assign(next, { planned_from: String(body.planned_from), planned_to: String(body.planned_to ?? '') })
+  for (const k of ['title', 'notes', 'area', 'deadline', 'list'] as const) if (k in body) Object.assign(next, { [k]: String(body[k]) })
+  next.title = next.title.trim()
+  if ('planned_from' in body) Object.assign(next, { planned_from: String(body.planned_from), planned_to: String(body.planned_to ?? '') }, !body.planned_from && { planned_time: '' })
   else if ('planned_to' in body) next.planned_to = String(body.planned_to)
   next.planned_to ||= next.planned_from
-  if (!next.planned_from) Object.assign(next, { planned_to: '', planned_time: '' })
+  if ('planned_time' in body) next.planned_time = String(body.planned_time)
   if ('done' in body) next.done_at = body.done ? (t.done_at ?? new Date().toISOString()) : null
   if (!next.title || [...next.title].length > 200) return [400, 'title: give 1 to 200 characters']
-  if ('planned_to' in body && !next.planned_from) return [400, 'planned_to: give planned_from too']
+  if (!next.planned_from && next.planned_to) return [400, 'planned_to: give planned_from too']
+  if (!next.planned_from && next.planned_time) return [400, 'planned_time: give planned_from too']
   if (next.planned_to < next.planned_from) return [400, `planned_to: ${next.planned_to} is before planned_from ${next.planned_from}`]
-  if (next.planned_time && !next.planned_from) return [400, 'planned_time: give planned_from too']
-  const changes: Entry['changes'] = FIELDS.filter((f) => next[f] !== t[f]).map((f) => (f === 'notes' ? { field: f } : { field: f, from: t[f], to: next[f] }))
+  // In the server's order: the fields as the wire lists them, then done, then the notes.
+  const changes: Entry['changes'] = FIELDS.filter((f) => f !== 'notes' && next[f] !== t[f]).map((f) => ({ field: f, from: t[f], to: next[f] }))
   if (!!next.done_at !== !!t.done_at) changes.push({ field: 'done', from: String(!!t.done_at), to: String(!!next.done_at) })
+  if (next.notes !== t.notes) changes.push({ field: 'notes' })
   if (changes.length === 0) return t
   const at = new Date().toISOString()
   return settled({ ...next, source: 'web', changed_at: at, log: [{ at, source: 'web', said: '', changes }, ...t.log] })
@@ -391,6 +393,7 @@ export const TASKS: Task[] = (
     [
       {
         title: 'Rydde garasjen',
+        changed_at: before(2 * 60),
         planned_from: '2026-11-28',
         planned_to: '2026-11-29',
         notes: '- kaste gammel maling\n- sortere skruene\n- få plass til bilen før snøen',

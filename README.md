@@ -30,7 +30,11 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   Today holds what waits to be sorted, what was left from earlier, what is
   overdue and what today holds; Week the rest of the week and what lies beyond
   it; Next and Someday their lists. A task is added where one stands, and
-  planned, put on a list or marked done from its row.
+  planned, put on a list or marked done from its row. A task opens beside the
+  list, or as a page on a phone, where its plan, with shortcuts for today,
+  tomorrow, the weekend and next week, its deadline, list and area save as they
+  change, its title and notes are edited, and its log tells each change, with
+  what the owner said.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and part of a word is

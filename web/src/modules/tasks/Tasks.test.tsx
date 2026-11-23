@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { task } from '../../dev/fixtures.ts'
+import { changeTask, task } from '../../dev/fixtures.ts'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, json, narrow, type Call } from '../../test-server.ts'
 import type { Now, Task } from './api.ts'
@@ -37,7 +37,7 @@ const week = (): Task[] => [
 test('each view shows the open tasks its question gives by the server’s today, never by the browser’s clock', async () => {
   // The browser's clock says June; the server says Monday 23 November.
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-06-01T12:00:00Z') })
-  narrow(false)
+  narrow(true)
   const calls = tasksServer(week())
   const { where } = await open('/')
   expect(where()).toBe('/tasks')
@@ -91,15 +91,17 @@ test.each([
   ['/tasks', { planned_from: '2026-11-23' }, 'today'],
   ['/tasks?view=next', { list: 'next' }, 'next'],
   ['/tasks?view=someday&area=garden', { list: 'someday', area: 'garden' }, 'someday'],
-])('the add line on %s sends one task with %j, which then stands in its group without a reload', async (path, fields, group) => {
+])('the add line on %s sends one task with %j, which then stands in its group without a reload and opens beside it', async (path, fields, group) => {
   narrow(false)
   const calls = tasksServer(week())
-  await open(path)
+  const { where } = await open(path)
   const line = within(page()).getByRole('textbox')
   await userEvent.type(line, '  a new one {Enter}')
   expect(writes(calls)).toEqual([['POST', '/api/tasks', { tasks: [{ title: 'a new one', ...fields }] }]])
   await waitFor(() => expect(shown()[group]).toContain('a new one'))
+  await waitFor(() => expect(where()).toBe(path.replace('/tasks', '/tasks/8')))
   expect(line).toHaveValue('')
+  expect(line).toHaveFocus()
   expect(reads(calls)).toBe(1)
 })
 
@@ -122,7 +124,7 @@ test.each([
   [1, { list: 'next' }, 'next'],
   [2, { list: 'someday' }, 'someday'],
 ])('the quick button %i of a task to sort sends %j and takes it to %s', async (n, fields, to) => {
-  narrow(false)
+  narrow(true)
   const calls = tasksServer(week())
   const view = await open('/tasks')
   await userEvent.click(quick('to sort')[n])
@@ -183,6 +185,23 @@ test('a task marked done stays in place, struck through, until the view is left,
   expect(counts()[0]).toBe('3')
 })
 
+test('two tasks marked done before either answer lands both stay struck through in place', async () => {
+  narrow(true)
+  const tasks = week()
+  const held: (() => void)[] = []
+  tasksServer(tasks, monday, (c) => {
+    if (c.method !== 'PATCH') return
+    const t = tasks.find((x) => c.path === `/api/tasks/${x.id}`)!
+    return new Promise((answer) => held.push(() => answer(json(Object.assign(t, changeTask(t, c.body as Record<string, unknown>))))))
+  })
+  await open('/tasks')
+  await userEvent.click(ringOf('overdue'))
+  await userEvent.click(ringOf('today'))
+  await act(async () => held.splice(0).forEach((answer) => answer()))
+  await waitFor(() => expect([ringOf('overdue'), ringOf('today')].map((r) => r.getAttribute('aria-pressed'))).toEqual(['true', 'true']))
+  expect(shown()).toEqual({ sort: ['to sort'], left: ['last weekend'], late: ['overdue'], today: ['today'] })
+})
+
 test('a change made elsewhere shows without a reload, and a refusal shows the server’s line', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   narrow(false)
@@ -203,7 +222,7 @@ test('a change made elsewhere shows without a reload, and a refusal shows the se
 })
 
 test('with no task at all a view says so, and with nothing for today Today offers Next', async () => {
-  narrow(false)
+  narrow(true)
   const none = tasksServer([])
   const view = await open('/tasks')
   expect(page().querySelector('.empty')).not.toBeNull()

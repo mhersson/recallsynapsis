@@ -215,8 +215,209 @@
   margin-top: 6px;
 }
 
-.late {
+.task-row .late {
   color: var(--red);
+}
+
+/* On desktop the task beside the list stays in view as the list scrolls, and scrolls within itself when it is taller. */
+.tasks .panes > .box {
+  position: sticky;
+  top: 22px;
+  max-height: calc(100dvh - 44px);
+  overflow-y: auto;
+}
+
+.task-head {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.task-head h1 {
+  flex: 1;
+}
+
+.task-head .ttl {
+  flex: 1;
+  min-width: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  padding: 2px 8px;
+  background: var(--bg0);
+  color: var(--fg);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+}
+
+.task-meta {
+  align-items: center;
+  margin-top: 2px;
+}
+
+.task-meta .mk {
+  margin-top: 0;
+}
+
+.task-read .md,
+.task-none {
+  margin: 14px 0;
+}
+
+.task-none {
+  color: var(--grey0);
+}
+
+.task-read .err {
+  margin: 14px 0 0;
+}
+
+.task-edit {
+  margin: 14px 0 4px;
+}
+
+.task-edit .ta {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  field-sizing: content;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+.task-edit .field {
+  margin-bottom: 10px;
+}
+
+/* A field of the task: its label beside it on desktop, above it on a phone. */
+.tf {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 7px 0;
+}
+
+.tf > .lb {
+  font-size: 12.5px;
+  color: var(--grey2);
+  margin: 6px 0 0;
+}
+
+.task-fields {
+  margin-bottom: 10px;
+}
+
+.task-fields input,
+.task-fields select {
+  background: var(--bg0);
+  color: var(--fg);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 13px;
+  min-height: 32px;
+}
+
+.task-fields input:disabled {
+  opacity: 0.55;
+}
+
+.scs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.35;
+  padding: 3px 7px 4px;
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  background: var(--bg1);
+  color: var(--fg);
+}
+
+.sc b {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sc span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey1);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.sc.on {
+  background: var(--bg-blue);
+  border-color: var(--blue);
+}
+
+.dts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: flex-end;
+}
+
+.dts > label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--grey1);
+}
+
+.dts > .btn.link {
+  align-self: center;
+  justify-self: start;
+}
+
+/* An entry of the log: when, from where, and what changed, with what the owner said under it. */
+.lg {
+  display: grid;
+  grid-template-columns: 124px 78px minmax(0, 1fr);
+  gap: 2px 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.lg .w {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--grey2);
+  letter-spacing: 0;
+}
+
+.lg .src {
+  color: var(--grey1);
+}
+
+.lg .c {
+  overflow-wrap: anywhere;
+}
+
+.lg .said {
+  grid-column: 3;
+  margin: 2px 0 0;
+  padding: 1px 0 1px 12px;
+  border-left: 2px solid var(--bg4);
+  color: var(--grey2);
+  overflow-wrap: anywhere;
+}
+
+.task-foot {
+  margin-top: 18px;
 }
 
 @media (max-width: 720px) {
@@ -227,5 +428,34 @@
 
   .views a {
     padding: 5px 8px;
+  }
+
+  .tf {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 6px 0;
+  }
+
+  .tf > .lb {
+    margin: 0;
+  }
+
+  .scs,
+  .dts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dts input {
+    width: 100%;
+  }
+
+  .lg {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .lg .c,
+  .lg .said {
+    grid-column: 1 / -1;
   }
 }

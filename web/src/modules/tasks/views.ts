@@ -16,7 +16,7 @@ export const views: [View, string, Group[]][] = [
 // Whether a task belongs in a group on the server's today, end being the last day of its week.
 function holds(g: Group, t: Row, today: string, end: string) {
   const from = t.planned_from
-  const to = t.planned_to || from
+  const to = t.planned_to
   const due = t.deadline
   switch (g) {
     case 'sort':

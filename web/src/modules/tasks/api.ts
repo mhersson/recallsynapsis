@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 
@@ -26,7 +26,6 @@ export type Row = {
   source: string
   created_at: string
   changed_at: string
-  trashed_at: string | null
 }
 
 // An entry of a task's log, the newest first: what each field was and became, as strings, an area as its slug and done as
@@ -53,7 +52,7 @@ export function useTasks(read: () => void) {
 }
 
 // The open tasks, 500 at most, as useTasks reads them. took places a task as a change answered it, at once and before
-// the stream tells of it, and takes it out once done; a read asked before it is dropped.
+// the stream tells of it, and takes it out once done; a read asked before it is dropped. A page sorts what it shows.
 export function useOpen() {
   const [list, setList] = useState<List>()
   const [failed, setFailed] = useState('')
@@ -74,10 +73,42 @@ export function useOpen() {
     setList((l) => {
       if (!l) return l
       const rest = l.tasks.filter((x) => x.id !== t.id)
-      return { ...l, tasks: t.state === 'done' ? rest : l.tasks.some((x) => x.id === t.id) ? l.tasks.map((x) => (x.id === t.id ? t : x)) : [...rest, t] }
+      return { ...l, tasks: t.state === 'done' ? rest : [...rest, t] }
     })
   }
   return { list, failed, took }
+}
+
+// The task id names, in full, read as useTasks reads and when id changes. show puts a change's answer in its place while
+// that task is the one named, and a read asked before it is dropped.
+export function useTask(id?: number) {
+  const [task, setTask] = useState<Task>()
+  const [failed, setFailed] = useState('')
+  const [tick, setTick] = useState(0)
+  const asked = useRef(0)
+  const named = useRef(id)
+  useEffect(() => {
+    named.current = id
+  })
+  useTasks(() => setTick((n) => n + 1))
+  useEffect(() => {
+    if (!tick || !id) return
+    const n = ++asked.current
+    api<Task>('GET', `/tasks/${id}`).then(
+      (t) => {
+        if (n !== asked.current) return
+        setTask(t)
+        setFailed('')
+      },
+      (e: unknown) => n === asked.current && setFailed(message(e)),
+    )
+  }, [id, tick])
+  const show = (t: Task) => {
+    if (t.id !== named.current) return
+    asked.current++
+    setTask(t)
+  }
+  return { task: task?.id === id ? task : undefined, failed, show }
 }
 
 // The name of the area a task names by its slug.

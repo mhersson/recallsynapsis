@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import { useAreas } from '../../api/areas.ts'
 import { AddIcon } from '../../components/icons.tsx'
@@ -7,9 +7,10 @@ import PageHead from '../../components/PageHead.tsx'
 import { ago } from '../../components/time.ts'
 import { back } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import { from, nameOf, useOpen, type Fields, type Now, type Row, type Task } from './api.ts'
+import { from, nameOf, useOpen, useTask, type Fields, type Now, type Row, type Task } from './api.ts'
 import Check from './Check.tsx'
 import { day, period, week } from './dates.ts'
+import TaskView from './TaskView.tsx'
 import { order, sortInto, views, type Group, type View } from './views.ts'
 import './Tasks.css'
 
@@ -35,6 +36,7 @@ function about(view: View, now: Now) {
 // the area chosen and the task open live in the address, so a reload keeps them.
 export default function Tasks() {
   const narrow = useNarrow()
+  const navigate = useNavigate()
   const id = Number(useParams().id) || undefined
   const { state } = useLocation()
   const [params, setParams] = useSearchParams()
@@ -43,46 +45,68 @@ export default function Tasks() {
   const search = params.toString() ? `?${params}` : ''
   const areas = useAreas(true)
   const { list, failed, took } = useOpen()
+  const opened = useTask(id)
   const [refused, setRefused] = useState('')
   const [added, setAdded] = useState<number>()
   // The tasks marked done in this view, as they were, so each stays where it stood, struck through, until the view is left.
   const [struck, setStruck] = useState<{ view: View; rows: Row[] }>({ view, rows: [] })
-  if (struck.view !== view) setStruck({ view, rows: [] }) // leaving the view drops them
-  const done = struck.view === view ? struck.rows : []
+  if (struck.view !== view) setStruck({ view, rows: [] })
+  const done = struck.rows
+  // A task open as a page of its own on a phone shows no list; the list still gives the server's today.
+  const alone = narrow && !!id
 
-  const to = (v: View, a = area) => {
-    const q = new URLSearchParams(Object.entries({ view: v === 'today' ? '' : v, area: a }).filter(([, x]) => x))
+  const here = (t: Row) => !area || t.area === area
+  const open = list?.tasks.filter(here) ?? []
+  const shown = [...open, ...done.filter((t) => here(t) && !open.some((x) => x.id === t.id))].sort(order)
+  const groups = list ? sortInto(view, shown, list.now) : []
+  // On desktop the view opens its first task by naming it in the address.
+  const first = groups.flatMap(([, ts]) => ts)[0]?.id
+  useEffect(() => {
+    if (!narrow && !id && first) void navigate(`/tasks/${first}${search}`, { replace: true })
+  }, [narrow, id, first, search, navigate])
+
+  const to = (v: View) => {
+    const q = new URLSearchParams(Object.entries({ view: v === 'today' ? '' : v, area }).filter(([, x]) => x))
     return q.size ? `/tasks?${q}` : '/tasks'
   }
 
-  if (!list) return failed ? <div className="page"><p role="alert" className="err">{failed}</p></div> : null
+  if (!list)
+    return (
+      failed && (
+        <div className="page">
+          <p role="alert" className="err">
+            {failed}
+          </p>
+        </div>
+      )
+    )
   const now = list.now
-  const here = (t: Row) => !area || t.area === area
-  const open = list.tasks.filter(here)
-  const shown = [...open, ...done.filter((t) => here(t) && !open.some((x) => x.id === t.id))].sort(order)
   const isDone = (t: Row) => done.some((x) => x.id === t.id) && !open.some((x) => x.id === t.id)
 
-  // Sends a change of a task and places the task as the answer has it; a refusal shows the server's line.
-  async function change(t: Row, fields: Fields): Promise<Task | undefined> {
-    setRefused('')
+  // Sends a change of a task and places the task as the answer has it, a task marked done staying where it is shown;
+  // gives the server's line when it is refused.
+  async function change(t: Row, fields: Fields): Promise<string> {
+    const as = shown.find((x) => x.id === t.id)
     try {
       const answer = await api<Task>('PATCH', `/tasks/${t.id}`, fields)
       took(answer)
-      return answer
+      opened.show(answer)
+      if (fields.done !== undefined) setStruck((s) => ({ ...s, rows: [...s.rows.filter((x) => x.id !== t.id), ...(fields.done && as ? [as] : [])] }))
+      return ''
     } catch (e) {
-      setRefused(message(e))
+      return message(e)
     }
   }
-  async function toggle(t: Row, d: boolean) {
-    if (!(await change(t, { done: d }))) return
-    setStruck({ view, rows: d ? [...done, t] : done.filter((x) => x.id !== t.id) })
+  const tap = async (t: Row, fields: Fields) => {
+    setRefused('')
+    setRefused(await change(t, fields))
   }
 
   const row = (t: Row, g: Group) => {
     const struckOut = isDone(t)
     const one = t.planned_to === t.planned_from
     const bits = [
-      t.area !== 'personal' && !area && nameOf(areas, t.area),
+      !area && areas.find((a) => a.slug === t.area)?.kind === 'project' && nameOf(areas, t.area),
       g === 'sort' && from(t.source),
       g === 'sort' && ago(t.created_at),
       t.planned_from && (g === 'today' && one ? t.planned_time : `${period(t.planned_from, t.planned_to)}${t.planned_time && ' ' + t.planned_time}`),
@@ -101,7 +125,7 @@ export default function Tasks() {
           : []
     return (
       <div key={t.id} className={'task-row' + (t.id === id ? ' on' : '') + (struckOut ? ' done' : '') + (t.id === added ? ' new' : '')}>
-        <Check done={struckOut} sort={t.state === 'unsorted'} onClick={() => void toggle(t, !struckOut)} />
+        <Check done={struckOut} sort={t.state === 'unsorted'} onClick={() => void tap(t, { done: !struckOut })} />
         <div className="bd">
           <Link className="tl" to={`/tasks/${t.id}${search}`} state={t.id === id ? state : back} aria-current={t.id === id || undefined}>
             <span className="t1">{t.title}</span>
@@ -116,7 +140,7 @@ export default function Tasks() {
           {!struckOut && quick.length > 0 && (
             <div className="qa">
               {quick.map(([label, fields]) => (
-                <button key={label} className="btn sm" onClick={() => void change(t, fields)}>
+                <button key={label} className="btn sm" onClick={() => void tap(t, fields)}>
                   {label}
                 </button>
               ))}
@@ -127,13 +151,12 @@ export default function Tasks() {
     )
   }
 
-  const groups = sortInto(view, shown, now)
   let listed
   if (list.tasks.length === 0 && done.length === 0)
     listed = (
       <div className="empty">
-        <b>No tasks yet.</b>
-        Type one above, or ask an AI client to make one.
+        <b>No open tasks.</b>
+        {view === 'week' ? 'Add one on Today, Next or Someday' : 'Type one above'}, or ask an AI client to make one.
       </div>
     )
   else
@@ -171,42 +194,65 @@ export default function Tasks() {
     </select>
   )
 
+  const task = opened.task ? (
+    <TaskView key={opened.task.id} task={opened.task} now={now} areas={areas} onChange={(f) => change(opened.task!, f)} />
+  ) : (
+    opened.failed && (
+      <p role="alert" className="err">
+        {opened.failed}
+      </p>
+    )
+  )
+  // The task keeps its place in the page on a phone and on desktop, so turning a phone never ends an edit.
   return (
-    <div className="page tasks">
-      <PageHead title="Tasks">{select}</PageHead>
-      <p className="sub">{about(view, now)}</p>
-      <div className={narrow ? undefined : 'panes'}>
-        <div>
-          <div className="views">
-            {views.map(([v, label]) => {
-              const n = sortInto(v, v === view ? shown : open, now).reduce((sum, [, ts]) => sum + ts.length, 0)
-              return (
-                <Link key={v} to={to(v)} aria-current={v === view ? 'page' : undefined}>
-                  {label}
-                  {n > 0 && <span className="dim"> {n}</span>}
-                </Link>
-              )
-            })}
-          </div>
-          {view !== 'week' && (
-            <AddLine
-              key={view}
-              view={view}
-              area={area && nameOf(areas, area)}
-              fields={{ ...(view === 'today' ? { planned_from: now.date } : { list: view }), ...(area && { area }) }}
-              onAdded={(t) => {
-                took(t)
-                setAdded(t.id)
-              }}
-            />
-          )}
-          {refused && (
-            <p role="alert" className="err">
-              {refused}
-            </p>
-          )}
-          {listed}
+    <div className={alone ? 'page narrow' : 'page tasks'}>
+      {alone ? (
+        <div className="crumb">
+          <Link to={'/tasks' + search}>Tasks</Link> /
         </div>
+      ) : (
+        <>
+          <PageHead title="Tasks">{select}</PageHead>
+          <p className="sub">{about(view, now)}</p>
+        </>
+      )}
+      <div className={narrow ? undefined : 'panes'}>
+        {!alone && (
+          <div>
+            <div className="views">
+              {views.map(([v, label]) => {
+                const n = sortInto(v, v === view ? shown : open, now).reduce((sum, [, ts]) => sum + ts.length, 0)
+                return (
+                  <Link key={v} to={to(v)} aria-current={v === view ? 'page' : undefined}>
+                    {label}
+                    {n > 0 && <span className="dim"> {n}</span>}
+                  </Link>
+                )
+              })}
+            </div>
+            {view !== 'week' && (
+              <AddLine
+                key={view}
+                view={view}
+                area={area && nameOf(areas, area)}
+                fields={{ ...(view === 'today' ? { planned_from: now.date } : { list: view }), ...(area && { area }) }}
+                onAdded={(t) => {
+                  took(t)
+                  setAdded(t.id)
+                  // On desktop the task added opens beside the list; the line keeps the focus for the next.
+                  if (!narrow) void navigate(`/tasks/${t.id}${search}`, { state: back })
+                }}
+              />
+            )}
+            {refused && (
+              <p role="alert" className="err">
+                {refused}
+              </p>
+            )}
+            {listed}
+          </div>
+        )}
+        {id && <div className={narrow ? undefined : 'box'}>{task}</div>}
       </div>
     </div>
   )
