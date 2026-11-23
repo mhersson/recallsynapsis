@@ -1,3 +1,4 @@
+import { screen, within } from '@testing-library/react'
 import type { Area, Session } from '../../api/types.ts'
 import { answerTasks } from '../../dev/fixtures.ts'
 import { fakeServer, json, type Call } from '../../test-server.ts'
@@ -24,4 +25,16 @@ export function tasksServer(tasks: Task[], now: Now = monday, answer: (c: Call) 
     const [status, body] = answerTasks(tasks, c.method, new URL(c.path, 'http://here'), (c.body ?? {}) as Record<string, unknown>, now, () => {})
     return json(body, status)
   })
+}
+
+// The task open, beside the list on desktop or as a page on a phone.
+export const taskView = () => screen.getByRole('main').querySelector<HTMLElement>('.task-read')!
+
+// Edit, in the head of a task on desktop and at its foot on a phone.
+export const editButton = () => [...taskView().querySelectorAll<HTMLElement>('.task-head .btn, .task-foot .btn')][0]
+
+// The form's Save and Cancel: on desktop Cancel, then Save, at the right, and on a phone Save above Cancel.
+export function form() {
+  const [a, b] = within(taskView().querySelector<HTMLElement>('.task-edit > .acts')!).getAllByRole('button')
+  return window.matchMedia('(max-width: 720px)').matches ? { save: a, cancel: b } : { save: b, cancel: a }
 }

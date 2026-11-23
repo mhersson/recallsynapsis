@@ -14,9 +14,6 @@ export function add(date: string, days: number) {
   return d.toISOString().slice(0, 10)
 }
 
-// A date a person typed in full, as a date field gives it; while its year is still being typed it is no date.
-export const whole = (v: string) => /^[1-9]\d{3}-\d\d-\d\d$/.test(v)
-
 // A day as a row writes it: Sat 28 Nov.
 export function day(date: string) {
   const d = at(date)
