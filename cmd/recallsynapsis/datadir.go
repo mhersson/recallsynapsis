@@ -74,7 +74,7 @@ func openData(ctx context.Context, dirFlag, configFlag string, changed func(cont
 
 	areas := core.New(st)
 
-	ms, err := areas.LoadModules(ctx, modules, cfg, module.Deps{Now: time.Now, Zone: zone, Dir: dir, Changed: changed})
+	ms, err := areas.LoadModules(ctx, modules, cfg, module.Deps{Now: time.Now, Zone: zone, PublicURL: cfg.PublicURL, Dir: dir, Changed: changed})
 	if err != nil {
 		_ = st.Close()
 

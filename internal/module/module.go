@@ -30,10 +30,11 @@ type Module struct {
 	Tools      []Tool
 	Jobs       []Job
 
-	// Optional. Nil when the module has nothing to offer. Each acts for the caller its context carries.
-	Search  func(context.Context, Query) ([]Hit, error) // its hits, ranked
-	Resolve func(context.Context, int64) (Item, error)  // one item as a link shows it; store.ErrNotFound when there is none
-	LinksTo func(context.Context, Ref) ([]Ref, error)   // its items that link to a ref
+	// Optional. Nil when the module has nothing to offer. Each but Deliver acts for the caller its context carries.
+	Search  func(context.Context, Query) ([]Hit, error)        // its hits, ranked
+	Resolve func(context.Context, int64) (Item, error)         // one item as a link shows it; store.ErrNotFound when there is none
+	LinksTo func(context.Context, Ref) ([]Ref, error)          // its items that link to a ref
+	Deliver func(ctx context.Context, userID int64, m Message) // sends m to the user; Deps.Notify calls it
 }
 
 // Route is one REST route of a module. It is served behind the same access
@@ -108,6 +109,14 @@ type Change struct {
 	Area   int64  `json:"area"`
 }
 
+// Message is one notification.
+type Message struct {
+	Title string
+	Body  string
+	URL   string // the path in the web app a tap opens, such as /tasks/12
+	Tag   string // a newer message replaces one of the same tag; letters, digits, - and _, at most 32
+}
+
 // Area is a user's personal area or one of their projects.
 type Area struct {
 	ID          int64  `json:"id"`
@@ -121,18 +130,21 @@ type Area struct {
 // Deps is what a module is built with. Resolve and LinksTo reach only the
 // enabled modules and act for the caller their context carries.
 type Deps struct {
-	Store    *store.Store
-	FindArea func(ctx context.Context, userID int64, ref string) (Area, error) // the area whose slug or name is ref, in any case
-	Areas    func(ctx context.Context, userID int64) ([]Area, error)           // every area of the user, the archived ones too, the personal area first
-	Now      func() time.Time
-	Zone     *time.Location // the configuration's timezone, in which a module tells what day it is
+	Store     *store.Store
+	FindArea  func(ctx context.Context, userID int64, ref string) (Area, error) // the area whose slug or name is ref, in any case
+	Areas     func(ctx context.Context, userID int64) ([]Area, error)           // every area of the user, the archived ones too, the personal area first
+	Now       func() time.Time
+	Zone      *time.Location // the configuration's timezone, in which a module tells what day it is
+	PublicURL string         // the configuration's public_url
 	// Dir is the data directory. A file under its files/ appears whole, by a
 	// rename, and never changes, since a backup never copies one it has again.
 	Dir string
 
-	Resolve func(context.Context, Ref) (Item, error)          // the item ref names, unavailable rather than an error when no enabled module has it
-	LinksTo func(context.Context, Ref) ([]Ref, error)         // the items of every enabled module that link to ref
-	Notify  func(ctx context.Context, about Ref, text string) // tells the caller text about an item; no module delivers it, so it does nothing
+	Resolve func(context.Context, Ref) (Item, error)  // the item ref names, unavailable rather than an error when no enabled module has it
+	LinksTo func(context.Context, Ref) ([]Ref, error) // the items of every enabled module that link to ref
+	// Notify sends m to the user through each enabled module that delivers,
+	// and does nothing when none is on. A sender never fails on a notification.
+	Notify func(ctx context.Context, userID int64, m Message)
 	// Changed tells the open pages of the caller its context carries what
 	// changed, once the change is stored; with no caller it tells no page.
 	Changed func(context.Context, Change)

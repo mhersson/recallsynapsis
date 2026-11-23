@@ -124,8 +124,8 @@ Every package states its one responsibility in its package comment, and
   verb registers itself from an `init` in its own file. `datadir.go` holds
   `modules`, the list of the binary's feature modules, which is notes and
   tasks, with the fake after it in the tests, and every verb that opens the
-  database builds them all, so every module's migrations run whether it is on
-  or not.
+  database builds them all, with the configuration's `public_url`, so every
+  module's migrations run whether it is on or not.
   `serve` gives the modules the hub of the event streams, whose streams end
   as a signal begins the shutdown, runs the jobs of the modules switched on
   and the nightly backup, and stops them before the store closes.
@@ -177,14 +177,18 @@ Every package states its one responsibility in its package comment, and
   Over the modules switched on it searches, grouping the hits by module,
   giving each its area's slug and failing on a hit outside the caller's
   areas, resolves a reference, unavailable rather than an error when no
-  module switched on has the item, and finds what links to one. It owns the
-  table `areas`.
+  module switched on has the item, finds what links to one, and hands a
+  message for a user to each module that delivers. It owns the table `areas`.
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
   settings and their check, migrations, routes, MCP tools, jobs, and
-  optionally its search, an item as a link shows it, and what links to a
-  reference; the `Deps` it is built with; and the shapes they exchange, among
-  them the `Area`.
+  optionally its search, an item as a link shows it, what links to a
+  reference, and the delivery of a message to a user; the `Deps` it is built
+  with, among them `Notify`, which sends a message to a user through the
+  modules switched on that deliver and returns nothing, and `PublicURL`; and
+  the shapes they exchange, among them the `Area` and the `Message`: a title,
+  a text, the path a tap opens and a tag, by which a newer message replaces
+  an older one.
   `NewTool` makes a tool from a typed function, so no module touches the MCP
   SDK. Beside it: `Capped`, which refuses a text a tool is given over a module's
   cap, counted in characters; the `Caller` an authorised request carries in its
