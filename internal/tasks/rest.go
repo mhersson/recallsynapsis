@@ -144,6 +144,40 @@ func (t tasks) serveEmpty(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// serveKinds answers the caller's kinds of notification.
+func (t tasks) serveKinds(w http.ResponseWriter, r *http.Request) error {
+	k, err := t.readKinds(r.Context())
+	if err != nil {
+		return err
+	}
+
+	module.Reply(w, http.StatusOK, k)
+
+	return nil
+}
+
+// serveChangeKinds sets the kinds of notification the body gives, keeps the
+// others, and answers them all.
+func (t tasks) serveChangeKinds(w http.ResponseWriter, r *http.Request) error {
+	k, err := t.readKinds(r.Context())
+	if err != nil {
+		return err
+	}
+
+	// Decoded over the kinds kept, a body changes only the fields it gives.
+	if err := module.Decode(w, r, &k); err != nil {
+		return err
+	}
+
+	if err := t.keepKinds(r.Context(), k); err != nil {
+		return err
+	}
+
+	module.Reply(w, http.StatusOK, k)
+
+	return nil
+}
+
 // flag reads the query's key: true for "true", false for "false" or none.
 func flag(q url.Values, key string) (bool, error) {
 	switch q.Get(key) {

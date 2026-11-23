@@ -2,6 +2,7 @@ package tasks_test
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -49,16 +50,21 @@ var start = time.Date(2026, 11, 23, 22, 30, 0, 0, time.UTC)
 // fixture serves a database whose user ada has her personal area and the
 // project Garden, and whose user grace has her personal area alone, with
 // notes switched on beside tasks, so a task is found and linked beside a
-// note. Each user is reached by the Authorization header of a token, and only
-// a test of what no token may do signs in, since each sign-in spends an
-// argon2 run.
+// note, and bell, a module that keeps what it is asked to deliver. Each user
+// is reached by the Authorization header of a token, and only a test of what
+// no token may do signs in, since each sign-in spends an argon2 run.
 type fixture struct {
 	h      http.Handler
 	store  *store.Store
 	auth   *auth.Service
 	core   *core.Service
 	hub    *api.Hub
-	tick   atomic.Int64
+	clock  atomic.Int64 // the Unix milliseconds of the last reading of the clock
+	zone   *time.Location
+	notify func(context.Context) error // the job of tasks, nil while it is off
+	muted  bool                        // bell is off
+	rang   []rang                      // what bell was asked to deliver
+	cut    context.CancelFunc          // when set, bell calls it as it delivers
 	ada    int64
 	laptop string // ada's write token
 	desk   string // another write token of ada's
@@ -86,8 +92,12 @@ func newDatabase(t *testing.T) *fixture {
 
 	t.Cleanup(func() { _ = st.Close() })
 
-	f := &fixture{store: st, core: core.New(st), hub: api.NewHub(t.Context().Done()), areas: map[string]int64{}, dir: t.TempDir()}
+	zone, err := time.LoadLocation("Europe/Helsinki")
+	require.NoError(t, err)
+
+	f := &fixture{store: st, core: core.New(st), hub: api.NewHub(t.Context().Done()), zone: zone, areas: map[string]int64{}, dir: t.TempDir()}
 	f.auth = auth.New(st, time.Now)
+	f.clock.Store(start.UnixMilli())
 
 	user := func(name string) int64 {
 		var id int64
@@ -127,24 +137,38 @@ func (f *fixture) load(t *testing.T, table object) {
 	require.NoError(t, err)
 
 	f.h = api.New(api.Deps{Auth: f.auth, Core: f.core, Modules: ms, PublicURL: "https://recall.example.org", Hub: f.hub})
+	f.notify = nil
+
+	for _, m := range ms.On() {
+		if m.Name == "tasks" {
+			f.notify = m.Jobs[0].Run
+		}
+	}
 }
 
 func (f *fixture) loadModules(t *testing.T, table object) (*core.Modules, error) {
 	t.Helper()
 
-	tables := map[string]map[string]any{"notes": {"enabled": true}}
+	tables := map[string]map[string]any{"notes": {"enabled": true}, "bell": {"enabled": !f.muted}}
 	if table != nil {
 		tables["tasks"] = table
 	}
 
-	zone, err := time.LoadLocation("Europe/Helsinki")
-	require.NoError(t, err)
-
 	// Each reading of the clock is a millisecond on from the last, so no two writes share a time.
-	now := func() time.Time { return start.Add(time.Duration(f.tick.Add(1)) * time.Millisecond) }
+	now := func() time.Time { return time.UnixMilli(f.clock.Add(1)) }
 
-	return f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{notes.New, tasks.New}, &config.Config{Modules: tables},
-		module.Deps{Now: now, Zone: zone, Dir: f.dir, Changed: f.hub.Changed})
+	bell := func(module.Deps) module.Module {
+		return module.Module{Name: "bell", Deliver: func(_ context.Context, userID int64, m module.Message) {
+			f.rang = append(f.rang, rang{userID, m})
+
+			if f.cut != nil {
+				f.cut()
+			}
+		}}
+	}
+
+	return f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{notes.New, tasks.New, bell}, &config.Config{Modules: tables},
+		module.Deps{Now: now, Zone: f.zone, Dir: f.dir, Changed: f.hub.Changed})
 }
 
 // signIn gives ada's session, as do takes it.
@@ -894,6 +918,14 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	code, got = f.do(t, http.MethodDelete, "/api/tasks/trash", "", session)
 	require.Equal(t, http.StatusNoContent, code, got)
 	assert.JSONEq(t, `{"module":"tasks","kind":"trash","id":0,"area":0}`, strings.TrimPrefix(next(), "data: "), "emptying tells once")
+
+	code, got = f.do(t, http.MethodPatch, "/api/tasks/notify", `{"morning_at":"7:00"}`, session)
+	refused(t, http.StatusBadRequest, code, got)
+	expect(f.create(t, `{"tasks":[{"title":"Sweep"}]}`, f.laptop)[0], "personal") // and not the refused change of the kinds
+
+	code, got = f.do(t, http.MethodPatch, "/api/tasks/notify", `{"morning":false}`, session)
+	require.Equal(t, http.StatusOK, code, got)
+	assert.JSONEq(t, `{"module":"tasks","kind":"notify","id":0,"area":0}`, strings.TrimPrefix(next(), "data: "), "a change of the kinds")
 }
 
 // trash sends task to the trash, or out of it with "/restore", and returns the task it answers.

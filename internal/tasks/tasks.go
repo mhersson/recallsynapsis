@@ -6,8 +6,11 @@
 // log of every change of a task's fields. A task in the trash is in no list
 // but the trash's, found by no search, no link and no tool, and kept
 // unchanged until it is restored or deleted for good. It searches them
-// through an index of their title and notes. It owns the tables tasks,
-// task_changes, task_links and tasks_fts.
+// through an index of their title and notes. It notifies each user, as they
+// chose, at a task's start time, in the morning of what the day holds, of the
+// tasks due tomorrow and of those planned for today with no start time today.
+// It owns the tables tasks, task_changes, task_links, tasks_fts, task_notify
+// and task_notified.
 package tasks
 
 import (
@@ -32,7 +35,8 @@ import (
 // leads to another task. A date is text, YYYY-MM-DD or empty for none, so
 // dates compare as text, and a time is HH:MM. The index keeps no copy of the
 // text, which a hit reads from the task, and its trigrams let a word find
-// part of a compound.
+// part of a compound. A user has a row of task_notify once they change a kind
+// of notification, and task_notified is one row: the moment notified up to.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE tasks (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +84,22 @@ CREATE TABLE task_links (
 );
 
 CREATE INDEX task_links_ref ON task_links (ref);
+`}, {Version: 3, SQL: `
+CREATE TABLE task_notify (
+	user_id     INTEGER PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+	start       INTEGER NOT NULL,
+	morning     INTEGER NOT NULL,
+	morning_at  TEXT NOT NULL,
+	deadline    INTEGER NOT NULL,
+	deadline_at TEXT NOT NULL,
+	untimed     INTEGER NOT NULL,
+	untimed_at  TEXT NOT NULL
+);
+
+CREATE TABLE task_notified (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	at INTEGER NOT NULL
+);
 `}}
 
 const (
@@ -141,7 +161,10 @@ func New(d module.Deps) module.Module {
 			{Pattern: "POST /api/tasks/{id}/restore", Access: module.Write, Serve: t.serveTrash(false)},
 			{Pattern: "DELETE /api/tasks/{id}", Access: module.Owner, Serve: t.serveDelete},
 			{Pattern: "DELETE /api/tasks/trash", Access: module.Owner, Serve: t.serveEmpty},
+			{Pattern: "GET /api/tasks/notify", Access: module.Owner, Serve: t.serveKinds},
+			{Pattern: "PATCH /api/tasks/notify", Access: module.Owner, Serve: t.serveChangeKinds},
 		},
+		Jobs:    []module.Job{{Name: "notify", Every: 30 * time.Second, Run: t.notify}},
 		Tools:   t.tools(),
 		Search:  t.search,
 		Resolve: t.resolve,
