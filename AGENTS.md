@@ -242,28 +242,32 @@ Every package states its one responsibility in its package comment, and
   snippet, placed by those words. It owns no table but the migration ledger.
 - `internal/tasks`: the tasks module. It keeps each user's tasks, each in one of
   the user's areas, named by the area's slug, with its notes, a planned period,
-  a deadline, a list, `soon` or `someday`, and when it was done. A date is text,
-  `YYYY-MM-DD` or `""` for none, so dates compare as text, and an answer gives
-  each date's weekday beside it. A from alone plans one day, a to before its
-  from and a time without a plan are refused, and a from cleared clears the
-  plan whole. A task is `done`, `unsorted` when it is open with no list, no plan
-  and no deadline, or `open`. A list gives the open tasks unless asked for the
-  done, by area, by list, by a span of dates, which a plan overlaps or a
-  deadline lies in, or the unsorted alone, and gives `now`: the date, its
-  weekday and the time in the configured `timezone`, and `week_start`. A call
-  makes 1 to 50 tasks, all or none, with one `said` kept on the making of each.
-  A change gives only its fields and the last one wins. Each change writes one
-  entry of the task's log, with its source and what each field was and became,
-  and of the notes only that they changed; a change that changes nothing writes
-  none. It searches its tasks, done and open, for every word of a query, in
-  title and notes and in any case, as notes does, through an FTS5 index with
-  the trigram tokenizer, which every write keeps level, which keeps no copy of
-  the text, and which deleting a task for good rewrites. A task in the trash is
-  in no list but the trash's, which gives the done and the open alike, the most
-  recently trashed first, is found by no search and cannot be changed.
-  Trashing and restoring write no entry of the log, and only the session cookie
-  deletes a task for good, alone or by emptying the trash. It owns the tables
-  `tasks`, `task_changes` and `tasks_fts`.
+  a deadline, a list, `soon` or `someday`, when it was done, and its links, at
+  most 100, each a reference to an item of any module, which a change gives
+  whole. A date is text, `YYYY-MM-DD` or `""` for none, so dates compare as
+  text, and an answer gives each date's weekday beside it. A from alone plans
+  one day, a to before its from and a time without a plan are refused, and a
+  from cleared clears the plan whole. A task is `done`, `unsorted` when it is
+  open with no list, no plan and no deadline, or `open`. A list gives the open
+  tasks unless asked for the done, by area, by list, by a span of dates, which a
+  plan overlaps or a deadline lies in, or the unsorted alone, and gives `now`:
+  the date, its weekday and the time in the configured `timezone`, and
+  `week_start`. A call makes 1 to 50 tasks, all or none, with one `said` kept on
+  the making of each. A change gives only its fields and the last one wins. Each
+  change writes one entry of the task's log, with its source and what each field
+  was and became, and of the notes and the links only that they changed; a
+  change that changes nothing writes none. A task read in full gives its links
+  and the items that link to it, each as the core resolves it, and a link to a
+  task in the trash or deleted for good leads nowhere. It searches its tasks,
+  done and open, for every word of a query, in title and notes and in any case,
+  as notes does, through an FTS5 index with the trigram tokenizer, which every
+  write keeps level, which keeps no copy of the text, and which deleting a task
+  for good rewrites. A task in the trash is in no list but the trash's, which
+  gives the done and the open alike, the most recently trashed first, is found
+  by no search and cannot be changed. Trashing and restoring write no entry of
+  the log, and only the session cookie deletes a task for good, alone or by
+  emptying the trash. It owns the tables `tasks`, `task_changes`, `task_links`
+  and `tasks_fts`.
 - `internal/testkit`: `fake`, a feature module as small as the tests of what
   serves modules need: a table, a route and a write tool that add to it and
   tell of what they add, a search of it, and a job that fails on every tick.

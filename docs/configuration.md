@@ -81,7 +81,8 @@ filed, and the trash.
 
 `[modules.tasks]` is the tasks module: tasks in the areas, each with its notes,
 a planned period of days with an optional time on its first, a deadline, the
-list Soon or Someday, when it was done, and a log of its changes; and the trash.
+list Soon or Someday, when it was done, its links and a log of its changes; and
+the trash.
 
 | Key | Default | Meaning |
 | --- | --- | --- |

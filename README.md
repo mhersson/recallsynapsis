@@ -22,7 +22,7 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   without naming an area or calling it an idea waits in the inbox.
 - Tasks keeps tasks in the areas, each with its notes, a planned period of days
   with an optional time on its first, a deadline, the list Soon or Someday, when
-  it was done, and a log of its changes; and a trash. Its REST API, at
+  it was done, its links and a log of its changes; and a trash. Its REST API, at
   `/api/tasks`, makes several at once, all or none, lists them by area, list,
   state and a span of dates, tells which day it is in the configured time zone,
   trashes and restores them, and deletes those in the trash for good, one or all
