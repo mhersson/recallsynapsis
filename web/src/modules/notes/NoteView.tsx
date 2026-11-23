@@ -100,8 +100,7 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
       document.removeEventListener('drop', keep)
     }
   }, [])
-  const typed = !!draft && Object.keys(changeOf(draft)).length > 0
-  const leaving = useUnsaved(typed, 'the note')
+  const leaving = useUnsaved(!!draft && Object.keys(changeOf(draft)).length > 0, 'the note')
 
   if (!note)
     return (
@@ -159,6 +158,15 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
 
   if (draft) {
     const set = (d: Partial<Draft>) => setDraft({ ...draft, ...d })
+    const saveButton = draft.moved ? (
+      <button className="btn" disabled={sending} onClick={() => void save(draft, note.revision)}>
+        Save mine over it
+      </button>
+    ) : (
+      <button className="btn primary" disabled={sending} onClick={() => void save(draft, draft.from.revision)}>
+        Save
+      </button>
+    )
     return (
       <div className="note-edit">
         {draft.moved && (
@@ -207,6 +215,7 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
               'Text'
             )
           }
+          hint={draft.moved ? 'Markdown' : `Markdown · from revision ${draft.from.revision}`}
         >
           <textarea className="ta" autoFocus value={draft.body} onChange={(e) => set({ body: e.target.value })} />
         </Field>
@@ -215,32 +224,19 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
           <span className="label">Tags</span>
           <TagField tags={draft.tags} onChange={(tags) => set({ tags })} />
         </div>
-        <div className={narrow ? 'acts stack' : 'acts'}>
+        {/* Save is last on desktop and first on a phone in the DOM too, so the focus moves in the order shown. */}
+        <div className={narrow ? 'acts stack' : 'acts end'}>
+          {narrow && saveButton}
           {draft.moved ? (
-            <>
-              <button className="btn" disabled={sending} onClick={() => void save(draft, note.revision)}>
-                Save mine over it
-              </button>
-              <button className="btn danger" onClick={() => setDraft(undefined)}>
-                Give up mine
-              </button>
-            </>
+            <button className="btn danger" onClick={() => setDraft(undefined)}>
+              Give up mine
+            </button>
           ) : (
-            <>
-              <button className="btn primary" disabled={sending} onClick={() => void save(draft, draft.from.revision)}>
-                Save
-              </button>
-              <button className="btn" onClick={() => setDraft(undefined)}>
-                Cancel
-              </button>
-            </>
+            <button className="btn" onClick={() => setDraft(undefined)}>
+              Cancel
+            </button>
           )}
-          {!narrow && (
-            <>
-              <span className="spacer" />
-              <span className="t2">{draft.moved ? 'Markdown' : `Markdown · from revision ${draft.from.revision}`}</span>
-            </>
-          )}
+          {!narrow && saveButton}
         </div>
         {leaving}
       </div>

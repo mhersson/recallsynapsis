@@ -113,40 +113,19 @@ export default function Tasks() {
       t.deadline && <span className={t.deadline < now.date ? 'late' : undefined}>due {day(t.deadline)}</span>,
       t.list && t.list !== g && t.list,
     ].filter(Boolean)
-    const quick: [string, Fields][] =
-      g === 'sort'
-        ? [
-            ['Today', { planned_from: now.date }],
-            ['Soon', { list: 'soon' }],
-            ['Someday', { list: 'someday' }],
-          ]
-        : g === 'left'
-          ? [['Move to today', { planned_from: now.date }]]
-          : []
     return (
-      <div key={t.id} className={'task-row' + (t.id === id ? ' on' : '') + (struckOut ? ' done' : '') + (t.id === added ? ' new' : '')}>
+      <div key={t.id} className={'row task-row' + (t.id === id ? ' on' : '') + (struckOut ? ' done' : '') + (t.id === added ? ' new' : '')}>
         <Check done={struckOut} sort={t.state === 'unsorted'} onClick={() => void tap(t, { done: !struckOut })} />
-        <div className="bd">
-          <Link className="tl" to={`/tasks/${t.id}${search}`} state={t.id === id ? state : back} aria-current={t.id === id || undefined}>
-            <span className="t1">{t.title}</span>
-            {bits.length > 0 && (
-              <span className="t2">
-                {bits.map((b, i) => (
-                  <span key={i}>{b}</span>
-                ))}
-              </span>
-            )}
-          </Link>
-          {!struckOut && quick.length > 0 && (
-            <div className="qa">
-              {quick.map(([label, fields]) => (
-                <button key={label} className="btn sm" onClick={() => void tap(t, fields)}>
-                  {label}
-                </button>
+        <Link to={`/tasks/${t.id}${search}`} state={t.id === id ? state : back} aria-current={t.id === id || undefined}>
+          <span className="t1">{t.title}</span>
+          {bits.length > 0 && (
+            <span className="t2">
+              {bits.map((b, i) => (
+                <span key={i}>{b}</span>
               ))}
-            </div>
+            </span>
           )}
-        </div>
+        </Link>
       </div>
     )
   }

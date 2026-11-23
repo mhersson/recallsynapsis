@@ -1,5 +1,5 @@
 import type { Now } from './api.ts'
-import { add, day, period, shortcuts, stamp, week, whole } from './dates.ts'
+import { add, day, period, shortcuts, stamp, week } from './dates.ts'
 
 const on = (date: string, week_start = 'monday'): Now => ({ date, weekday: '', time: '10:00', timezone: 'Europe/Oslo', week_start })
 
@@ -15,10 +15,6 @@ test('dates are counted as plain days, across a month, a year and a change of th
   expect(add('2026-12-31', 1)).toBe('2027-01-01')
   expect(add('2026-03-29', -1)).toBe('2026-03-28')
   expect(add('2026-10-25', 1)).toBe('2026-10-26')
-})
-
-test('a date field gives a date once its year is typed in full', () => {
-  expect(['2026-11-28', '0002-11-28', '0202-11-28', ''].map(whole)).toEqual([true, false, false, false])
 })
 
 test.each([

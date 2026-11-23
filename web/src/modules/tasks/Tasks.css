@@ -166,14 +166,6 @@
   color: inherit;
 }
 
-.task-row {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--bg2);
-}
-
 .task-row:hover,
 .task-row.on {
   background: var(--bg1);
@@ -181,20 +173,6 @@
 
 .task-row.new {
   background: var(--bg-visual);
-}
-
-.task-row .bd {
-  flex: 1;
-  min-width: 0;
-}
-
-.task-row .tl {
-  display: block;
-  color: var(--fg);
-}
-
-.task-row .tl:hover {
-  text-decoration: none;
 }
 
 .task-row .t1 {
@@ -206,13 +184,6 @@
   text-decoration: line-through;
   color: var(--grey1);
   font-weight: 400;
-}
-
-.qa {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
 }
 
 .task-row .late {
@@ -258,6 +229,21 @@
   margin-top: 0;
 }
 
+/* The plan, the deadline and the list of a task read, as two quiet lines. */
+.task-lines {
+  margin-top: 10px;
+  color: var(--grey2);
+  font-size: 13px;
+}
+
+.task-lines p {
+  margin: 0;
+}
+
+.task-lines .late {
+  color: var(--red);
+}
+
 .task-read .md,
 .task-none {
   margin: 14px 0;
@@ -288,7 +274,15 @@
 }
 
 .task-edit .field {
-  margin-bottom: 10px;
+  margin-bottom: 4px;
+}
+
+.task-edit .err {
+  margin: 10px 0 0;
+}
+
+.task-edit > .acts {
+  margin-top: 12px;
 }
 
 /* A field of the task: its label beside it on desktop, above it on a phone. */

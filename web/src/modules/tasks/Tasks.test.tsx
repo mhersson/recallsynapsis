@@ -4,7 +4,7 @@ import { changeTask, task } from '../../dev/fixtures.ts'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, json, narrow, type Call } from '../../test-server.ts'
 import type { Now, Task } from './api.ts'
-import { monday, tasksServer } from './test-tasks.ts'
+import { editButton, form, monday, taskView, tasksServer } from './test-tasks.ts'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -15,7 +15,12 @@ const page = () => screen.getByRole('main')
 // The titles in each group shown, by the group's key.
 const shown = () => Object.fromEntries([...page().querySelectorAll('[data-group]')].map((g) => [g.getAttribute('data-group'), [...g.querySelectorAll('.t1')].map((t) => t.textContent)]))
 const rowOf = (title: string) => [...page().querySelectorAll<HTMLElement>('.task-row')].find((r) => r.querySelector('.t1')?.textContent === title)!
-const quick = (title: string) => within(rowOf(title).querySelector<HTMLElement>('.qa')!).getAllByRole('button')
+// Edits the task open, picks what pick finds in it, and saves.
+async function sortOpen(pick: (view: HTMLElement) => HTMLElement) {
+  await userEvent.click(await waitFor(editButton))
+  await userEvent.click(pick(taskView()))
+  await userEvent.click(form().save)
+}
 const ringOf = (title: string) => within(rowOf(title)).getAllByRole('button')[0]
 const viewLinks = () => [...page().querySelectorAll<HTMLAnchorElement>('.views a')]
 const counts = () => viewLinks().map((a) => a.querySelector('.dim')?.textContent?.trim() ?? '')
@@ -105,13 +110,24 @@ test.each([
   expect(reads(calls)).toBe(1)
 })
 
-test('a quick button sends only what it changes, and the row then stands where it belongs without a reload', async () => {
+test('a row carries no button but its ring', async () => {
+  narrow(false)
+  tasksServer(week())
+  await open('/tasks')
+  // The ring is the one button that is pressed or not.
+  const buttons = [...page().querySelectorAll<HTMLElement>('.task-row')].map((r) => within(r).getAllByRole('button').map((b) => b.hasAttribute('aria-pressed')))
+  expect(buttons).toEqual([[true], [true], [true], [true]])
+})
+
+test('a task to sort or left from earlier is planned for today through its page, and then stands where it belongs without a reload', async () => {
   narrow(false)
   const calls = tasksServer(week())
-  await open('/tasks')
-  await userEvent.click(quick('to sort')[0])
+  await open('/tasks/1')
+  await sortOpen((v) => v.querySelector<HTMLElement>('.scs button')!)
   await waitFor(() => expect(shown()).toEqual({ left: ['last weekend'], late: ['overdue'], today: ['today', 'to sort'] }))
-  await userEvent.click(quick('last weekend')[0])
+  await userEvent.click(within(rowOf('last weekend')).getByRole('link'))
+  await waitFor(() => expect(page().querySelector('.task-read h1')).toHaveTextContent('last weekend'))
+  await sortOpen((v) => v.querySelector<HTMLElement>('.scs button')!)
   await waitFor(() => expect(shown()).toEqual({ late: ['overdue'], today: ['today', 'to sort', 'last weekend'] }))
   expect(writes(calls)).toEqual([
     ['PATCH', '/api/tasks/1', { planned_from: '2026-11-23' }],
@@ -121,17 +137,17 @@ test('a quick button sends only what it changes, and the row then stands where i
 })
 
 test.each([
-  [1, { list: 'soon' }, 'soon'],
-  [2, { list: 'someday' }, 'someday'],
-])('the quick button %i of a task to sort sends %j and takes it to %s', async (n, fields, to) => {
-  narrow(true)
+  ['soon', 1],
+  ['someday', 2],
+] as const)('a task to sort put on %s on its page goes there', async (to, n) => {
+  narrow(false)
   const calls = tasksServer(week())
-  const view = await open('/tasks')
-  await userEvent.click(quick('to sort')[n])
+  await open('/tasks/1')
+  await sortOpen((v) => within(v).getAllByRole('radio')[n])
   await waitFor(() => expect(shown().sort).toBeUndefined())
-  expect(writes(calls)).toEqual([['PATCH', '/api/tasks/1', fields]])
+  expect(writes(calls)).toEqual([['PATCH', '/api/tasks/1', { list: to }]])
   await userEvent.click(viewLinks()[n + 1])
-  await waitFor(() => expect(view.where()).toBe(`/tasks?view=${to}`))
+  await waitFor(() => expect(viewLinks()[n + 1]).toHaveAttribute('aria-current', 'page'))
   expect(shown()[to]).toContain('to sort')
 })
 
