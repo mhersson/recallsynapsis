@@ -4,7 +4,8 @@
 // them by area, list, state and a span of dates, tells which day it is in the
 // configured time zone, and keeps a log of every change of a task's fields. A
 // task in the trash is in no list but the trash's, and kept unchanged until it
-// is restored or deleted for good. It owns the tables tasks and task_changes.
+// is restored or deleted for good. It searches them through an index of their
+// title and notes. It owns the tables tasks, task_changes and tasks_fts.
 package tasks
 
 import (
@@ -27,7 +28,9 @@ import (
 // migrations make the module's schema. A task's id is AUTOINCREMENT, so a
 // task deleted for good never gives its id to another, and a link to it never
 // leads to another task. A date is text, YYYY-MM-DD or empty for none, so
-// dates compare as text, and a time is HH:MM.
+// dates compare as text, and a time is HH:MM. The index keeps no copy of the
+// text, which a hit reads from the task, and its trigrams let a word find
+// part of a compound.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE tasks (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +62,14 @@ CREATE TABLE task_changes (
 );
 
 CREATE INDEX task_changes_task ON task_changes (task_id);
+`}, {Version: 2, SQL: `
+CREATE VIRTUAL TABLE tasks_fts USING fts5 (title, notes, tokenize = 'trigram', content = '', contentless_delete = 1);
+
+INSERT INTO tasks_fts (rowid, title, notes) SELECT id, title, notes FROM tasks;
+
+CREATE TRIGGER tasks_fts_delete AFTER DELETE ON tasks BEGIN
+	DELETE FROM tasks_fts WHERE rowid = old.id;
+END;
 `}}
 
 const (
@@ -116,6 +127,7 @@ func New(d module.Deps) module.Module {
 			{Pattern: "DELETE /api/tasks/{id}", Access: module.Owner, Serve: t.serveDelete},
 			{Pattern: "DELETE /api/tasks/trash", Access: module.Owner, Serve: t.serveEmpty},
 		},
+		Search: t.search,
 	}
 }
 
@@ -372,6 +384,14 @@ func diff(from, to fields, slugs map[int64]string) []delta {
 const columns = `id, area_id, title, planned_from, planned_to, planned_time, deadline, list, done_at, notes <> '', source, created_at, changed_at,
 	trashed_at`
 
+const (
+	// index writes the task ?1 into the search index as it now stands.
+	index = `REPLACE INTO tasks_fts (rowid, title, notes) SELECT id, title, notes FROM tasks WHERE id = ?1`
+	// purge rewrites the search index whole. A delete only marks a task's
+	// rows in it, whose text a backup would copy until a merge drops them.
+	purge = `INSERT INTO tasks_fts (tasks_fts) VALUES ('optimize')`
+)
+
 // scanRow reads a row of columns, and extra after it, naming its area by
 // its slug in slugs.
 func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, extra ...any) (row, error) {
@@ -403,16 +423,26 @@ func scanRow(sc interface{ Scan(dest ...any) error }, slugs map[int64]string, ex
 		r.TrashedAt = new(time.UnixMilli(trashed.Int64).UTC())
 	}
 
-	switch {
-	case done.Valid:
-		r.State, r.DoneAt = "done", new(time.UnixMilli(done.Int64).UTC())
-	case r.List == "" && r.PlannedFrom == "" && r.Deadline == "":
-		r.State = "unsorted"
-	default:
-		r.State = "open"
+	if done.Valid {
+		r.DoneAt = new(time.UnixMilli(done.Int64).UTC())
 	}
 
+	r.State = state(done.Valid, r.List, r.PlannedFrom, r.Deadline)
+
 	return r, nil
+}
+
+// state is how a row, a hit or a link tells a task: "done", "unsorted" when
+// it is open with no list, no plan and no deadline, else "open".
+func state(done bool, list, from, deadline string) string {
+	switch {
+	case done:
+		return "done"
+	case list == "" && from == "" && deadline == "":
+		return "unsorted"
+	}
+
+	return "open"
 }
 
 // today is which day it is in the configured zone.
@@ -678,6 +708,10 @@ func (t tasks) create(ctx context.Context, b batch) (made, error) {
 
 			out.Tasks[i] = r
 
+			if _, err := tx.ExecContext(ctx, index, r.ID); err != nil {
+				return fmt.Errorf("tasks: index: %w", err)
+			}
+
 			if err := logChange(ctx, tx, r.ID, now, c.Source, b.Said, diff(fields{}, f, slugs)); err != nil {
 				return err
 			}
@@ -767,6 +801,12 @@ func (t tasks) change(ctx context.Context, id int64, ch change) (task, error) {
 			return fmt.Errorf("tasks: change: %w", err)
 		}
 
+		if was.title != f.title || was.notes != f.notes {
+			if _, err := tx.ExecContext(ctx, index, id); err != nil {
+				return fmt.Errorf("tasks: index: %w", err)
+			}
+		}
+
 		changed = true
 
 		return logChange(ctx, tx, id, now, c.Source, "", changes)
@@ -815,8 +855,8 @@ func (t tasks) trash(ctx context.Context, id int64, trashed bool) (task, error) 
 	return t.read(ctx, slugs, c.UserID, id)
 }
 
-// remove deletes the caller's task with the id for good, with its log. A
-// task outside the trash is ErrConflict.
+// remove deletes the caller's task with the id for good, with its log and
+// its text in the search index. A task outside the trash is ErrConflict.
 func (t tasks) remove(ctx context.Context, id int64) error {
 	c, _ := module.CallerFrom(ctx)
 
@@ -841,6 +881,10 @@ func (t tasks) remove(ctx context.Context, id int64) error {
 			return fmt.Errorf("tasks: delete: %w", err)
 		}
 
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("tasks: delete: %w", err)
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -856,8 +900,19 @@ func (t tasks) remove(ctx context.Context, id int64) error {
 func (t tasks) empty(ctx context.Context) error {
 	c, _ := module.CallerFrom(ctx)
 
-	if _, err := t.Store.ExecContext(ctx, `DELETE FROM tasks WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
-		return fmt.Errorf("tasks: empty the trash: %w", err)
+	err := t.Store.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE user_id = ? AND trashed_at IS NOT NULL`, c.UserID); err != nil {
+			return fmt.Errorf("tasks: empty the trash: %w", err)
+		}
+
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("tasks: empty the trash: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	// One change for them all, since a stream that falls behind is ended.

@@ -255,11 +255,15 @@ Every package states its one responsibility in its package comment, and
   A change gives only its fields and the last one wins. Each change writes one
   entry of the task's log, with its source and what each field was and became,
   and of the notes only that they changed; a change that changes nothing writes
-  none. A task in the trash is in no list but the trash's, which gives the done
-  and the open alike, the most recently trashed first, and cannot be changed.
+  none. It searches its tasks, done and open, for every word of a query, in
+  title and notes and in any case, as notes does, through an FTS5 index with
+  the trigram tokenizer, which every write keeps level, which keeps no copy of
+  the text, and which deleting a task for good rewrites. A task in the trash is
+  in no list but the trash's, which gives the done and the open alike, the most
+  recently trashed first, is found by no search and cannot be changed.
   Trashing and restoring write no entry of the log, and only the session cookie
   deletes a task for good, alone or by emptying the trash. It owns the tables
-  `tasks` and `task_changes`.
+  `tasks`, `task_changes` and `tasks_fts`.
 - `internal/testkit`: `fake`, a feature module as small as the tests of what
   serves modules need: a table, a route and a write tool that add to it and
   tell of what they add, a search of it, and a job that fails on every tick.

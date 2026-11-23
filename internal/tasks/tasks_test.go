@@ -23,6 +23,7 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/config"
 	"github.com/mhersson/recallsynapsis/internal/core"
 	"github.com/mhersson/recallsynapsis/internal/module"
+	"github.com/mhersson/recallsynapsis/internal/notes"
 	"github.com/mhersson/recallsynapsis/internal/store"
 	"github.com/mhersson/recallsynapsis/internal/tasks"
 )
@@ -46,9 +47,11 @@ var passwordHash = sync.OnceValue(func() string {
 var start = time.Date(2026, 11, 23, 22, 30, 0, 0, time.UTC)
 
 // fixture serves a database whose user ada has her personal area and the
-// project Garden, and whose user grace has her personal area alone. Each
-// user is reached by the Authorization header of a token, and only a test of
-// what no token may do signs in, since each sign-in spends an argon2 run.
+// project Garden, and whose user grace has her personal area alone, with
+// notes switched on beside tasks, so a task is found and linked beside a
+// note. Each user is reached by the Authorization header of a token, and only
+// a test of what no token may do signs in, since each sign-in spends an
+// argon2 run.
 type fixture struct {
 	h      http.Handler
 	store  *store.Store
@@ -62,6 +65,7 @@ type fixture struct {
 	phone  string // ada's read token
 	grace  string // grace's write token
 	areas  map[string]int64
+	dir    string // the data directory
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -82,7 +86,7 @@ func newDatabase(t *testing.T) *fixture {
 
 	t.Cleanup(func() { _ = st.Close() })
 
-	f := &fixture{store: st, core: core.New(st), hub: api.NewHub(t.Context().Done()), areas: map[string]int64{}}
+	f := &fixture{store: st, core: core.New(st), hub: api.NewHub(t.Context().Done()), areas: map[string]int64{}, dir: t.TempDir()}
 	f.auth = auth.New(st, time.Now)
 
 	user := func(name string) int64 {
@@ -128,7 +132,7 @@ func (f *fixture) load(t *testing.T, table object) {
 func (f *fixture) loadModules(t *testing.T, table object) (*core.Modules, error) {
 	t.Helper()
 
-	tables := map[string]map[string]any{}
+	tables := map[string]map[string]any{"notes": {"enabled": true}}
 	if table != nil {
 		tables["tasks"] = table
 	}
@@ -139,8 +143,8 @@ func (f *fixture) loadModules(t *testing.T, table object) (*core.Modules, error)
 	// Each reading of the clock is a millisecond on from the last, so no two writes share a time.
 	now := func() time.Time { return start.Add(time.Duration(f.tick.Add(1)) * time.Millisecond) }
 
-	return f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{tasks.New}, &config.Config{Modules: tables},
-		module.Deps{Now: now, Zone: zone, Changed: f.hub.Changed})
+	return f.core.LoadModules(t.Context(), []func(module.Deps) module.Module{notes.New, tasks.New}, &config.Config{Modules: tables},
+		module.Deps{Now: now, Zone: zone, Dir: f.dir, Changed: f.hub.Changed})
 }
 
 // signIn gives ada's session, as do takes it.
@@ -755,8 +759,12 @@ func TestAModuleSwitchedOffKeepsItsTasks(t *testing.T) {
 
 	want := []object{f.read(t, made[0], f.laptop), f.read(t, made[1], f.laptop)}
 
+	assert.Equal(t, []string{"Garage"}, f.found(t, "garage", f.phone))
+
 	for _, table := range []object{{"enabled": false}, nil} {
 		f.load(t, table)
+
+		assert.NotContains(t, f.hits(t, "garage", "", f.phone), "tasks", "a module switched off finds nothing")
 
 		for _, r := range []struct{ method, target, body string }{
 			{http.MethodGet, "/api/tasks", ""},
@@ -781,6 +789,8 @@ func TestAModuleSwitchedOffKeepsItsTasks(t *testing.T) {
 	for i, task := range made {
 		assert.Equal(t, want[i], f.read(t, task, f.laptop))
 	}
+
+	assert.Equal(t, []string{"Garage"}, f.found(t, "garage", f.phone))
 }
 
 func TestEachWriteReachesAnOpenStream(t *testing.T) {

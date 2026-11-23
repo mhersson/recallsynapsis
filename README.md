@@ -38,8 +38,9 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   tells each change, with what the owner said.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
-  every word given, in their title, body or tags, and part of a word is
-  enough. The MCP tool `list_areas` lists the areas.
+  every word given, in their title, body or tags, and Tasks the tasks, done or
+  open, that hold them in their title or notes; part of a word is enough. The
+  MCP tool `list_areas` lists the areas.
 - It backs itself up every night, into a directory you name.
 
 ## What it needs
