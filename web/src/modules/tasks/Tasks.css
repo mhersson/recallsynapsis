@@ -166,14 +166,6 @@
   color: inherit;
 }
 
-.task-row {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--bg2);
-}
-
 .task-row:hover,
 .task-row.on {
   background: var(--bg1);
@@ -181,20 +173,6 @@
 
 .task-row.new {
   background: var(--bg-visual);
-}
-
-.task-row .bd {
-  flex: 1;
-  min-width: 0;
-}
-
-.task-row .tl {
-  display: block;
-  color: var(--fg);
-}
-
-.task-row .tl:hover {
-  text-decoration: none;
 }
 
 .task-row .t1 {
@@ -206,13 +184,6 @@
   text-decoration: line-through;
   color: var(--grey1);
   font-weight: 400;
-}
-
-.qa {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
 }
 
 .task-row .late {
