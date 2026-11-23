@@ -36,7 +36,7 @@ func (c *Service) LoadModules(ctx context.Context, list []func(module.Deps) modu
 	d.Store, d.FindArea = c.store, c.Find
 	d.Areas = func(ctx context.Context, userID int64) ([]module.Area, error) { return c.Areas(ctx, userID, true) }
 	d.Resolve, d.LinksTo = ms.Resolve, ms.LinksTo
-	d.Notify = func(context.Context, module.Ref, string) {}
+	d.Notify = ms.Notify
 
 	var (
 		names      []string
@@ -176,6 +176,15 @@ func (ms *Modules) Resolve(ctx context.Context, ref module.Ref) (module.Item, er
 	it.Ref, it.Available = ref, true
 
 	return it, nil
+}
+
+// Notify hands m for the user to each module switched on that delivers.
+func (ms *Modules) Notify(ctx context.Context, userID int64, m module.Message) {
+	for _, mod := range ms.on {
+		if mod.Deliver != nil {
+			mod.Deliver(ctx, userID, m)
+		}
+	}
 }
 
 // LinksTo gives the items of every module switched on that link to ref.

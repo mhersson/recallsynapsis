@@ -108,15 +108,32 @@ func TestLoadModules(t *testing.T) {
 	clock := func() time.Time { return time.Unix(7, 0) }
 	zone := time.FixedZone("Somewhere", 3600)
 
-	var heard []module.Change
+	var (
+		heard     []module.Change
+		delivered []string
+	)
+
+	deliverer := func(name string) func(module.Deps) module.Module {
+		return func(module.Deps) module.Module {
+			return module.Module{Name: name, Deliver: func(_ context.Context, userID int64, m module.Message) {
+				delivered = append(delivered, fmt.Sprintf("%s %d %s", name, userID, m.Title))
+			}}
+		}
+	}
 
 	ms, err := f.svc.LoadModules(t.Context(),
-		[]func(module.Deps) module.Module{stub("off", nil, nil, nil), tuned, stub("plain", nil, map[int64]string{1: "Beds"}, nil), stub("bare", nil, nil, nil)},
-		&config.Config{Modules: map[string]table{"off": {"enabled": false}, "tuned": {"enabled": true, "size": int64(9)}, "plain": {"enabled": true}}},
-		module.Deps{Now: clock, Zone: zone, Dir: "/data", Changed: func(_ context.Context, c module.Change) { heard = append(heard, c) }})
+		[]func(module.Deps) module.Module{
+			stub("off", nil, nil, nil), tuned, stub("plain", nil, map[int64]string{1: "Beds"}, nil), stub("bare", nil, nil, nil),
+			deliverer("bell"), deliverer("muted"),
+		},
+		&config.Config{Modules: map[string]table{
+			"off": {"enabled": false}, "tuned": {"enabled": true, "size": int64(9)}, "plain": {"enabled": true},
+			"bell": {"enabled": true}, "muted": {"enabled": false},
+		}},
+		module.Deps{Now: clock, Zone: zone, PublicURL: "https://recall.example.org", Dir: "/data", Changed: func(_ context.Context, c module.Change) { heard = append(heard, c) }})
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"tuned", "plain"}, names(ms), "the modules on, in the list's order; one with no table is off")
+	assert.Equal(t, []string{"tuned", "plain", "bell"}, names(ms), "the modules on, in the list's order; one with no table is off")
 	assert.Equal(t, settings{Size: 9}, tune, "its table is decoded into its settings")
 	assert.Equal(t, []string{"bare_items", "off_items", "plain_items", "tuned_items"}, f.tables(t), "every module's migrations run, on or off")
 
@@ -129,9 +146,11 @@ func TestLoadModules(t *testing.T) {
 	assert.Equal(t, time.Unix(7, 0), got.Now())
 	assert.Same(t, zone, got.Zone)
 	assert.Equal(t, "/data", got.Dir)
+	assert.Equal(t, "https://recall.example.org", got.PublicURL)
 	got.Changed(t.Context(), module.Change{Module: "tuned", Kind: "item", ID: 1, Area: 2})
 	assert.Equal(t, []module.Change{{Module: "tuned", Kind: "item", ID: 1, Area: 2}}, heard)
-	got.Notify(t.Context(), module.NewRef("tuned", 1), "hello")
+	got.Notify(t.Context(), ada, module.Message{Title: "Beds"})
+	assert.Equal(t, []string{fmt.Sprintf("bell %d Beds", ada)}, delivered, "the modules on that deliver, built after the one given Notify")
 
 	personal, err := got.FindArea(t.Context(), ada, "PERSONAL")
 	require.NoError(t, err)

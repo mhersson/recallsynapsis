@@ -8,7 +8,7 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
 - The owner signs in with a name and a password. AI clients and scripts use API
   tokens made in Settings, each with read or write access.
 - What it keeps comes from feature modules, each switched on in the
-  configuration. This build has two. Notes keeps notes and ideas in the areas,
+  configuration. This build has three. Notes keeps notes and ideas in the areas,
   with their tags, links, attached files and history, an inbox of captures that
   wait to be filed, and a trash. In the web app, Capture saves a thought and the
   Inbox files it; Notes lists the filed notes, each read, edited, moved to
@@ -55,6 +55,10 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   archived, beside its notes and ideas, and leads to what was done in it. Search
   lists the tasks' hits before the notes', and a task found there or linked from
   a note shows its ring and leads to its page.
+- Push sends a module's notifications as Web Push to every browser of the
+  owner's in which they are turned on, encrypted for each browser, and a
+  browser is turned on or off with the session cookie alone. No module of this
+  build sends one.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and Tasks the tasks, done or
@@ -128,8 +132,8 @@ To run it from the image instead, see
 - [docs/configuration.md](docs/configuration.md): the data directory and every
   key of `recallsynapsis.toml`.
 - [docs/running.md](docs/running.md): building, the verbs, the password, the
-  API tokens, the image, what stands in front, backups and restoring, and
-  upgrading.
+  API tokens, the image, what stands in front, notifications, backups and
+  restoring, and upgrading.
 
 ## Contributing
 
