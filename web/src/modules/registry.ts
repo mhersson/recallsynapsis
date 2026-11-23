@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import type { Area } from '../api/types.ts'
+import type { Area, Linked } from '../api/types.ts'
 import { notes } from './notes/index.tsx'
 import { tasks } from './tasks/index.tsx'
 
@@ -18,6 +18,16 @@ export type CaptureKind = {
   label: string
   more: ComponentType<{ value: Record<string, string>; onChange: (v: Record<string, string>) => void }>
   save: (text: string, area: string, more: Record<string, string>) => Promise<unknown>
+}
+
+// An item, as a link names it.
+export type Named = Pick<Linked, 'ref' | 'kind' | 'state' | 'title'>
+
+// What a module makes of another module's item, such as a task of a note: its label, and its form, given the item, its
+// text, its area and the areas, which tells whether anything is entered and closes with what it made, if anything.
+export type Maker = {
+  label: string
+  form: ComponentType<{ of: Named; text: string; area: string; areas: Area[]; onEntered: (entered: boolean) => void; onClose: (made?: Named) => void }>
 }
 
 // Where an item leads, the class of the small mark that shows what it is, and its state in words when it has one
@@ -43,6 +53,8 @@ export type Module = {
   // What it holds in an area, shown on that area's page beside the other modules' on desktop; first when it comes first
   // there, so on a phone it opens.
   section?: ComponentType<{ area: Area; first: boolean }>
+  // What it makes from another module's item, offered on that item's page.
+  make?: Maker
   // An item of the module, given its reference, kind and state, as a hit or a link names it.
   item?: (ref: string, kind: string, state: string) => Item
 }

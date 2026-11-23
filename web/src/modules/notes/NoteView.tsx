@@ -8,14 +8,18 @@ import Field from '../../components/Field.tsx'
 import { RestoreIcon, TrashIcon } from '../../components/icons.tsx'
 import Links from '../../components/Links.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
+import PageHead from '../../components/PageHead.tsx'
 import { ago, when } from '../../components/time.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useUnsaved } from '../../components/useUnsaved.tsx'
+import { useModules } from '../../session.ts'
+import type { Maker, Named } from '../registry.ts'
 import { count, from, mark, type Kind, type Note, type Version } from './api.ts'
 import { Place } from './Filing.tsx'
 import Files from './Files.tsx'
 import History, { RevisionView } from './History.tsx'
 import { AttachIcon } from './icons.tsx'
+import MadeNotice from './MadeNotice.tsx'
 import TagField from './TagField.tsx'
 import { size, useUploads } from './uploads.ts'
 import './Sections.css'
@@ -49,6 +53,12 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
   const [reading, setReading] = useState<number>()
   const [restored, setRestored] = useState<{ from: number; at: string; as: number }>()
   const [deleting, setDeleting] = useState(false)
+  const makers = useModules().flatMap((m) => (m.make ? [m.make] : []))
+  // A maker's form opens as a dialog on desktop and as the note's page on a phone, and stays so: turning a phone would
+  // otherwise make it anew and lose what is entered.
+  const [making, setMaking] = useState<{ maker: Maker; dialog: boolean }>()
+  const [entered, setEntered] = useState(false)
+  const [made, setMade] = useState<Named>()
   // A note read, or a change's answer, that left the server before the note shown would show the note as it was. A file,
   // a trash or a restore changes no revision, so only the last read asked is shown, and none asked before a change.
   const show = (n: Note) => setNote((x) => (x && x.revision > n.revision ? x : n))
@@ -72,7 +82,7 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
   // At the note's level, so an upload goes on while the note is edited.
   const up = useUploads(id, read)
   // On desktop a file dropped on the note, or an image pasted anywhere, is attached to the note being read.
-  const attachable = !narrow && !draft && !reading && !!note && !note.trashed_at
+  const attachable = !narrow && !draft && !reading && !making && !!note && !note.trashed_at
   const [over, setOver] = useState(false)
   const pasted = useEffectEvent((e: ClipboardEvent) => {
     // A paste in a dialog, such as Capture, is the dialog's. Cells copied from a spreadsheet come as text and as a picture
@@ -103,7 +113,8 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
       document.removeEventListener('drop', keep)
     }
   }, [])
-  const leaving = useUnsaved(!!draft && Object.keys(changeOf(draft)).length > 0, 'the note')
+  // One question for the editor and a maker's form alike, since the router heeds one blocker alone.
+  const leaving = useUnsaved((!!draft && Object.keys(changeOf(draft)).length > 0) || (!!making && entered), 'the note')
 
   if (!note)
     return (
@@ -158,6 +169,32 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
       {refused}
     </p>
   )
+
+  const stop = (m?: Named) => {
+    setMaking(undefined)
+    setEntered(false)
+    if (!m) return
+    setMade(m)
+    void read()
+  }
+  const form = making && (
+    <making.maker.form
+      of={{ ref: note.ref, kind: note.kind, state: note.inbox ? 'inbox' : 'filed', title: note.title }}
+      text={note.body}
+      area={note.area}
+      areas={areas}
+      onEntered={setEntered}
+      onClose={stop}
+    />
+  )
+  if (form && !making.dialog)
+    return (
+      <div className="note-make">
+        <PageHead title={making.maker.label} />
+        {form}
+        {leaving}
+      </div>
+    )
 
   if (draft) {
     const set = (d: Partial<Draft>) => setDraft({ ...draft, ...d })
@@ -284,6 +321,11 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
       <button className="btn" disabled={sending} onClick={() => setDraft({ from: note, title: note.title, body: note.body, area: note.area, kind: note.kind, tags: note.tags })}>
         Edit
       </button>
+      {makers.map((m) => (
+        <button key={m.label} className="btn" disabled={sending} onClick={() => setMaking({ maker: m, dialog: !narrow })}>
+          {m.label}
+        </button>
+      ))}
       <button className="btn danger" disabled={sending} onClick={() => void send('POST', `/notes/${id}/trash`, undefined, onGone).then(setRefused)}>
         Trash
       </button>
@@ -315,6 +357,7 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
           </div>
         </div>
       )}
+      {made && <MadeNotice made={made}>It links back to this note.</MadeNotice>}
       {restored?.as === note.revision && (
         <div className="notice restored">
           <div className="nt">
@@ -366,11 +409,17 @@ export default function NoteView({ id, areas, onGone, onChanged, onRestored }: P
         )}
       </div>
       <div className="sects">
-        <Links of={note} areas={areas} trashed={trashed} sending={sending} onLinks={(links) => send('PATCH', `/notes/${id}`, { revision: note.revision, links })} />
+        <Links of={note} areas={areas} trashed={trashed} sending={sending} open={!!made} onLinks={(links) => send('PATCH', `/notes/${id}`, { revision: note.revision, links })} />
         <Files note={note} trashed={trashed} up={up} onRemoved={() => void read()} />
         <History note={note} fresh={restored?.as} onRead={setReading} />
       </div>
       {narrow && acts && <div className="acts stack note-foot">{acts}</div>}
+      {form && making.dialog && (
+        <Dialog title={making.maker.label} className="wide" onClose={() => stop()}>
+          {form}
+        </Dialog>
+      )}
+      {leaving}
       {deleting && (
         <Dialog title={note.title ? `Delete “${note.title}” for good?` : 'Delete this note for good?'} onClose={() => setDeleting(false)}>
           <p className="note">

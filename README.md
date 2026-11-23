@@ -37,7 +37,9 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   it; Soon and Someday their lists. Done lists what was done, the newest
   first, by the day it was done. Capture makes a task too: the first line is
   its title and the rest its notes, in the area chosen, planned by a shortcut
-  or left to be sorted. A task is added where one stands, and opens
+  or left to be sorted. Make a task, on a note's or an idea's page, makes one
+  with the fields of a task's form and a link back to the note, which stays
+  and lists it. A task is added where one stands, and opens
   beside the list, or as a page on a phone, where it is read first and edited in
   one form that saves nothing before Save: its title, notes, plan, with
   shortcuts for today, tomorrow, the weekend and next week, deadline, list and

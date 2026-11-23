@@ -12,11 +12,11 @@ import './Links.css'
 // The item whose links are shown, of any module.
 type Of = { ref: string; links: Linked[]; linked_from: Linked[] }
 
-type Props = { of: Of; areas: Area[]; trashed: boolean; sending: boolean; onLinks: (refs: string[]) => Promise<string> }
+type Props = { of: Of; areas: Area[]; trashed: boolean; sending: boolean; open?: boolean; onLinks: (refs: string[]) => Promise<string> }
 
 // What an item links to, each removed or added at once as a change of the item, and what links to it. An item in the
-// trash changes nothing, and shows the section only when it has a link.
-export default function Links({ of, areas, trashed, sending, onLinks }: Props) {
+// trash changes nothing, and shows the section only when it has a link. On a phone it is folded unless open.
+export default function Links({ of, areas, trashed, sending, open, onLinks }: Props) {
   const item = useItem()
   const [finding, setFinding] = useState(false)
   const [refused, setRefused] = useState('')
@@ -61,7 +61,7 @@ export default function Links({ of, areas, trashed, sending, onLinks }: Props) {
     </button>
   )
   return (
-    <Section title="Links" count={of.links.length + of.linked_from.length} add={add}>
+    <Section title="Links" count={of.links.length + of.linked_from.length} add={add} open={open}>
       {refused && (
         <p role="alert" className="err">
           {refused}

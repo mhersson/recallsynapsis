@@ -50,8 +50,20 @@ export type Fields = Partial<Pick<Task, 'title' | 'notes' | 'area' | 'planned_fr
 // Makes one task, with the owner's words when given, and gives it as a list gives it; a refusal throws.
 export const make = (t: Fields, said = '') => api<{ tasks: Row[] }>('POST', '/tasks', { tasks: [t], ...(said && { said }) }).then((r) => r.tasks[0])
 
+// The server's today, read once with a list of one task, for a form that reads no task.
+export function useNow() {
+  const [now, setNow] = useState<Now>()
+  useEffect(() => {
+    api<List>('GET', '/tasks?limit=1').then(
+      (l) => setNow(l.now),
+      () => {},
+    )
+  }, [])
+  return now
+}
+
 // A text as a task takes it: its first line the title, and what follows the notes.
-export function split(text: string): Fields {
+export function split(text: string): { title: string; notes?: string } {
   const [title, ...rest] = text.trim().split('\n')
   const notes = rest.join('\n').trim()
   return { title: title.trim(), ...(notes && { notes }) }

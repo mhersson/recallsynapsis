@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react'
-import { api } from '../../api/client.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
-import type { List, Now } from './api.ts'
+import { useNow } from './api.ts'
 import { period } from './dates.ts'
 import { Shortcuts } from './fields.tsx'
 
@@ -11,13 +9,7 @@ type Props = { value: Record<string, string>; onChange: (v: Record<string, strin
 // itself. The one chosen is chosen no more when picked again, and with none the task waits to be sorted.
 export default function When({ value, onChange }: Props) {
   const narrow = useNarrow()
-  const [now, setNow] = useState<Now>()
-  useEffect(() => {
-    api<List>('GET', '/tasks?limit=1').then(
-      (l) => setNow(l.now),
-      () => {},
-    )
-  }, [])
+  const now = useNow()
   if (!now) return null
   const { planned_from: from = '', planned_to: to = '' } = value
   return (
