@@ -8,9 +8,9 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
 - The owner signs in with a name and a password. AI clients and scripts use API
   tokens made in Settings, each with read or write access.
 - What it keeps comes from feature modules, each switched on in the
-  configuration. This build has one, notes: notes and ideas in the areas, with
-  their tags, links, attached files and history, an inbox of captures that wait
-  to be filed, and a trash. In the web app, Capture saves a thought and the
+  configuration. This build has two. Notes keeps notes and ideas in the areas,
+  with their tags, links, attached files and history, an inbox of captures that
+  wait to be filed, and a trash. In the web app, Capture saves a thought and the
   Inbox files it; Notes lists the filed notes, each read, edited, moved to
   another area or kind, tagged, linked, given files, brought back to an earlier
   revision and trashed on its page, which shows what links to it and its
@@ -20,6 +20,12 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   reads, changes and trashes notes through the MCP tools `create_note`,
   `list_notes`, `get_note`, `update_note` and `trash_note`, and what it saves
   without naming an area or calling it an idea waits in the inbox.
+- Tasks keeps tasks in the areas, each with its notes, a planned period of days
+  with an optional time on its first, a deadline, the list Next or Someday, when
+  it was done, and a log of its changes. This build reaches them through the
+  REST API alone, at `/api/tasks`, which makes several at once, all or none,
+  lists them by area, list, state and a span of dates, and tells which day it
+  is in the configured time zone.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and part of a word is

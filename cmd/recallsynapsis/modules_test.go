@@ -7,9 +7,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -64,6 +66,7 @@ func TestEveryVerbAppliesTheMigrationsOfAModuleThatIsOff(t *testing.T) {
 
 			assert.True(t, hasTable(t, dir, "fake_items"))
 			assert.True(t, hasTable(t, dir, "notes"), "the binary's own modules are built too")
+			assert.True(t, hasTable(t, dir, "tasks"))
 		})
 	}
 }
@@ -75,6 +78,7 @@ func TestAModuleTableTheBinaryCannotUseStopsTheStart(t *testing.T) {
 		{"a module the binary lacks", fakeOn + "[modules.ghost]\nenabled = true\n", "modules.ghost"},
 		{"an unknown key", fakeOn + "colour = \"red\"\n", "modules.fake.colour"},
 		{"an unknown key of notes", "[modules.notes]\ncolour = \"red\"\n", "modules.notes.colour"},
+		{"a first day of the week that is none", "[modules.tasks]\nweek_start = \"someday\"\n", "modules.tasks.week_start"},
 	}
 	for _, tt := range tests {
 		for _, verb := range []string{"serve", "password"} {
@@ -90,6 +94,30 @@ func TestAModuleTableTheBinaryCannotUseStopsTheStart(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestAModuleTellsTheDayInTheConfiguredZone(t *testing.T) {
+	t.Parallel()
+
+	config := writeConfig(t, t.TempDir(), validConfig+"timezone = \"Pacific/Kiritimati\"\n[modules.tasks]\nenabled = true\n")
+
+	d, err := openData(t.Context(), filepath.Join(t.TempDir(), "data"), config, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.store.Close() })
+
+	on := d.modules.On()
+	i := slices.IndexFunc(on, func(m module.Module) bool { return m.Name == "tasks" })
+	require.GreaterOrEqual(t, i, 0, "tasks is on")
+	j := slices.IndexFunc(on[i].Routes, func(r module.Route) bool { return r.Pattern == "GET /api/tasks" })
+	require.GreaterOrEqual(t, j, 0)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(module.WithCaller(t.Context(), module.Caller{UserID: 1}), http.MethodGet, "/api/tasks", nil)
+	require.NoError(t, on[i].Routes[j].Serve(rec, req))
+
+	var got struct{ Now struct{ Timezone string } }
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got), rec.Body.String())
+	assert.Equal(t, "Pacific/Kiritimati", got.Now.Timezone)
 }
 
 // fakeRoute is the status of a POST with no authority to the fake module's

@@ -119,9 +119,10 @@ Every package states its one responsibility in its package comment, and
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
   verb registers itself from an `init` in its own file. `datadir.go` holds
-  `modules`, the list of the binary's feature modules, which is notes, with
-  the fake after it in the tests, and every verb that opens the database
-  builds them all, so every module's migrations run whether it is on or not.
+  `modules`, the list of the binary's feature modules, which is notes and
+  tasks, with the fake after it in the tests, and every verb that opens the
+  database builds them all, so every module's migrations run whether it is on
+  or not.
   `serve` gives the modules the hub of the event streams, whose streams end
   as a signal begins the shutdown, runs the jobs of the modules switched on
   and the nightly backup, and stops them before the store closes.
@@ -231,6 +232,22 @@ Every package states its one responsibility in its package comment, and
 - `internal/store`: opens the SQLite database, applies the migrations each
   package that owns tables brings, keyed by that owner and a version, and
   hands every package the one handle. It owns no table but the migration ledger.
+- `internal/tasks`: the tasks module. It keeps each user's tasks, each in one of
+  the user's areas, named by the area's slug, with its notes, a planned period,
+  a deadline, a list, `next` or `someday`, and when it was done. A date is text,
+  `YYYY-MM-DD` or `""` for none, so dates compare as text, and an answer gives
+  each date's weekday beside it. A from alone plans one day, a to before its
+  from and a time without a plan are refused, and a from cleared clears the
+  plan whole. A task is `done`, `unsorted` when it is open with no list, no plan
+  and no deadline, or `open`. A list gives the open tasks unless asked for the
+  done, by area, by list, by a span of dates, which a plan overlaps or a
+  deadline lies in, or the unsorted alone, and gives `now`: the date, its
+  weekday and the time in the configured `timezone`, and `week_start`. A call
+  makes 1 to 50 tasks, all or none, with one `said` kept on the making of each.
+  A change gives only its fields and the last one wins. Each change writes one
+  entry of the task's log, with its source and what each field was and became,
+  and of the notes only that they changed; a change that changes nothing writes
+  none. It owns the tables `tasks` and `task_changes`.
 - `internal/testkit`: `fake`, a feature module as small as the tests of what
   serves modules need: a table, a route and a write tool that add to it and
   tell of what they add, a search of it, and a job that fails on every tick.
