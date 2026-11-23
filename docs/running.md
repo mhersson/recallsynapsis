@@ -101,9 +101,9 @@ remove a note's file: only a signed-in session can.
 
 At `/mcp` a client with a token calls the core's tools, `list_areas` and
 `search`, which only read, and those of each module switched on. These are the
-tools of notes, with the mark suggested for each in an MCP gateway such as
-Portal, which keeps the marks in its own configuration: a free tool runs at
-once, and one that needs a tap waits for the owner to allow it.
+tools of notes and of tasks, with the mark suggested for each in an MCP gateway
+such as Portal, which keeps the marks in its own configuration: a free tool runs
+at once, and one that needs a tap waits for the owner to allow it.
 
 | Tool | Access | What it does | Mark |
 | --- | --- | --- | --- |
@@ -112,14 +112,24 @@ once, and one that needs a tap waits for the owner to allow it.
 | `get_note` | `read` | reads one note in full, with its links, what links to it, and the id, name, type and size of each file | free |
 | `update_note` | `write` | changes a note's title, body, kind, area, tags, links or inbox flag, or adds text to its body | free |
 | `trash_note` | `write` | moves a note to the trash | needs a tap |
+| `create_tasks` | `write` | saves 1 to 50 tasks, all or none, each in the area it names or else the personal area, with the owner's words kept on each | free |
+| `list_tasks` | `read` | lists the open or the done tasks by area, list, a span of dates or what waits to be sorted, and tells which day it is | free |
+| `get_task` | `read` | reads one task in full, with its notes, links, what links to it, and its log | free |
+| `update_task` | `write` | changes a task's title, notes, area, plan, deadline, list or links, or marks it done or opens it again | free |
+| `trash_task` | `write` | moves a task to the trash | needs a tap |
 
-No tool finds a note in the trash, restores one, deletes one for good, or
-reads, attaches or removes a file. A text through `create_note` or
-`update_note` longer than `capture_max_chars`
+No tool finds a note or a task in the trash, restores one or deletes one for
+good, and no tool reads, attaches or removes a note's file. A text through
+`create_note`, `update_note`, `create_tasks` or `update_task` longer than its
+module's `capture_max_chars`
 ([configuration.md](configuration.md#recallsynapsistoml)) is refused, and
-nothing is saved. A write through a tool records the token's name as its
-source. Each tool's description tells a client what it does and when to use
-it, since Portal relays neither annotations nor instructions to the client.
+nothing is saved. A call of `create_tasks` or `update_task` that sets a date
+gives `today`, the date the client takes for today; unless it is the date in
+the configured `timezone`, the call is refused with that date, its weekday, the
+time zone and the first day of the week, and nothing is saved. A write through
+a tool records the token's name as its source. Each tool's description tells a
+client what it does and when to use it, since Portal relays neither annotations
+nor instructions to the client.
 
 ## From the image
 

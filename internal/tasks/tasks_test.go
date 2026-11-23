@@ -866,6 +866,7 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	made := f.create(t, `{"tasks":[{"title":"Garage"},{"title":"Car","area":"garden"}]}`, f.laptop)
 	expect(made[0], "personal")
 	expect(made[1], "garden")
+	expect(makes(t, f.client(t, f.laptop), object{"tasks": []object{{"title": "Rake", "area": "garden"}}})[0], "garden")
 
 	code, got := f.do(t, http.MethodPatch, path(made[0]), `{"planned_time":"09:00"}`, f.laptop)
 	refused(t, http.StatusBadRequest, code, got)

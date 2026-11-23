@@ -88,9 +88,10 @@ the trash.
 | --- | --- | --- |
 | `enabled` | `false` | whether tasks is on |
 | `week_start` | `monday` | the first day of the week, which tasks give beside today's date: a weekday's name in lower case, such as `sunday`; checked whether tasks is on or not |
+| `capture_max_chars` | `4000` | the longest text an MCP tool of tasks keeps, in characters, at least 1: the `notes` of each task and `said` of `create_tasks`, and `notes` of `update_task`, each on its own; a title has its own cap of 200 characters everywhere; REST, and so the web app, has no such cap; checked whether tasks is on or not |
 
-A whole file, with `listen`, `backup.at`, `backup.keep`, `capture_max_chars`,
-`file_max_mib` and `week_start` at their defaults:
+A whole file, with `listen`, `backup.at`, `backup.keep`, both
+`capture_max_chars`, `file_max_mib` and `week_start` at their defaults:
 
 ```toml
 listen     = "127.0.0.1:7119"
@@ -109,6 +110,7 @@ capture_max_chars = 4000
 file_max_mib      = 15
 
 [modules.tasks]
-enabled    = true
-week_start = "monday"
+enabled           = true
+week_start        = "monday"
+capture_max_chars = 4000
 ```

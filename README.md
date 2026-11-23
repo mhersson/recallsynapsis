@@ -26,16 +26,20 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   `/api/tasks`, makes several at once, all or none, lists them by area, list,
   state and a span of dates, tells which day it is in the configured time zone,
   trashes and restores them, and deletes those in the trash for good, one or all
-  at once. In the web app Tasks is the landing page, its entry first in the
-  navigation with the count of what waits to be sorted. Its views sort the open
-  tasks by the server's today: Today holds what waits to be sorted, what was
-  left from earlier, what is overdue and what today holds; Week the rest of the
-  week and what lies beyond it; Soon and Someday their lists. A task is added
-  where one stands, and planned, put on a list or marked done from its row. A
-  task opens beside the list, or as a page on a phone, where its plan, with
-  shortcuts for today, tomorrow, the weekend and next week, its deadline, list
-  and area save as they change, its title and notes are edited, and its log
-  tells each change, with what the owner said.
+  at once. An AI client makes, lists, reads, changes and trashes tasks through
+  the MCP tools `create_tasks`, `list_tasks`, `get_task`, `update_task` and
+  `trash_task`, and a call that sets a date names the day the client takes for
+  today, and is refused with the right one when it is wrong. In the web app
+  Tasks is the landing page, its entry first in the navigation with the count of
+  what waits to be sorted. Its views sort the open tasks by the server's today:
+  Today holds what waits to be sorted, what was left from earlier, what is
+  overdue and what today holds; Week the rest of the week and what lies beyond
+  it; Soon and Someday their lists. A task is added where one stands, and
+  planned, put on a list or marked done from its row. A task opens beside the
+  list, or as a page on a phone, where its plan, with shortcuts for today,
+  tomorrow, the weekend and next week, its deadline, list and area save as they
+  change, its title and notes are edited, and its log tells each change, with
+  what the owner said.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and Tasks the tasks, done or

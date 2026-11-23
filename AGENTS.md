@@ -267,8 +267,15 @@ Every package states its one responsibility in its package comment, and
   the trash is in no list but the trash's, which gives the done and the open
   alike, the most recently trashed first, is found by no search and cannot be
   changed. Trashing and restoring write no entry of the log, and only the
-  session cookie deletes a task for good, alone or by emptying the trash. It
-  owns the tables `tasks`, `task_changes`, `task_links` and `tasks_fts`.
+  session cookie deletes a task for good, alone or by emptying the trash. Its
+  MCP tools, `create_tasks`, `list_tasks`, `get_task`, `update_task` and
+  `trash_task`, each call what a REST route calls, find no task in the trash,
+  and refuse notes or a `said` over `capture_max_chars` characters, which REST
+  does not cap. A call of `create_tasks` or `update_task` that sets a date is
+  refused, and saves nothing, unless its `today` is the date in the configured
+  `timezone`, with a line that gives that date, its weekday, the time zone and
+  `week_start`; REST takes no `today`. It owns the tables `tasks`,
+  `task_changes`, `task_links` and `tasks_fts`.
 - `internal/testkit`: `fake`, a feature module as small as the tests of what
   serves modules need: a table, a route and a write tool that add to it and
   tell of what they add, a search of it, and a job that fails on every tick.

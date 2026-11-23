@@ -4,10 +4,10 @@
 // to the items of any module. It lists them by area, list, state and a span
 // of dates, tells which day it is in the configured time zone, and keeps a
 // log of every change of a task's fields. A task in the trash is in no list
-// but the trash's, found by no search and no link, and kept unchanged until
-// it is restored or deleted for good. It searches them through an index of
-// their title and notes. It owns the tables tasks, task_changes, task_links
-// and tasks_fts.
+// but the trash's, found by no search, no link and no tool, and kept
+// unchanged until it is restored or deleted for good. It searches them
+// through an index of their title and notes. It owns the tables tasks,
+// task_changes, task_links and tasks_fts.
 package tasks
 
 import (
@@ -102,13 +102,18 @@ var (
 
 // settings are the module's keys of [modules.tasks] beside enabled.
 type settings struct {
-	WeekStart string `toml:"week_start"`
+	WeekStart       string `toml:"week_start"`
+	CaptureMaxChars int    `toml:"capture_max_chars"`
 }
 
-// Check refuses a first day of the week that is no weekday's name in lower case.
+// Check refuses a first day of the week that is no weekday's name in lower
+// case, and a cap on a tool's text under 1 character.
 func (s *settings) Check() error {
-	if !slices.Contains(weekdays, s.WeekStart) {
+	switch {
+	case !slices.Contains(weekdays, s.WeekStart):
 		return fmt.Errorf("week_start: %q is not a weekday's name in lower case, such as \"monday\"", s.WeekStart)
+	case s.CaptureMaxChars < 1:
+		return fmt.Errorf("capture_max_chars: %d is not at least 1", s.CaptureMaxChars)
 	}
 
 	return nil
@@ -121,7 +126,7 @@ type tasks struct {
 
 // New builds the tasks module.
 func New(d module.Deps) module.Module {
-	t := tasks{Deps: d, settings: &settings{WeekStart: "monday"}}
+	t := tasks{Deps: d, settings: &settings{WeekStart: "monday", CaptureMaxChars: 4000}}
 
 	return module.Module{
 		Name:       name,
@@ -137,6 +142,7 @@ func New(d module.Deps) module.Module {
 			{Pattern: "DELETE /api/tasks/{id}", Access: module.Owner, Serve: t.serveDelete},
 			{Pattern: "DELETE /api/tasks/trash", Access: module.Owner, Serve: t.serveEmpty},
 		},
+		Tools:   t.tools(),
 		Search:  t.search,
 		Resolve: t.resolve,
 		LinksTo: t.linksTo,
@@ -206,24 +212,25 @@ type delta struct {
 }
 
 // draft is a new task, in the personal area unless it names another, as a
-// slug or a name.
+// slug or a name. A field a tool may leave out is omitempty, which its schema
+// reads as optional.
 type draft struct {
 	Title       string       `json:"title"`
-	Notes       string       `json:"notes"`
-	Area        string       `json:"area"`
-	PlannedFrom string       `json:"planned_from"`
-	PlannedTo   string       `json:"planned_to"`
-	PlannedTime string       `json:"planned_time"`
-	Deadline    string       `json:"deadline"`
-	List        string       `json:"list"`
-	Links       []module.Ref `json:"links"`
+	Notes       string       `json:"notes,omitempty"`
+	Area        string       `json:"area,omitempty"`
+	PlannedFrom string       `json:"planned_from,omitempty"`
+	PlannedTo   string       `json:"planned_to,omitempty"`
+	PlannedTime string       `json:"planned_time,omitempty"`
+	Deadline    string       `json:"deadline,omitempty"`
+	List        string       `json:"list,omitempty"`
+	Links       []module.Ref `json:"links,omitempty"`
 }
 
 // batch is the tasks one call makes, with the owner's own words, kept on the
 // making of each.
 type batch struct {
 	Tasks []draft `json:"tasks"`
-	Said  string  `json:"said"`
+	Said  string  `json:"said,omitempty"`
 }
 
 // made is what a call that makes tasks gives.
@@ -234,16 +241,16 @@ type made struct {
 
 // change is what a change sets; a nil field stays as it is.
 type change struct {
-	Title       *string       `json:"title"`
-	Notes       *string       `json:"notes"`
-	Area        *string       `json:"area"`
-	PlannedFrom *string       `json:"planned_from"`
-	PlannedTo   *string       `json:"planned_to"`
-	PlannedTime *string       `json:"planned_time"`
-	Deadline    *string       `json:"deadline"`
-	List        *string       `json:"list"`
-	Done        *bool         `json:"done"`
-	Links       *[]module.Ref `json:"links"` // replaces them all
+	Title       *string       `json:"title,omitempty"`
+	Notes       *string       `json:"notes,omitempty"`
+	Area        *string       `json:"area,omitempty"`
+	PlannedFrom *string       `json:"planned_from,omitempty"`
+	PlannedTo   *string       `json:"planned_to,omitempty"`
+	PlannedTime *string       `json:"planned_time,omitempty"`
+	Deadline    *string       `json:"deadline,omitempty"`
+	List        *string       `json:"list,omitempty"`
+	Done        *bool         `json:"done,omitempty"`
+	Links       *[]module.Ref `json:"links,omitempty"` // replaces them all
 }
 
 // filter is what a list asks for; a zero field asks for nothing.
