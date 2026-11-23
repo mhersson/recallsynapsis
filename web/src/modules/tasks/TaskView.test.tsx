@@ -94,12 +94,12 @@ test('the ring of the open task marks it done, which strikes its row in place, a
   ])
 })
 
-test('a task read has no control but its ring, Edit and Trash', async () => {
+test('a task read has no control but its ring, Edit, Trash and Add a link', async () => {
   narrow(false)
   tasksServer(tasks())
   await open('/tasks/3')
   await waitFor(editButton)
-  expect(inView().getAllByRole('button')).toEqual([ring(), editButton(), trashButton()])
+  expect(inView().getAllByRole('button')).toEqual([ring(), editButton(), trashButton(), view().querySelector('.sect-head .btn')])
   expect(view().querySelectorAll('input, select, textarea')).toHaveLength(0)
 })
 

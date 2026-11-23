@@ -3,6 +3,7 @@ import { nameOf } from '../../api/areas.ts'
 import type { Area } from '../../api/types.ts'
 import Dialog from '../../components/Dialog.tsx'
 import Field from '../../components/Field.tsx'
+import Links from '../../components/Links.tsx'
 import { TrashIcon } from '../../components/icons.tsx'
 import { Markdown } from '../../components/Markdown.tsx'
 import Section from '../../components/Section.tsx'
@@ -70,6 +71,13 @@ export default function TaskView({ task, now, areas, onChange, onTrash, onRestor
     return !why
   }
   const change = (f: Fields) => send(() => onChange!(f))
+  // A link added or removed is a change of the task, whose refusal the links section shows.
+  async function link(links: string[]) {
+    setSending(true)
+    const why = await onChange!({ links })
+    setSending(false)
+    return why
+  }
   const editing = (d?: Draft) => {
     setDraft(d)
     setRefused('')
@@ -275,6 +283,7 @@ export default function TaskView({ task, now, areas, onChange, onTrash, onRestor
       )}
       {body}
       <div className="sects">
+        <Links of={task} areas={areas} trashed={trashed || !onChange} sending={sending} onLinks={link} />
         <Section title="Log" count={`${task.log.length} ${task.log.length === 1 ? 'change' : 'changes'}`}>
           {task.log.map((e, i) => (
             <div key={i} className="lg">

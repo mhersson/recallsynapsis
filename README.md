@@ -40,8 +40,9 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   one form that saves nothing before Save: its title, notes, plan, with
   shortcuts for today, tomorrow, the weekend and next week, deadline, list and
   area. Its ring, on its row or its page, marks it done at once, its Trash
-  moves it to the trash at once, and its log tells each change, with what the
-  owner said. Trashed, at the head of Tasks, lists the trash, the most recently
+  moves it to the trash at once, a link is added or removed at once on its
+  page, which shows what it links to and what links to it, and its log tells
+  each change, with what the owner said. Trashed, at the head of Tasks, lists the trash, the most recently
   trashed first, where a task is read only, restored, and deleted for good, one
   or all at once. Search lists the tasks' hits
   before the notes', and a task found there or linked from a note shows its ring

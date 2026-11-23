@@ -73,16 +73,22 @@ export const refs = (...to: string[]): Linked[] => to.map((ref) => ({ ref, kind:
 // What a note goes by in a hit and in a link: its title, or the first line of its body.
 const label = (n: Note) => n.title || n.body.split('\n')[0].slice(0, 80)
 
-// GET /api/notes/{id} from notes: n with its links as the core resolves them, unavailable once their note is in the
-// trash or gone, and the notes outside the trash that link to it.
-export function full(notes: Note[], n: Note): Note {
-  const item = (ref: string): Linked => {
-    const t = notes.find((x) => x.ref === ref && !x.trashed_at)
-    return t ? { ref, kind: t.kind, state: t.inbox ? 'inbox' : 'filed', title: label(t), available: true } : refs(ref)[0]
-  }
-  const from = notes.filter((x) => !x.trashed_at && x.links.some((l) => l.ref === n.ref))
-  return { ...n, links: n.links.map((l) => item(l.ref)), linked_from: from.map((x) => item(x.ref)) }
+// A reference as the core resolves it among notes and tasks: unavailable once its item is in the trash or gone.
+function linked(ref: string, notes: Note[], tasks: Task[]): Linked {
+  const n = notes.find((x) => x.ref === ref && !x.trashed_at)
+  if (n) return { ref, kind: n.kind, state: n.inbox ? 'inbox' : 'filed', title: label(n), available: true }
+  const t = tasks.find((x) => x.ref === ref && !x.trashed_at)
+  return t ? { ref, kind: 'task', state: t.state, title: t.title, available: true } : refs(ref)[0]
 }
+
+// What an item links to as the core resolves it, and the notes and tasks outside the trash that link to it, the notes first.
+export function resolved<T extends Note | Task>(item: T, notes: Note[], tasks: Task[]): T {
+  const from = [...notes, ...tasks].filter((x) => !x.trashed_at && x.links.some((l) => l.ref === item.ref))
+  return { ...item, links: item.links.map((l) => linked(l.ref, notes, tasks)), linked_from: from.map((x) => linked(x.ref, notes, tasks)) }
+}
+
+// GET /api/notes/{id} from notes, and from tasks when given: n with its links and what links to it, resolved.
+export const full = (notes: Note[], n: Note, tasks: Task[] = []): Note => resolved(n, notes, tasks)
 
 // A note trashed hours ago, changed ten hours before that.
 const trashed = (id: number, hours: number, n: Partial<Note>) => note(id, (hours + 10) * 60, { ...n, trashed_at: before(hours * 60) })
@@ -144,7 +150,7 @@ export const NOTES: Note[] = [
     title: 'Trigram search for Norwegian compound words',
     body: 'So a search for port finds garasjeport too.',
   }),
-  note(22, 26 * 60, { tags: ['garage'], title: 'Garage shelving layout', body: 'Left wall 240 cm, right wall 185 cm up to the window.' }),
+  note(22, 26 * 60, { tags: ['garage'], title: 'Garage shelving layout', body: 'Left wall 240 cm, right wall 185 cm up to the window.', links: refs('tasks:106') }),
   note(25, 27 * 60, {
     area: 'aim',
     kind: 'idea',
@@ -321,6 +327,8 @@ export function task(id: number, minutes: number, t: Partial<Task>): Task {
     trashed_at: null,
     notes: '',
     said: '',
+    links: [],
+    linked_from: [],
     log: [],
     now: NOW,
     ...t,
@@ -337,7 +345,7 @@ export function task(id: number, minutes: number, t: Partial<Task>): Task {
 }
 
 // A task as a list gives it.
-export const taskRow = ({ notes: _, said: __, log: ___, now: ____, ...r }: Task): TaskRow => r
+export const taskRow = ({ notes: _, said: __, links: ___, linked_from: ____, log: _____, now: ______, ...r }: Task): TaskRow => r
 
 // GET /api/tasks from tasks, as the server answers it: the open tasks outside the trash, or the done with done=true, or
 // with trashed=true the whole trash, done and open alike, of the area and the list asked, or those to sort, in the
@@ -363,8 +371,9 @@ export function listTasks(tasks: Task[], q: URLSearchParams, now: Now): TaskList
 export function makeTask(id: number, body: Record<string, unknown>, said: string): Task | [number, string] {
   const title = String(body.title ?? '').trim()
   if (!title || [...title].length > 200) return [400, 'title: give 1 to 200 characters']
-  const given = Object.fromEntries(Object.entries(body).map(([k, v]) => [k, String(v)]))
-  return task(id, 0, { ...given, title, said, list: (given.list ?? '') as Task['list'] })
+  const { links, ...rest } = body
+  const given = Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, String(v)]))
+  return task(id, 0, { ...given, title, said, list: (given.list ?? '') as Task['list'], links: refs(...((links as string[]) ?? [])) })
 }
 
 // PATCH /api/tasks/{id}, as the server applies it: a from sets the plan, one day unless a to comes with it, and a from of
@@ -380,14 +389,16 @@ export function changeTask(t: Task, body: Record<string, unknown>): Task | [numb
   next.planned_to ||= next.planned_from
   if ('planned_time' in body) next.planned_time = String(body.planned_time)
   if ('done' in body) next.done_at = body.done ? (t.done_at ?? new Date().toISOString()) : null
+  if (Array.isArray(body.links)) next.links = refs(...(body.links as string[]))
   if (!next.title || [...next.title].length > 200) return [400, 'title: give 1 to 200 characters']
   if (!next.planned_from && next.planned_to) return [400, 'planned_to: give planned_from too']
   if (!next.planned_from && next.planned_time) return [400, 'planned_time: give planned_from too']
   if (next.planned_to < next.planned_from) return [400, `planned_to: ${next.planned_to} is before planned_from ${next.planned_from}`]
-  // In the server's order: the fields as the wire lists them, then done, then the notes.
+  // In the server's order: the fields as the wire lists them, then done, then the notes and the links.
   const changes: Entry['changes'] = FIELDS.filter((f) => f !== 'notes' && next[f] !== t[f]).map((f) => ({ field: f, from: t[f], to: next[f] }))
   if (!!next.done_at !== !!t.done_at) changes.push({ field: 'done', from: String(!!t.done_at), to: String(!!next.done_at) })
   if (next.notes !== t.notes) changes.push({ field: 'notes' })
+  if (next.links.map((l) => l.ref).join() !== t.links.map((l) => l.ref).join()) changes.push({ field: 'links' })
   if (changes.length === 0) return t
   const at = new Date().toISOString()
   return settled({ ...next, source: 'web', changed_at: at, log: [{ at, source: 'web', said: '', changes }, ...t.log] })
@@ -396,7 +407,7 @@ export function changeTask(t: Task, body: Record<string, unknown>): Task | [numb
 // The open tasks of the harness, as the tasks screens are drawn: dates from the Monday of NOW, made in the order listed.
 export const TASKS: Task[] = (
   [
-    [{ title: 'Fikse lyset i garasjen', source: 'portal', said: 'Lyset i garasjen blinker igjen. Legg inn at det må fikses.' }, 12],
+    [{ title: 'Fikse lyset i garasjen', source: 'portal', said: 'Lyset i garasjen blinker igjen. Legg inn at det må fikses.', links: refs('tasks:9') }, 12],
     [{ title: 'Skifte til vinterdekk', planned_from: '2026-11-21' }],
     [{ title: 'Stenge vannet på hytta', area: 'hytta', planned_from: '2026-11-21', planned_to: '2026-11-22' }],
     [{ title: 'Betale fakturaen fra elektrikeren', deadline: '2026-11-20' }],
@@ -408,6 +419,7 @@ export const TASKS: Task[] = (
       {
         title: 'Rydde garasjen',
         changed_at: before(2 * 60),
+        links: refs('notes:22'),
         planned_from: '2026-11-28',
         planned_to: '2026-11-29',
         notes: '- kaste gammel maling\n- sortere skruene\n- få plass til bilen før snøen',
@@ -494,9 +506,11 @@ export const TRASHED: Task[] = (
 // What Today would show of tasks, which today=none leaves out.
 export const onToday = (tasks: Task[], now: Now) => sortInto('today', tasks.map(taskRow), now).flatMap(([, ts]) => ts.map((t) => t.id))
 
-// The tasks routes from tasks, as the server answers them, as a status and a body, none with 204; tell hears of each task
-// made, changed or deleted, and of none when the trash is emptied.
-export function answerTasks(tasks: Task[], method: string, url: URL, body: Record<string, unknown>, now: Now, tell: (t?: Task) => void): [number, unknown] {
+// The tasks routes from tasks, as the server answers them, as a status and a body, none with 204, a task in full with its
+// links resolved among notes and tasks; tell hears of each task made, changed or deleted, and of none when the trash is
+// emptied.
+export function answerTasks(tasks: Task[], method: string, url: URL, body: Record<string, unknown>, now: Now, tell: (t?: Task) => void, notes: Note[] = []): [number, unknown] {
+  const whole = (x: Task) => ({ ...resolved(x, notes, tasks), now })
   if (url.pathname === '/api/tasks' && method === 'GET') return [200, listTasks(tasks, url.searchParams, now)]
   if (url.pathname === '/api/tasks' && method === 'POST') {
     const made: Task[] = []
@@ -519,11 +533,11 @@ export function answerTasks(tasks: Task[], method: string, url: URL, body: Recor
   if (!t) return [404, { error: 'not found' }]
   const told = (x: Task): [number, unknown] => {
     tell(x)
-    return [200, { ...x, now }]
+    return [200, whole(x)]
   }
   // Trashing a task in the trash, or restoring one outside it, changes nothing and tells nothing.
-  if (part && method === 'POST') return !!t.trashed_at === (part === 'trash') ? [200, { ...t, now }] : told(Object.assign(t, { trashed_at: part === 'trash' ? new Date().toISOString() : null }))
-  if (method === 'GET' && !part) return [200, { ...t, now }]
+  if (part && method === 'POST') return !!t.trashed_at === (part === 'trash') ? [200, whole(t)] : told(Object.assign(t, { trashed_at: part === 'trash' ? new Date().toISOString() : null }))
+  if (method === 'GET' && !part) return [200, whole(t)]
   if (method === 'DELETE' && !part) {
     if (!t.trashed_at) return [409, { error: `task ${t.id} is not in the trash, and only a task in the trash is deleted: conflict` }]
     tasks.splice(tasks.indexOf(t), 1)
@@ -534,6 +548,6 @@ export function answerTasks(tasks: Task[], method: string, url: URL, body: Recor
   if (t.trashed_at) return [409, { error: 'the task is in the trash, and is restored before it is changed: conflict' }]
   const changed = changeTask(t, body)
   if (Array.isArray(changed)) return [changed[0], { error: changed[1] }]
-  if (changed === t) return [200, { ...t, now }]
+  if (changed === t) return [200, whole(t)]
   return told(Object.assign(t, changed))
 }

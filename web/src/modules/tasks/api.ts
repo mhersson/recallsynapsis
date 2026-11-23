@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, api, message } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
+import type { Linked } from '../../api/types.ts'
 
 // A task's state: done, or unsorted while it is open with no list, no plan and no deadline, or else open.
 export type State = 'open' | 'unsorted' | 'done'
@@ -34,17 +35,17 @@ export type Row = {
 // "false" or "true"; the notes and the links give neither. The oldest is the making, each field it was given from "".
 export type Entry = { at: string; source: string; said: string; changes: { field: string; from?: string; to?: string }[] }
 
-// A task as GET /api/tasks/{id} gives it, in full: with its notes, the owner's own words when a client gave them, its log,
-// and the server's today.
-export type Task = Row & { notes: string; said: string; log: Entry[]; now: Now }
+// A task as GET /api/tasks/{id} gives it, in full: with its notes, the owner's own words when a client gave them, its links
+// and the items that link to it, as the core resolves them, its log, and the server's today.
+export type Task = Row & { notes: string; said: string; links: Linked[]; linked_from: Linked[]; log: Entry[]; now: Now }
 
 // The server's today, in its time zone, and the first day of its week, a weekday's name in lower case.
 export type Now = { date: string; weekday: string; time: string; timezone: string; week_start: string }
 
 export type List = { tasks: Row[]; total: number; now: Now }
 
-// What a change of a task may send; a change sends only what it changes.
-export type Fields = Partial<Pick<Task, 'title' | 'notes' | 'area' | 'planned_from' | 'planned_to' | 'planned_time' | 'deadline' | 'list'>> & { done?: boolean }
+// What a change of a task may send; a change sends only what it changes, and links whole, as references.
+export type Fields = Partial<Pick<Task, 'title' | 'notes' | 'area' | 'planned_from' | 'planned_to' | 'planned_time' | 'deadline' | 'list'>> & { done?: boolean; links?: string[] }
 
 // Reads when the page mounts, when the stream opens again, on any change of a task and on any change of an area, whose
 // slug names the tasks in it.
@@ -123,8 +124,9 @@ export function useMore(asked: string, holds: (t: Row) => boolean) {
   return { list: got?.asked === asked ? got.list : undefined, failed, more, took, again: () => setTick((x) => x + 1) }
 }
 
-// The task id names, in full, read as useTasks reads and when id changes. show puts a change's answer in its place while
-// that task is the one named, and a read asked before it is dropped.
+// The task id names, in full, read when the page mounts, on every change the stream tells of, since what it links to may
+// be any module's item and the core tells only of areas, and when id changes. show puts a change's answer in its place
+// while that task is the one named, and a read asked before it is dropped.
 export function useTask(id?: number) {
   const [task, setTask] = useState<Task>()
   const [failed, setFailed] = useState('')
@@ -134,7 +136,7 @@ export function useTask(id?: number) {
   useEffect(() => {
     named.current = id
   })
-  useTasks(() => setTick((n) => n + 1))
+  useStream(() => setTick((n) => n + 1))
   useEffect(() => {
     if (!tick || !id) return
     const n = ++asked.current

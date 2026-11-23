@@ -66,6 +66,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   if (path.startsWith('/api/tasks')) {
     const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) =>
       tell(t ? { module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 } : { module: 'tasks', kind: 'trash', id: 0, area: 0 }),
+      notes,
     )
     return status === 204 ? new Response(null, { status }) : json(answered, status)
   }
@@ -98,7 +99,7 @@ const historyOf = (n: Note) => versions.get(n.id) ?? versions.set(n.id, history(
 function answerNotes(method: string, url: URL, body: Record<string, unknown>, file?: Blob): Response | Promise<Response> {
   const told = (n: Note) => {
     tell({ module: 'notes', kind: 'note', id: n.id, area: areas.find((a) => a.slug === n.area)?.id ?? 0 })
-    return full(notes, n)
+    return full(notes, n, tasks)
   }
   const changed = (n: Note) => {
     Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() })
@@ -157,7 +158,7 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
     if (method === 'POST' && part === 'restore') return json(told(Object.assign(n, { trashed_at: null })))
     return json({ error: 'not found' }, 404)
   }
-  if (method === 'GET') return json(full(notes, n))
+  if (method === 'GET') return json(full(notes, n, tasks))
   if (method === 'DELETE') {
     if (!n.trashed_at) return json({ error: `note ${n.id} is not in the trash, and only a note in the trash is deleted: conflict` }, 409)
     notes.splice(notes.indexOf(n), 1)
