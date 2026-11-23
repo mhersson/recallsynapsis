@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mhersson/recallsynapsis/internal/module"
+	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
 func TestTheCallerTravelsInTheContext(t *testing.T) {
@@ -57,5 +58,30 @@ func TestARefNamesAModuleAndAnID(t *testing.T) {
 	for _, bad := range []module.Ref{"", "notes", "notes:", ":42", "notes:x", "notes:4:2"} {
 		_, _, ok := bad.Split()
 		assert.False(t, ok, bad)
+	}
+}
+
+func TestLinksAreKeptOnceEachAsNewRefWritesThem(t *testing.T) {
+	t.Parallel()
+
+	got, err := module.CleanLinks([]module.Ref{"tasks:7", "notes:042", "notes:42", "tasks:7", "notes:3"})
+	require.NoError(t, err)
+	assert.Equal(t, []module.Ref{"tasks:7", "notes:42", "notes:3"}, got, "in the order given")
+
+	got, err = module.CleanLinks(nil)
+	require.NoError(t, err)
+	assert.Equal(t, []module.Ref{}, got)
+
+	many := make([]module.Ref, 101)
+	for i := range many {
+		many[i] = module.NewRef("notes", int64(i))
+	}
+
+	_, err = module.CleanLinks(many[:100])
+	require.NoError(t, err)
+
+	for _, bad := range [][]module.Ref{many, {"notes:1", "notes"}, {""}, {"notes:x"}} {
+		_, err := module.CleanLinks(bad)
+		require.ErrorIs(t, err, store.ErrInvalid, bad)
 	}
 }

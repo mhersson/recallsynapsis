@@ -110,7 +110,6 @@ const (
 
 	maxTitle     = 200
 	maxTag       = 40
-	maxLinks     = 100
 	defaultLimit = 50
 	maxLimit     = 500
 )
@@ -455,28 +454,12 @@ func (n notes) read(ctx context.Context, slugs map[int64]string, userID, id int6
 		return note{}, err
 	}
 
-	if out.Links, err = n.items(ctx, refs); err != nil {
+	if out.Links, err = n.Items(ctx, refs); err != nil {
 		return note{}, err
 	}
 
-	if out.LinkedFrom, err = n.items(ctx, from); err != nil {
+	if out.LinkedFrom, err = n.Items(ctx, from); err != nil {
 		return note{}, err
-	}
-
-	return out, nil
-}
-
-// items gives each of refs as the core resolves it.
-func (n notes) items(ctx context.Context, refs []module.Ref) ([]module.Item, error) {
-	out := make([]module.Item, 0, len(refs))
-
-	for _, r := range refs {
-		it, err := n.Resolve(ctx, r)
-		if err != nil {
-			return nil, err
-		}
-
-		out = append(out, it)
 	}
 
 	return out, nil
@@ -743,7 +726,7 @@ func (n notes) change(ctx context.Context, id int64, ch change) (note, error) {
 	}
 
 	if ch.Links != nil {
-		links, err := cleanLinks(*ch.Links)
+		links, err := module.CleanLinks(*ch.Links)
 		if err != nil {
 			return note{}, err
 		}
@@ -1147,29 +1130,4 @@ func cleanTag(t string) (string, error) {
 	}
 
 	return t, nil
-}
-
-// cleanLinks gives each of links once, in the order given and written as
-// NewRef writes it, so a link to an item reads the same however it was
-// given. A link that is not module:id is refused, and so are more than
-// maxLinks, since a note is read with a query for each.
-func cleanLinks(links []module.Ref) ([]module.Ref, error) {
-	if len(links) > maxLinks {
-		return nil, fmt.Errorf("a note has at most %d links: %w", maxLinks, store.ErrInvalid)
-	}
-
-	out := make([]module.Ref, 0, len(links))
-
-	for _, l := range links {
-		mod, id, ok := l.Split()
-		if !ok {
-			return nil, fmt.Errorf("the link %q is not a reference, module:id: %w", l, store.ErrInvalid)
-		}
-
-		if r := module.NewRef(mod, id); !slices.Contains(out, r) {
-			out = append(out, r)
-		}
-	}
-
-	return out, nil
 }
