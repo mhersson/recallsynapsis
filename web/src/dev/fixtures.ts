@@ -150,7 +150,20 @@ export const NOTES: Note[] = [
     title: 'Trigram search for Norwegian compound words',
     body: 'So a search for port finds garasjeport too.',
   }),
-  note(22, 26 * 60, { tags: ['garage'], title: 'Garage shelving layout', body: 'Left wall 240 cm, right wall 185 cm up to the window.', links: refs('tasks:106') }),
+  note(22, 26 * 60, {
+    tags: ['garage'],
+    title: 'Garage shelving layout',
+    body: `Left wall 240 cm, right wall 185 cm up to the window.
+
+| Shelf | Wall | From the floor | Depth | Width | Holds |
+| :---: | --- | ---: | ---: | ---: | --- |
+| 1 | Left | 30 cm | 40 cm | 240 cm | **Tyres** under it, paint on it |
+| 2 | Left | 75 cm | 40 cm | 240 cm | Tools, \`M8\` and \`M10\` bolts |
+| 3 | Right | 75 cm | 30 cm | 185 cm | Camping gear \\| ski wax |
+## Still to buy
+Brackets for the right wall, see https://example.test/brackets.`,
+    links: refs('tasks:106'),
+  }),
   note(25, 27 * 60, {
     area: 'aim',
     kind: 'idea',

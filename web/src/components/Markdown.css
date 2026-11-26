@@ -67,7 +67,30 @@
   white-space: pre;
 }
 
-/* A table, a block quote or raw HTML, shown as typed. */
+/* A wide table scrolls sideways in its own box, its words breaking only between them. */
+.md .table {
+  overflow-x: auto;
+}
+
+.md table {
+  border-collapse: collapse;
+  overflow-wrap: normal;
+}
+
+.md :is(th, td) {
+  border: 1px solid var(--bg3);
+  padding: 4px 8px;
+  text-align: start;
+  vertical-align: top;
+}
+
+.md th {
+  color: var(--fg);
+  background: var(--bg1);
+  font-weight: 600;
+}
+
+/* A block quote or raw HTML, shown as typed. */
 .md .typed {
   white-space: pre-wrap;
 }

@@ -28,15 +28,32 @@ test('# is a heading under the page\'s own, and ## and ### step below it', () =>
   expect([...container.querySelectorAll('h1, h2, h3, h4, h5')].map((h) => h.tagName)).toEqual(['H2', 'H3', 'H4'])
 })
 
-test('a long code line scrolls sideways in its own box', () => {
+test('a table gives column headers and cells with their inline Markdown, and the heading after it is no row', () => {
+  const text = ['| Item | State |', '| :-- | --: |', '| **Milk** | `a\\|b` and [list](https://example.test/l) |', '| <b>b</b> | [x](javascript:alert(1)) |', '## Next'].join('\n')
+  const { container, getAllByRole, getByRole } = render(<Markdown text={text} />)
+  expect(getAllByRole('columnheader').map((c) => c.textContent)).toEqual(['Item', 'State'])
+  const cells = getAllByRole('cell')
+  expect(cells.map((c) => c.textContent)).toEqual(['Milk', 'a|b and list', '<b>b</b>', '[x](javascript:alert(1))'])
+  expect(cells.map((c) => c.style.textAlign)).toEqual(['left', 'right', 'left', 'right'])
+  expect(cells[0].querySelector('strong')).toHaveTextContent('Milk')
+  expect(cells[1].querySelector('code')).toHaveTextContent('a|b')
+  expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://example.test/l'])
+  expect(container.querySelector('b')).toBeNull()
+  expect(getAllByRole('row')).toHaveLength(3)
+  expect(getByRole('heading', { level: 3, name: 'Next' }).closest('table')).toBeNull()
+})
+
+test('a long code line and a wide table scroll sideways in their own boxes', () => {
   const style = document.createElement('style')
   style.textContent = css
   document.head.append(style)
   const line = Array(40).fill('go test ./...').join(' && ')
-  const { container } = render(<Markdown text={'```sh\n' + line + '\n```'} />)
+  const row = Array(12).fill('column').join(' | ')
+  const { container } = render(<Markdown text={['```sh', line, '```', row, Array(12).fill('---').join(' | '), row].join('\n')} />)
   const box = container.querySelector('pre')!
   expect(box.textContent).toBe(line)
   expect(box.childElementCount).toBe(0)
   const look = getComputedStyle(box)
   expect([look.overflowX, look.whiteSpace]).toEqual(['auto', 'pre'])
+  expect(getComputedStyle(container.querySelector('table')!.parentElement!).overflowX).toBe('auto')
 })

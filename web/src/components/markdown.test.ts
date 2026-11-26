@@ -1,6 +1,7 @@
-import { blocks, inlines, type Block, type Inline } from './markdown.ts'
+import { blocks, inlines, type Align, type Block, type Inline } from './markdown.ts'
 
 const t = (text: string): Inline => ({ kind: 'text', text })
+const table = (head: string[], rows: string[][], align: Align[] = head.map(() => undefined)): Block => ({ kind: 'table', align, head, rows })
 const code = (text: string): Inline => ({ kind: 'code', text })
 const link = (href: string, text = href): Inline => ({ kind: 'link', href, children: [t(text)] })
 const p = (text: string): Block => ({ kind: 'paragraph', text })
@@ -110,10 +111,38 @@ test('raw HTML is shown as typed', () => {
   expect(inlines('a <b>b</b> <img src=x onerror=alert(1)>')).toEqual([t('a <b>b</b> <img src=x onerror=alert(1)>')])
 })
 
-test('a table, an image and a block quote are shown as typed', () => {
-  expect(blocks('| a | b |\n|---|---|\n| 1 | 2 |\n\n> quoted\n> on')).toEqual([
-    { kind: 'typed', text: '| a | b |\n|---|---|\n| 1 | 2 |' },
-    { kind: 'typed', text: '> quoted\n> on' },
-  ])
+test('an image and a block quote are shown as typed', () => {
+  expect(blocks('| a | b |\n|---|---|\n| 1 | 2 |\n\n> quoted\n> on')).toEqual([table(['a', 'b'], [['1', '2']]), { kind: 'typed', text: '> quoted\n> on' }])
   expect(inlines('![a](https://example.test/a.png)')).toEqual([t('![a](https://example.test/a.png)')])
+})
+
+test('a row over a rule of dashes is a table, with or without the outer pipes, and a heading ends it', () => {
+  const want: Block[] = [table(['Item', 'State'], [['Milk', 'Ready']]), { kind: 'heading', level: 2, text: 'Next' }]
+  expect(blocks('| Item | State |\n| --- | --- |\n| Milk | Ready |\n## Next')).toEqual(want)
+  expect(blocks('Item | State\n--- | ---\nMilk | Ready\n## Next')).toEqual(want)
+})
+
+test("a rule's colons align its columns", () => {
+  expect(blocks('a | b | c | d\n:-- | :-: | --: | -')).toEqual([table(['a', 'b', 'c', 'd'], [], ['left', 'center', 'right', undefined])])
+})
+
+test('an escaped pipe stays in its cell, and a row is cut or filled to the columns', () => {
+  expect(blocks('| a | b |\n|---|---|\n| x \\| y | `p\\|q` |\n| 1 |\n| 1 | 2 | 3 |\nlast')).toEqual([
+    table(['a', 'b'], [['x | y', '`p|q`'], ['1', ''], ['1', '2'], ['last', '']]),
+  ])
+})
+
+test('a table ends a paragraph and a list, and a list item or a fence ends a table', () => {
+  expect(blocks('Shopping:\n| a | b |\n|---|---|\n| 1 | 2 |\n- after\n| c | d |\n|-|-|\n```\ncode\n```')).toEqual([
+    p('Shopping:'),
+    table(['a', 'b'], [['1', '2']]),
+    { kind: 'list', items: [{ text: 'after' }] },
+    table(['c', 'd'], []),
+    { kind: 'code', text: 'code' },
+  ])
+})
+
+test('text with a pipe stays text, and so does a table in a fence', () => {
+  for (const s of ['a | b', '| a | b |\n| c | d |', 'a | b | c\n--- | ---', 'a\n---']) expect(blocks(s), s).toEqual([p(s)])
+  expect(blocks('```\n| a | b |\n|---|---|\n```')).toEqual([{ kind: 'code', text: '| a | b |\n|---|---|' }])
 })
