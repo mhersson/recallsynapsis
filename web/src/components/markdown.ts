@@ -1,20 +1,43 @@
-// The safe set of Markdown: headings to ###, paragraphs, lists one level deep, inline and fenced code,
-// bold, italic and http or https links. Anything else is text as typed.
+// The safe set of Markdown: headings to ###, paragraphs, lists one level deep, tables, inline and fenced
+// code, bold, italic and http or https links. Anything else is text as typed.
 
 // A numbered list has its first number; a bullet list has none.
 export type List = { kind: 'list'; start?: number; items: { text: string; sub?: List }[] }
-// A typed block is a table, a block quote or raw HTML, kept as written.
-export type Block = { kind: 'heading'; level: 1 | 2 | 3; text: string } | { kind: 'paragraph' | 'code' | 'typed'; text: string } | List
+export type Align = 'left' | 'center' | 'right' | undefined
+// Every row of a table has a cell for each column, its text still to be parsed as inlines.
+export type Table = { kind: 'table'; align: Align[]; head: string[]; rows: string[][] }
+// A typed block is a block quote or raw HTML, kept as written.
+export type Block = { kind: 'heading'; level: 1 | 2 | 3; text: string } | { kind: 'paragraph' | 'code' | 'typed'; text: string } | List | Table
 export type Inline = { kind: 'text' | 'code'; text: string } | { kind: 'strong' | 'em'; children: Inline[] } | { kind: 'link'; href: string; children: Inline[] } | { kind: 'break' }
 
 const FENCE = /^( {0,3})(`{3,}|~{3,})[^`]*$/
 const HEADING = /^ {0,3}(#{1,3})[ \t]+(.*?)[ \t]*$/
 const ITEM = /^( *)([-*]|\d{1,9}\.)[ \t]+(.*)$/
-const TYPED = /^ {0,3}(>|\||<[A-Za-z!/?])/
+const TYPED = /^ {0,3}(>|<[A-Za-z!/?])/
+const RULE = /^:?-+:?$/
 const blank = (l: string) => l.trim() === ''
 const starts = (l: string) => FENCE.test(l) || HEADING.test(l) || ITEM.test(l) || TYPED.test(l)
 const numbered = (marker: string) => /\d/.test(marker)
 const list = (marker: string): List => (numbered(marker) ? { kind: 'list', start: parseInt(marker), items: [] } : { kind: 'list', items: [] })
+
+// A row's cells lie between the pipes no backslash escapes, and an escaped one is a pipe in its cell.
+const cells = (l: string) =>
+  l
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/(?<!\\)\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((c) => c.trim().replaceAll('\\|', '|'))
+
+// A table starts at a row over a rule with as many cells of dashes, both lines with a pipe, so
+// text with a pipe in it stays text. The rule's colons align the columns.
+function table(lines: string[], i: number): Align[] | null {
+  const rule = lines[i + 1] ?? ''
+  if (!lines[i].includes('|') || !rule.includes('|')) return null
+  const r = cells(rule)
+  if (!r.every((c) => RULE.test(c)) || cells(lines[i]).length !== r.length) return null
+  return r.map((c) => (c.endsWith(':') ? (c.startsWith(':') ? 'center' : 'right') : c.startsWith(':') ? 'left' : undefined))
+}
 
 export function blocks(text: string): Block[] {
   const lines = text.split(/\r?\n/)
@@ -23,6 +46,7 @@ export function blocks(text: string): Block[] {
   while (i < lines.length) {
     const l = lines[i]
     let m: RegExpExecArray | null
+    let align: Align[] | null
     if (blank(l)) {
       i++
     } else if ((m = FENCE.exec(l))) {
@@ -58,7 +82,7 @@ export function blocks(text: string): Block[] {
         }
         const m = ITEM.exec(l)
         if (!m) {
-          if (starts(l)) break
+          if (starts(l) || table(lines, i)) break
           item.text += '\n' + l.trim()
         } else if (m[1].length < base + 2) {
           if (numbered(m[2]) !== (top.start !== undefined)) break
@@ -81,9 +105,18 @@ export function blocks(text: string): Block[] {
       const from = i
       while (i < lines.length && !blank(lines[i])) i++
       out.push({ kind: 'typed', text: lines.slice(from, i).join('\n') })
+    } else if ((align = table(lines, i))) {
+      const head = cells(l)
+      const rows: string[][] = []
+      // As in GFM, a line without a pipe is a row too, and a row is cut or filled to the columns.
+      for (i += 2; i < lines.length && !blank(lines[i]) && !starts(lines[i]); i++) {
+        const c = cells(lines[i])
+        rows.push(align.map((_, j) => c[j] ?? ''))
+      }
+      out.push({ kind: 'table', align, head, rows })
     } else {
       const from = i++
-      while (i < lines.length && !blank(lines[i]) && !starts(lines[i])) i++
+      while (i < lines.length && !blank(lines[i]) && !starts(lines[i]) && !table(lines, i)) i++
       out.push({ kind: 'paragraph', text: lines.slice(from, i).map((x) => x.trim()).join('\n') })
     }
   }

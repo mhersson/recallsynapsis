@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { blocks, inlines, type Block, type Inline, type List } from './markdown.ts'
+import { blocks, inlines, type Block, type Inline, type List, type Table } from './markdown.ts'
 import './Markdown.css'
 
 // React elements and text children only; a link's address is http or https, as inlines checked.
@@ -36,6 +36,30 @@ function ListOf({ list }: { list: List }) {
   return list.start === undefined ? <ul>{items}</ul> : <ol start={list.start}>{items}</ol>
 }
 
+// React sets a cell's alignment through the CSSOM, which the content policy lets through, unlike a style attribute.
+function TableOf({ table }: { table: Table }) {
+  const row = (cells: string[], Cell: 'th' | 'td') =>
+    cells.map((c, j) => (
+      <Cell key={j} style={{ textAlign: table.align[j] }}>
+        {spans(inlines(c))}
+      </Cell>
+    ))
+  return (
+    <div className="table">
+      <table>
+        <thead>
+          <tr>{row(table.head, 'th')}</tr>
+        </thead>
+        <tbody>
+          {table.rows.map((r, i) => (
+            <tr key={i}>{row(r, 'td')}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // A heading sits under the page's own h1, so # is an h2.
 function block(b: Block, key: number): ReactNode {
   switch (b.kind) {
@@ -49,6 +73,8 @@ function block(b: Block, key: number): ReactNode {
       return <ListOf key={key} list={b} />
     case 'code':
       return <pre key={key}>{b.text}</pre>
+    case 'table':
+      return <TableOf key={key} table={b} />
     case 'typed':
       return (
         <p key={key} className="typed">
