@@ -10,7 +10,6 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
-// serveList answers the tasks that ?area=, ?list=, ?from=, ?to=, ?unsorted=, ?done=, ?trashed= and ?limit= ask for.
 func (t tasks) serveList(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	f := filter{area: q.Get("area"), list: q.Get("list"), from: q.Get("from"), to: q.Get("to")}
@@ -33,6 +32,12 @@ func (t tasks) serveList(w http.ResponseWriter, r *http.Request) error {
 	if v := q.Get("limit"); v != "" {
 		if f.limit, err = strconv.Atoi(v); err != nil || f.limit == 0 {
 			return errLimit
+		}
+	}
+
+	if v := q.Get("offset"); v != "" {
+		if f.offset, err = strconv.Atoi(v); err != nil || f.offset < 0 {
+			return fmt.Errorf("offset must be a non-negative integer: %w", store.ErrInvalid)
 		}
 	}
 

@@ -31,12 +31,15 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   `trash_task`, and a call that sets a date names the day the client takes for
   today, and is refused with the right one when it is wrong. In the web app
   Tasks is the landing page, its entry first in the navigation with the count of
-  what waits to be sorted. Its views sort the open tasks by the server's today:
-  Today holds what waits to be sorted, what was left from earlier, what is
-  overdue and what today holds; Week the rest of the week and what lies beyond
-  it; Soon and Someday their lists. Done lists what was done, the newest
-  first, by the day it was done. Capture makes a task too: the first line is
-  its title and the rest its notes, in the area chosen, planned by a shortcut
+  what waits to be sorted. Tasks opens on Agenda, where each open task appears
+  once. Scheduled holds tasks with a plan or deadline, and Unscheduled holds
+  the rest. Today holds what waits to be sorted, what was left from earlier,
+  what is overdue and what today holds. Week shows the rest of the week and
+  what lies beyond it. Soon and Someday show their lists. Finished tasks
+  appear in Done, newest first, grouped by the day they were done. Each
+  nonempty view shows its count for the selected area. Views that do not fit
+  beside the current view are under More. Capture also makes a task from its
+  first line as the title and the rest as notes, in the area chosen, planned by a shortcut
   or left to be sorted. Make a task, on a note's or an idea's page, makes one
   with the fields of a task's form and a link back to the note, which stays
   and lists it; in the Inbox it makes one to sort at once, of the capture's
@@ -51,7 +54,7 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
   with what the owner said. Trashed, at the head of Tasks, lists the trash, the
   most recently trashed first, where a task is read only, restored, and deleted
   for good, one or all at once. An area's page shows its open tasks first,
-  grouped as the views group them, under a line that adds one to it unless it is
+  grouped by date and list, under a line that adds one to it unless it is
   archived, beside its notes and ideas, and leads to what was done in it. Search
   lists the tasks' hits before the notes', and a task found there or linked from
   a note shows its ring and leads to its page.

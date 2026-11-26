@@ -1,11 +1,13 @@
 import type { Now, Row } from './api.ts'
 import { week } from './dates.ts'
 
-export type View = 'today' | 'week' | 'soon' | 'someday' | 'done'
+export type View = 'agenda' | 'today' | 'week' | 'soon' | 'someday' | 'done'
 
-export type Group = 'sort' | 'left' | 'late' | 'today' | 'week' | 'later' | 'soon' | 'someday'
+export type Group = 'scheduled' | 'unscheduled' | 'sort' | 'left' | 'late' | 'today' | 'week' | 'later' | 'soon' | 'someday'
 
 export const groupNames: Record<Group, string> = {
+  scheduled: 'Scheduled',
+  unscheduled: 'Unscheduled',
   sort: 'To sort',
   left: 'Left from earlier',
   late: 'Overdue',
@@ -18,6 +20,7 @@ export const groupNames: Record<Group, string> = {
 
 // The views in the order of their row, each with its name and its groups in order.
 export const views: [View, string, Group[]][] = [
+  ['agenda', 'Agenda', ['scheduled', 'unscheduled']],
   ['today', 'Today', ['sort', 'left', 'late', 'today']],
   ['week', 'Week', ['week', 'later']],
   ['soon', 'Soon', ['soon']],
@@ -31,6 +34,10 @@ function holds(g: Group, t: Row, today: string, end: string) {
   const to = t.planned_to
   const due = t.deadline
   switch (g) {
+    case 'scheduled':
+      return !!(from || due)
+    case 'unscheduled':
+      return !from && !due
     case 'sort':
       return t.state === 'unsorted'
     case 'left':
@@ -48,17 +55,16 @@ function holds(g: Group, t: Row, today: string, end: string) {
   }
 }
 
-// The groups of a view, or of every view with all, each with its tasks in the order given; a task is in the first group
-// it belongs to, or in none.
+// An area's page uses the detailed groups. Each task belongs to its first matching group.
 export function sortInto(view: View | 'all', tasks: Row[], now: Now): [Group, Row[]][] {
   const end = week(now)[1]
   const placed = new Set<number>()
-  return (view === 'all' ? views.flatMap(([, , gs]) => gs) : views.find(([v]) => v === view)![2])
-    .map((g) => {
-      const held = tasks.filter((t) => !placed.has(t.id) && holds(g, t, now.date, end))
-      held.forEach((t) => placed.add(t.id))
-      return [g, held]
-    })
+  const groups = view === 'all' ? views.flatMap(([v, , gs]) => (v === 'agenda' ? [] : gs)) : views.find(([v]) => v === view)![2]
+  return groups.map((g) => {
+    const held = tasks.filter((t) => !placed.has(t.id) && holds(g, t, now.date, end))
+    held.forEach((t) => placed.add(t.id))
+    return [g, held]
+  })
 }
 
 // The order of the server's lists of open tasks: by the first day that matters, the planned from or else the deadline,

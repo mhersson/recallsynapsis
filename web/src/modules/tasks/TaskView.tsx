@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { nameOf } from '../../api/areas.ts'
 import type { Area } from '../../api/types.ts'
 import Dialog from '../../components/Dialog.tsx'
@@ -21,6 +21,7 @@ type Props = {
   now: Now
   areas: Area[]
   onChange?: (f: Fields) => Promise<string>
+  onOutsideView?: (changed: boolean) => void
   onTrash?: () => Promise<string>
   onRestore?: () => Promise<string>
   onDelete?: () => Promise<string>
@@ -53,7 +54,7 @@ function changeOf(d: Draft): Fields {
 
 // A task, read first, and edited in place in one form that sends nothing before Save; no read of the task replaces the
 // form. Only the ring, Trash and a link act at once. In the trash it is read only, with Restore and Delete for good.
-export default function TaskView({ task, now, areas, onChange, onTrash, onRestore, onDelete }: Props) {
+export default function TaskView({ task, now, areas, onChange, onOutsideView, onTrash, onRestore, onDelete }: Props) {
   const narrow = useNarrow()
   const [draft, setDraft] = useState<Draft>()
   const [sending, setSending] = useState(false)
@@ -87,6 +88,11 @@ export default function TaskView({ task, now, areas, onChange, onTrash, onRestor
   }
 
   const done = task.state === 'done'
+  const [enteredDone] = useState(done)
+  // A completion may remove the row while its detail still has an unsaved draft.
+  useEffect(() => {
+    if (!draft) onOutsideView?.(enteredDone !== done)
+  }, [draft, onOutsideView, enteredDone, done])
   const trashed = !!task.trashed_at
   const alert = refused && (
     <p role="alert" className="err">

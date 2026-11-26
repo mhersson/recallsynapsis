@@ -34,15 +34,15 @@ const tasks = (): Task[] => [
 test('on desktop a view opens its first task beside the list, and a row picked opens its own, both named in the address', async () => {
   narrow(false)
   const calls = tasksServer(tasks())
-  const { where } = await open('/tasks')
-  await waitFor(() => expect(where()).toBe('/tasks/1'))
+  const { where } = await open('/tasks?view=today')
+  await waitFor(() => expect(where()).toBe('/tasks/1?view=today'))
   expect(await head().findByRole('heading', { level: 1 })).toHaveTextContent('to sort')
   // What the owner said when a client made it is in the log.
   expect(entries()).toHaveLength(1)
   expect(entries()[0]).toHaveTextContent('Remember the light in the garage.')
 
   await userEvent.click(within(rowOf('planned')).getByRole('link'))
-  await waitFor(() => expect(where()).toBe('/tasks/2'))
+  await waitFor(() => expect(where()).toBe('/tasks/2?view=today'))
   await waitFor(() => expect(head().getByRole('heading', { level: 1 })).toHaveTextContent('planned'))
   expect(rowOf('planned').querySelector('a')).toHaveAttribute('aria-current', 'true')
   expect(writes(calls)).toEqual([])
@@ -72,26 +72,35 @@ test('on a phone a task’s page reads the task alone, which gives the day, and 
   await waitFor(() => expect(head().getByRole('heading', { level: 1 })).toHaveTextContent('in the garden'))
   expect(reads(calls)).toBe(0)
   await userEvent.click(within(screen.getByRole('main').querySelector<HTMLElement>('.crumb')!).getByRole('link'))
-  await waitFor(() => expect(rows()).toHaveLength(2))
+  await waitFor(() => expect(rows()).toHaveLength(3))
   expect(reads(calls)).toBe(1)
 })
 
-test('the ring of the open task marks it done, which strikes its row in place, and opens it again', async () => {
+test('completing the selected task advances Agenda and reopening it advances Done', async () => {
   narrow(false)
   const calls = tasksServer(tasks())
-  await open('/tasks/2')
-  await waitFor(() => expect(ring()).toHaveAttribute('aria-pressed', 'false'))
-  await userEvent.click(ring())
-  await waitFor(() => expect(ring()).toHaveAttribute('aria-pressed', 'true'))
-  expect(rowOf('planned')).toHaveClass('done')
+  const { where } = await open('/tasks/2')
+  await userEvent.click(await waitFor(ring))
+  await waitFor(() => expect(where()).toBe('/tasks/3'))
+  expect(rowOf('planned')).toBeUndefined()
+  await userEvent.click(screen.getByRole('link', { name: /^Done,/ }))
+  await waitFor(() => expect(where()).toBe('/tasks/2?view=done'))
   expect(entries()).toHaveLength(2)
   await userEvent.click(ring())
-  await waitFor(() => expect(ring()).toHaveAttribute('aria-pressed', 'false'))
-  expect(rowOf('planned')).not.toHaveClass('done')
+  await waitFor(() => expect(where()).toBe('/tasks?view=done'))
+  expect(rows()).toHaveLength(0)
   expect(writes(calls)).toEqual([
     ['PATCH', '/api/tasks/2', { done: true }],
     ['PATCH', '/api/tasks/2', { done: false }],
   ])
+})
+
+test('a desktop link to an already finished task opens its detail in Done', async () => {
+  narrow(false)
+  tasksServer([...tasks(), task(4, 0, { title: 'finished', done_at: '2026-11-22T10:00:00Z' })])
+  const { where } = await open('/tasks/4')
+  await waitFor(() => expect(where()).toBe('/tasks/4?view=done'))
+  expect(rowOf('finished')).toHaveClass('done')
 })
 
 test('a task read has no control but its ring, Edit, Trash and Add a link', async () => {
@@ -247,7 +256,7 @@ test('the ring beside the title field marks the task done at once and the form k
   await userEvent.click(shortcuts()[1])
   await userEvent.click(ring())
   await waitFor(() => expect(ring()).toHaveAttribute('aria-pressed', 'true'))
-  expect(rowOf('planned')).toHaveClass('done')
+  expect(rowOf('planned')).toBeUndefined()
   expect(head().getByRole('textbox')).toHaveValue('planned first')
   expect(dates()[0]).toHaveValue('2026-11-24')
   await userEvent.click(form().save)

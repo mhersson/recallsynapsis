@@ -22,8 +22,8 @@ async function sortOpen(pick: (view: HTMLElement) => HTMLElement) {
   await userEvent.click(form().save)
 }
 const ringOf = (title: string) => within(rowOf(title)).getAllByRole('button')[0]
-const viewLinks = () => [...page().querySelectorAll<HTMLAnchorElement>('.views a')]
-const counts = () => viewLinks().map((a) => a.querySelector('.dim')?.textContent?.trim() ?? '')
+const viewLinks = () => [...page().querySelectorAll<HTMLAnchorElement>('.views > a')]
+const counts = () => viewLinks().map((a) => a.querySelector('.view-count')?.textContent?.trim() ?? '')
 const reads = (calls: Call[]) => calls.filter((c) => c.method === 'GET' && c.path.startsWith('/api/tasks?limit=')).length
 const writes = (calls: Call[]) => calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path, c.body])
 const sunday: Now = { ...monday, date: '2026-11-29', weekday: 'Sunday' }
@@ -48,18 +48,22 @@ test('each view shows the open tasks its question gives by the server’s today,
   expect(where()).toBe('/tasks')
   expect(calls.filter((c) => c.path.startsWith('/api/tasks?limit='))).toHaveLength(1)
   expect(calls.find((c) => c.path.startsWith('/api/tasks?limit='))!.path).toBe('/api/tasks?limit=500')
+  expect(shown()).toEqual({ scheduled: ['overdue', 'last weekend', 'today', 'the weekend'], unscheduled: ['to sort', 'soon', 'someday'] })
+  expect(viewLinks()[0]).toHaveAttribute('aria-current', 'page')
+  await userEvent.click(viewLinks()[1])
+  await waitFor(() => expect(where()).toBe('/tasks?view=today'))
   expect(shown()).toEqual({ sort: ['to sort'], left: ['last weekend'], late: ['overdue'], today: ['today'] })
   // What was left keeps the dates it had, and a deadline passed is in the danger look.
   expect(rowOf('last weekend').querySelector('.t2')).toHaveTextContent('Sat-Sun 21-22 Nov')
   expect(rowOf('overdue').querySelector('.late')).not.toBeNull()
-  expect(counts()).toEqual(['4', '1', '1', '1', ''])
+  expect(counts()).toEqual(['7', '4', '1', '1', '1', ''])
 
-  await userEvent.click(viewLinks()[1])
+  await userEvent.click(viewLinks()[2])
   await waitFor(() => expect(where()).toBe('/tasks?view=week'))
   expect(shown()).toEqual({ week: ['the weekend'] })
-  await userEvent.click(viewLinks()[2])
-  await waitFor(() => expect(shown()).toEqual({ soon: ['soon'] }))
   await userEvent.click(viewLinks()[3])
+  await waitFor(() => expect(shown()).toEqual({ soon: ['soon'] }))
+  await userEvent.click(viewLinks()[4])
   await waitFor(() => expect(shown()).toEqual({ someday: ['someday'] }))
   expect(reads(calls)).toBe(1)
 })
@@ -67,7 +71,7 @@ test('each view shows the open tasks its question gives by the server’s today,
 test('on that Sunday the weekend is on Today, with its span on the row', async () => {
   narrow(false)
   tasksServer(week(), sunday)
-  await open('/tasks')
+  await open('/tasks?view=today')
   expect(shown().today).toEqual(['the weekend'])
   expect(rowOf('the weekend').querySelector('.t2')).toHaveTextContent('Sat-Sun 28-29 Nov')
 })
@@ -79,21 +83,22 @@ test('the area chosen narrows every view and count and is kept in the address wi
   const area = within(page()).getByRole('combobox')
   await userEvent.selectOptions(area, 'garden')
   await waitFor(() => expect(view.where()).toBe('/tasks?view=week&area=garden'))
-  expect(counts()).toEqual(['', '1', '', '', ''])
+  expect(counts()).toEqual(['1', '', '1', '', '', ''])
   await userEvent.selectOptions(area, '')
-  await waitFor(() => expect(counts()).toEqual(['4', '1', '1', '1', '']))
+  await waitFor(() => expect(counts()).toEqual(['7', '4', '1', '1', '1', '']))
   view.unmount()
 
   const calls = tasksServer(week())
   await open('/tasks?view=week&area=garden')
   expect(within(page()).getByRole('combobox')).toHaveValue('garden')
-  expect(viewLinks()[1]).toHaveAttribute('aria-current', 'page')
+  expect(viewLinks()[2]).toHaveAttribute('aria-current', 'page')
   expect(shown()).toEqual({ week: ['the weekend'] })
   expect(reads(calls)).toBe(1)
 })
 
 test.each([
-  ['/tasks', { planned_from: '2026-11-23' }, 'today'],
+  ['/tasks', {}, 'unscheduled'],
+  ['/tasks?view=today', { planned_from: '2026-11-23' }, 'today'],
   ['/tasks?view=soon', { list: 'soon' }, 'soon'],
   ['/tasks?view=someday&area=garden', { list: 'someday', area: 'garden' }, 'someday'],
 ])('the add line on %s sends one task with %j, which then stands in its group without a reload and opens beside it', async (path, fields, group) => {
@@ -110,19 +115,44 @@ test.each([
   expect(reads(calls)).toBe(1)
 })
 
+test('a view picked from More moves into the row and the menu dismisses with Escape', async () => {
+  const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    const width = this.matches('.views') ? 360 : this.matches('details') ? 46 : 74
+    return new DOMRect(0, 0, width, 44)
+  })
+  try {
+    narrow(true)
+    tasksServer(week())
+    const { where } = await open('/tasks')
+    const bar = within(page().querySelector<HTMLElement>('.views')!)
+    const more = bar.getByText('More')
+    await userEvent.click(more)
+    await userEvent.keyboard('{Escape}')
+    expect(more).toHaveFocus()
+    expect(more.closest('details')).not.toHaveAttribute('open')
+    await userEvent.click(more)
+    await userEvent.click(within(more.closest('details')!).getByRole('link', { name: /^Someday/ }))
+    await waitFor(() => expect(where()).toBe('/tasks?view=someday'))
+    expect(bar.getByRole('link', { name: /^Someday/, current: 'page' })).toBeVisible()
+    expect(more.closest('details')).not.toHaveAttribute('open')
+  } finally {
+    bounds.mockRestore()
+  }
+})
+
 test('a row carries no button but its ring', async () => {
   narrow(false)
   tasksServer(week())
   await open('/tasks')
   // The ring is the one button that is pressed or not.
   const buttons = [...page().querySelectorAll<HTMLElement>('.task-row')].map((r) => within(r).getAllByRole('button').map((b) => b.hasAttribute('aria-pressed')))
-  expect(buttons).toEqual([[true], [true], [true], [true]])
+  expect(buttons).toEqual(week().map(() => [true]))
 })
 
 test('a task to sort or left from earlier is planned for today through its page, and then stands where it belongs without a reload', async () => {
   narrow(false)
   const calls = tasksServer(week())
-  await open('/tasks/1')
+  await open('/tasks/1?view=today')
   await sortOpen((v) => v.querySelector<HTMLElement>('.scs button')!)
   await waitFor(() => expect(shown()).toEqual({ left: ['last weekend'], late: ['overdue'], today: ['today', 'to sort'] }))
   await userEvent.click(within(rowOf('last weekend')).getByRole('link'))
@@ -142,80 +172,49 @@ test.each([
 ] as const)('a task to sort put on %s on its page goes there', async (to, n) => {
   narrow(false)
   const calls = tasksServer(week())
-  await open('/tasks/1')
+  await open('/tasks/1?view=today')
   await sortOpen((v) => within(v).getAllByRole('radio')[n])
   await waitFor(() => expect(shown().sort).toBeUndefined())
   expect(writes(calls)).toEqual([['PATCH', '/api/tasks/1', { list: to }]])
-  await userEvent.click(viewLinks()[n + 1])
-  await waitFor(() => expect(viewLinks()[n + 1]).toHaveAttribute('aria-current', 'page'))
+  await userEvent.click(viewLinks()[n + 2])
+  await waitFor(() => expect(viewLinks()[n + 2]).toHaveAttribute('aria-current', 'page'))
   expect(shown()[to]).toContain('to sort')
 })
 
-test('among tasks made in one call, one marked done or opened again keeps its place before the list is read again', async () => {
+test('Agenda counts overlapping dates and lists once, and a completion moves the row and its count to Done', async () => {
   narrow(true)
-  const made = '2026-11-23T08:00:00Z'
-  const calls = tasksServer(['a', 'b', 'c'].map((title, i) => task(i + 1, 0, { title, planned_from: '2026-11-23', created_at: made })))
+  const tasks = week()
+  tasks[4].list = 'soon'
+  tasks.push(task(8, 0, { title: 'finished', done_at: '2026-11-22T10:00:00Z' }))
+  const calls = tasksServer(tasks)
   await open('/tasks')
-  expect(shown().today).toEqual(['a', 'b', 'c'])
-  await userEvent.click(ringOf('b'))
-  await waitFor(() => expect(ringOf('b')).toHaveAttribute('aria-pressed', 'true'))
-  expect(shown().today).toEqual(['a', 'b', 'c'])
-  await userEvent.click(ringOf('b'))
-  await waitFor(() => expect(ringOf('b')).toHaveAttribute('aria-pressed', 'false'))
-  expect(shown().today).toEqual(['a', 'b', 'c'])
-  expect(reads(calls)).toBe(1)
+  expect(counts()).toEqual(['7', '4', '1', '2', '1', '1'])
+  expect(shown().scheduled).toEqual(['overdue', 'last weekend', 'today', 'the weekend'])
+  expect(shown().unscheduled).toEqual(['to sort', 'soon', 'someday'])
+  await userEvent.click(ringOf('the weekend'))
+  await waitFor(() => expect(rowOf('the weekend')).toBeUndefined())
+  expect(counts()).toEqual(['6', '4', '', '1', '1', '2'])
+  await userEvent.click(viewLinks()[5])
+  await waitFor(() => expect(rowOf('the weekend')).toHaveClass('done'))
+  await userEvent.click(ringOf('the weekend'))
+  await waitFor(() => expect(rowOf('the weekend')).toBeUndefined())
+  await userEvent.click(viewLinks()[0])
+  await waitFor(() => expect(rowOf('the weekend')).toBeDefined())
+  expect(counts()).toEqual(['7', '4', '1', '2', '1', '1'])
+  expect(writes(calls)).toEqual([['PATCH', '/api/tasks/5', { done: true }], ['PATCH', '/api/tasks/5', { done: false }]])
 })
 
-test('a task marked done stays in place, struck through, until the view is left, and a second tap opens it again', async () => {
-  vi.useFakeTimers({ shouldAdvanceTime: true })
-  narrow(false)
-  const calls = tasksServer(week())
-  await open('/tasks')
-  const es = FakeEventSource.all[0]
-  await act(async () => es.open())
-  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-
-  await user.click(ringOf('overdue'))
-  await waitFor(() => expect(ringOf('overdue')).toHaveAttribute('aria-pressed', 'true'))
-  expect(rowOf('overdue')).toHaveClass('done')
-  // The server has it done at once, so the list read again lacks it; the row stays where it stood.
-  act(() => es.send({ module: 'tasks', kind: 'task', id: 3, area: 1 }))
-  await act(() => vi.advanceTimersByTimeAsync(2000))
+test('Agenda includes open tasks and area counts beyond the first page', async () => {
+  narrow(true)
+  const many = Array.from({ length: 501 }, (_, i) => task(i + 1, 0, { title: String(i), list: 'soon', area: i === 500 ? 'garden' : 'personal' }))
+  const calls = tasksServer(many)
+  await open('/tasks?area=garden')
+  await waitFor(() => expect(shown().unscheduled).toEqual(['500']))
+  expect(counts()).toEqual(['1', '', '', '1', '', ''])
   expect(reads(calls)).toBe(2)
-  expect(shown()).toEqual({ sort: ['to sort'], left: ['last weekend'], late: ['overdue'], today: ['today'] })
-  expect(counts()[0]).toBe('4')
-
-  await user.click(ringOf('overdue'))
-  await waitFor(() => expect(ringOf('overdue')).toHaveAttribute('aria-pressed', 'false'))
-  await user.click(ringOf('overdue'))
-  await waitFor(() => expect(ringOf('overdue')).toHaveAttribute('aria-pressed', 'true'))
-  expect(writes(calls)).toEqual([
-    ['PATCH', '/api/tasks/3', { done: true }],
-    ['PATCH', '/api/tasks/3', { done: false }],
-    ['PATCH', '/api/tasks/3', { done: true }],
-  ])
-
-  await user.click(viewLinks()[1])
-  await user.click(viewLinks()[0])
-  await waitFor(() => expect(shown().late).toBeUndefined())
-  expect(counts()[0]).toBe('3')
 })
 
-test('a row marked done and opened again shows a change saved on its page since', async () => {
-  narrow(false)
-  tasksServer(week())
-  await open('/tasks/4')
-  await userEvent.click(ringOf('today'))
-  await waitFor(() => expect(ringOf('today')).toHaveAttribute('aria-pressed', 'true'))
-  await userEvent.click(ringOf('today'))
-  await waitFor(() => expect(ringOf('today')).toHaveAttribute('aria-pressed', 'false'))
-  await userEvent.click(await waitFor(editButton))
-  await userEvent.type(within(taskView().querySelector<HTMLElement>('.task-head')!).getByRole('textbox'), ' again')
-  await userEvent.click(form().save)
-  await waitFor(() => expect(rowOf('today again')).toBeDefined())
-})
-
-test('two tasks marked done before either answer lands both stay struck through in place', async () => {
+test('two tasks marked done before either answer lands both leave the open list', async () => {
   narrow(true)
   const tasks = week()
   const held: (() => void)[] = []
@@ -228,8 +227,8 @@ test('two tasks marked done before either answer lands both stay struck through 
   await userEvent.click(ringOf('overdue'))
   await userEvent.click(ringOf('today'))
   await act(async () => held.splice(0).forEach((answer) => answer()))
-  await waitFor(() => expect([ringOf('overdue'), ringOf('today')].map((r) => r.getAttribute('aria-pressed'))).toEqual(['true', 'true']))
-  expect(shown()).toEqual({ sort: ['to sort'], left: ['last weekend'], late: ['overdue'], today: ['today'] })
+  await waitFor(() => expect(shown().scheduled).toEqual(['last weekend', 'the weekend']))
+  expect(counts()[5]).toBe('2')
 })
 
 test('a change made elsewhere shows without a reload, and a refusal shows the server’s line', async () => {
@@ -269,7 +268,7 @@ test('with no task at all a view says so, and with nothing for today Today offer
   view.unmount()
 
   tasksServer([task(6, 10, { title: 'soon', list: 'soon' })])
-  const { where } = await open('/tasks')
+  const { where } = await open('/tasks?view=today')
   expect(shown()).toEqual({ today: [] })
   await userEvent.click(within(page().querySelector<HTMLElement>('[data-group=today]')!).getByRole('link'))
   await waitFor(() => expect(where()).toBe('/tasks?view=soon'))

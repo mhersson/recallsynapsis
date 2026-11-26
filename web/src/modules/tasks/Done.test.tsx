@@ -47,28 +47,6 @@ test('Done lists what was done, the newest first, under the day it was done, and
   expect(writes(calls)).toEqual([])
 })
 
-test('a task opened again in Done stays in place until the view is left, and is back in its view', async () => {
-  narrow(true)
-  const calls = tasksServer(tasks())
-  await open('/tasks?view=done')
-  await waitFor(() => expect(rowOf('mon late')).toBeDefined())
-  await userEvent.click(ringOf('mon late'))
-  await waitFor(() => expect(ringOf('mon late')).toHaveAttribute('aria-pressed', 'false'))
-  expect(rowOf('mon late')).not.toHaveClass('done')
-  expect(days()[0]).toEqual(['2026-11-23', ['mon late', 'mon early']])
-  expect(writes(calls)).toEqual([['PATCH', '/api/tasks/4', { done: false }]])
-
-  // A second tap marks it done again, where it stands.
-  await userEvent.click(ringOf('mon late'))
-  await waitFor(() => expect(ringOf('mon late')).toHaveAttribute('aria-pressed', 'true'))
-  expect(days()[0]).toEqual(['2026-11-23', ['mon late', 'mon early']])
-  await userEvent.click(ringOf('mon late'))
-  await waitFor(() => expect(ringOf('mon late')).toHaveAttribute('aria-pressed', 'false'))
-
-  await userEvent.click(within(page().querySelector<HTMLElement>('.views')!).getAllByRole('link')[0])
-  await waitFor(() => expect(page().querySelector('[data-group=today] .t1')).toHaveTextContent('mon late'))
-})
-
 test('a list with more says so and shows 50 more, and with nothing done Done says so', async () => {
   narrow(true)
   const many = Array.from({ length: 60 }, (_, i) => task(i + 1, 60, { title: `done ${i + 1}`, done_at: `2026-11-${String(1 + (i % 22)).padStart(2, '0')}T10:00:00Z` }))
@@ -78,6 +56,7 @@ test('a list with more says so and shows 50 more, and with nothing done Done say
   await userEvent.click(within(page().querySelector<HTMLElement>('.list-end')!).getByRole('button'))
   await waitFor(() => expect(page().querySelectorAll('.task-row')).toHaveLength(60))
   expect(asked(calls)).toEqual(['/api/tasks?done=true&limit=50', '/api/tasks?done=true&limit=100'])
+  expect(page().querySelector('.views a[aria-current] .view-count')).toHaveTextContent('60')
   expect(page().querySelector('.list-end')).toBeNull()
   view.unmount()
 
@@ -98,7 +77,7 @@ test('a row ticked in a view of the open is not carried into Done, though its an
   })
   await open('/tasks?view=soon')
   await userEvent.click(ringOf('open'))
-  await userEvent.click(within(page().querySelector<HTMLElement>('.views')!).getAllByRole('link')[4])
+  await userEvent.click(within(page().querySelector<HTMLElement>('.views')!).getAllByRole('link')[5])
   await waitFor(() => expect(days()).toHaveLength(3))
   await act(async () => held.splice(0).forEach((answer) => answer()))
   await waitFor(() => expect(days().flatMap(([, titles]) => titles)).toContain('open'))

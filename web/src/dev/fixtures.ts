@@ -367,7 +367,8 @@ export function listTasks(tasks: Task[], q: URLSearchParams, now: Now): TaskList
         (q.get('unsorted') !== 'true' || t.state === 'unsorted'),
     )
     .sort(trash ? (a, b) => b.trashed_at!.localeCompare(a.trashed_at!) : done ? (a, b) => b.done_at!.localeCompare(a.done_at!) : order)
-  return { tasks: found.slice(0, Number(q.get('limit')) || 50).map(taskRow), total: found.length, now }
+  const offset = Number(q.get('offset'))
+  return { tasks: found.slice(offset, offset + (Number(q.get('limit')) || 50)).map(taskRow), total: found.length, now }
 }
 
 // POST /api/tasks for one task, as the server makes it, or its refusal.

@@ -87,9 +87,18 @@ export function useTasks(read: () => void) {
   })
 }
 
-// The open tasks, 500 at most, as useTasks reads them while on, and again once on. took places a task as a change answered
-// it, at once and before the stream tells of it, and takes it out once done or trashed; a read asked before it is dropped.
-// A page sorts what it shows.
+async function openTasks(signal: AbortSignal): Promise<List> {
+  const tasks = new Map<number, Row>()
+  let offset = 0
+  for (;;) {
+    const page = await api<List>('GET', '/tasks?limit=500' + (offset ? `&offset=${offset}` : ''), undefined, signal)
+    for (const t of page.tasks) tasks.set(t.id, t)
+    offset += page.tasks.length
+    if (offset >= page.total || !page.tasks.length) return { ...page, tasks: [...tasks.values()] }
+  }
+}
+
+// A local write takes precedence over any earlier read until the stream refreshes the list.
 export function useOpen(on = true) {
   const [list, setList] = useState<List>()
   const [failed, setFailed] = useState('')
@@ -99,21 +108,24 @@ export function useOpen(on = true) {
   useEffect(() => {
     if (!on || !tick) return
     const n = ++asked.current
-    api<List>('GET', '/tasks?limit=500').then(
+    const controller = new AbortController()
+    openTasks(controller.signal).then(
       (l) => {
         if (n !== asked.current) return
         setList(l)
         setFailed('')
       },
-      (e: unknown) => n === asked.current && setFailed(message(e)),
+      (e: unknown) => !controller.signal.aborted && n === asked.current && setFailed(message(e)),
     )
+    return () => controller.abort()
   }, [on, tick])
   const took = (t: Row) => {
     asked.current++
     setList((l) => {
       if (!l) return l
       const rest = l.tasks.filter((x) => x.id !== t.id)
-      return { ...l, tasks: t.state === 'done' || t.trashed_at ? rest : [...rest, t] }
+      const tasks = t.state === 'done' || t.trashed_at ? rest : [...rest, t]
+      return { ...l, tasks, total: tasks.length }
     })
   }
   return { list, failed, took }
@@ -121,11 +133,10 @@ export function useOpen(on = true) {
 
 const step = 50
 
-// The done or the trashed, as GET /tasks?asked gives them, 50 more at a time up to 500; '' reads nothing. took places a
-// task as a change answered it, or takes it out once holds says it no longer belongs, and drops a read asked before.
-export function useMore(asked: string, holds: (t: Row) => boolean) {
+// One row carries the total for a badge. A list starts at 50 and can grow to 500.
+export function useMore(asked: string, holds: (t: Row) => boolean, countOnly = false) {
   const [shown, setShown] = useState({ asked, limit: step })
-  const limit = shown.asked === asked ? shown.limit : step
+  const limit = countOnly ? 1 : shown.asked === asked ? shown.limit : step
   const [got, setGot] = useState<{ asked: string; list: List }>()
   const [failed, setFailed] = useState('')
   const [tick, setTick] = useState(0)
