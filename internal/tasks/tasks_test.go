@@ -734,6 +734,19 @@ func TestTheListGivesAtMostFiftyUnlessAsked(t *testing.T) {
 	assert.Equal(t, []string{"Rake", "Rake"}, got)
 	assert.Equal(t, 51, total)
 
+	got, total = f.titles(t, "?limit=2&offset=50", f.phone)
+	assert.Equal(t, []string{"Sweep"}, got)
+	assert.Equal(t, 51, total)
+
+	got, total = f.titles(t, "?limit=2&offset=51", f.phone)
+	assert.Empty(t, got)
+	assert.Equal(t, 51, total)
+
+	for _, offset := range []string{"-1", "many"} {
+		code, answer := f.do(t, http.MethodGet, "/api/tasks?offset="+offset, "", f.phone)
+		refused(t, http.StatusBadRequest, code, answer)
+	}
+
 	for _, limit := range []string{"0", "-1", "501", "many"} {
 		code, answer := f.do(t, http.MethodGet, "/api/tasks?limit="+limit, "", f.phone)
 		refused(t, http.StatusBadRequest, code, answer)

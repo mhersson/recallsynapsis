@@ -285,6 +285,7 @@ type filter struct {
 	done     bool // the done tasks, else the open ones
 	trashed  bool // the trash alone, else none of it
 	limit    int  // defaultLimit when 0
+	offset   int
 }
 
 // page is what a list gives: its tasks, how many it was asked for in all,
@@ -699,15 +700,16 @@ func (t tasks) list(ctx context.Context, f filter) (page, error) {
 		}
 	}
 
-	// The window counts every row the query matches, before the limit cuts
-	// them. A side of the span left out is open: '' is before every date.
-	rows, err := t.Store.QueryContext(ctx, `SELECT `+columns+`, count(*) OVER () FROM tasks
-		WHERE user_id = ?1 AND (trashed_at IS NOT NULL) = ?8 AND `+done+` AND ?2 IN (0, area_id) AND (?3 IS NULL OR list = ?3)
+	// A side of the span left out is open: '' is before every date.
+	where := ` FROM tasks WHERE user_id = ?1 AND (trashed_at IS NOT NULL) = ?7 AND ` + done + ` AND ?2 IN (0, area_id) AND (?3 IS NULL OR list = ?3)
 			AND (NOT ?4 OR done_at IS NULL AND list = '' AND planned_from = '' AND deadline = '')
 			AND (?5 = '' AND ?6 = ''
 				OR planned_from <> '' AND (?6 = '' OR planned_from <= ?6) AND planned_to >= ?5
-				OR deadline <> '' AND (?6 = '' OR deadline <= ?6) AND deadline >= ?5)
-		ORDER BY `+order+` LIMIT ?7`, c.UserID, area, list, f.unsorted, f.from, f.to, f.limit, f.trashed)
+				OR deadline <> '' AND (?6 = '' OR deadline <= ?6) AND deadline >= ?5)`
+	args := []any{c.UserID, area, list, f.unsorted, f.from, f.to, f.trashed}
+
+	rows, err := t.Store.QueryContext(ctx, `SELECT `+columns+`, count(*) OVER ()`+where+` ORDER BY `+order+` LIMIT ?8 OFFSET ?9`,
+		append(args, f.limit, f.offset)...)
 	if err != nil {
 		return page{}, fmt.Errorf("tasks: list: %w", err)
 	}
@@ -726,6 +728,13 @@ func (t tasks) list(ctx context.Context, f filter) (page, error) {
 
 	if err := rows.Err(); err != nil {
 		return page{}, fmt.Errorf("tasks: list: %w", err)
+	}
+
+	// An offset past the last row leaves no row to carry the window's count.
+	if f.offset > 0 && len(out.Tasks) == 0 {
+		if err := t.Store.QueryRowContext(ctx, "SELECT count(*)"+where, args...).Scan(&out.Total); err != nil {
+			return page{}, fmt.Errorf("tasks: count: %w", err)
+		}
 	}
 
 	return out, nil

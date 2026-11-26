@@ -56,7 +56,7 @@ test('Restore puts a task back where it was, and the trash no longer lists it', 
   await userEvent.click(page().querySelector<HTMLElement>('.notice a')!)
   await waitFor(() => expect(where()).toBe('/tasks/1'))
   await userEvent.click(within(page().querySelector<HTMLElement>('.crumb')!).getByRole('link'))
-  await userEvent.click(await waitFor(() => within(page().querySelector<HTMLElement>('.views')!).getAllByRole('link')[1]))
+  await userEvent.click(await waitFor(() => within(page().querySelector<HTMLElement>('.views')!).getAllByRole('link')[2]))
   await waitFor(() => expect(page().querySelector('[data-group=week] .t1')).toHaveTextContent('planned'))
 })
 

@@ -7,7 +7,7 @@ import { areas, monday, tasksServer } from './test-tasks.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
-const nav = () => within(screen.getByRole('navigation')).getAllByRole('link')
+const nav = () => within(screen.getByRole('navigation', { name: '' })).getAllByRole('link')
 const links = () => nav().map((a) => a.getAttribute('href'))
 const counted = () => nav().map((a) => a.querySelector('.cnt')?.textContent ?? '')
 
@@ -30,7 +30,7 @@ test('with tasks and notes on, a person lands on Tasks, which heads the side bar
   expect(counted().slice(0, 2)).toEqual(['1', '2'])
   expect(calls.map((c) => c.path)).toContain('/api/tasks?unsorted=true&limit=1')
   // Capture stays notes'.
-  expect(within(screen.getByRole('navigation')).getByRole('button')).toBeInTheDocument()
+  expect(within(screen.getByRole('navigation', { name: '' })).getByRole('button')).toBeInTheDocument()
 })
 
 test('with tasks and notes on, the phone has Tasks, Inbox, Capture, Notes and More, and Projects is a row of More', async () => {

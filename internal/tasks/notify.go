@@ -247,7 +247,7 @@ func messages(k kinds, ts []planned, today, tomorrow string, due func(hhmm strin
 	}
 
 	if k.Untimed && due(k.UntimedAt) {
-		out = append(out, summary(ts, func(p planned) bool { return covers(p) && p.at == "" }, "planned for today", "/tasks", "tasks-untimed")...)
+		out = append(out, summary(ts, func(p planned) bool { return covers(p) && p.at == "" }, "planned for today", "/tasks?view=today", "tasks-untimed")...)
 	}
 
 	return out
@@ -298,7 +298,7 @@ func morning(ts []planned, today string, covers func(planned) bool) []module.Mes
 
 	lines = append(append(lines, titles(left)...), titles(late)...)
 
-	return []module.Message{{Title: strings.Join(counts, ", "), Body: strings.Join(lines, "\n"), URL: "/tasks", Tag: "tasks-morning"}}
+	return []module.Message{{Title: strings.Join(counts, ", "), Body: strings.Join(lines, "\n"), URL: "/tasks?view=today", Tag: "tasks-morning"}}
 }
 
 // summary is one message that counts and names the tasks of ts that holds

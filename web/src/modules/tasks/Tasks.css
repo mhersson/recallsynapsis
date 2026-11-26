@@ -82,19 +82,42 @@
 
 .views {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   margin-bottom: 10px;
 }
 
-.views a {
-  padding: 4px 10px;
+.views a,
+.views summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 30px;
+  padding: 4px 1px;
   border-radius: 6px;
   color: var(--grey2);
   font-size: 13px;
   white-space: nowrap;
 }
 
-.views a:hover {
+.views > a {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.views [hidden] {
+  display: none;
+}
+
+.views.measuring > a,
+.views.measuring > details {
+  display: flex;
+  flex: none;
+}
+
+.views a:hover,
+.views summary:hover,
+.views details[open] > summary {
   background: var(--bg1);
   text-decoration: none;
 }
@@ -105,9 +128,65 @@
   font-weight: 500;
 }
 
-.views .dim {
-  color: var(--grey1);
-  font-weight: 400;
+.view-count {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 2px;
+  border: 1px solid var(--count-ring);
+  border-radius: 99px;
+  background: var(--count-fill);
+  color: var(--count-ink);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.views details {
+  position: relative;
+  flex: none;
+}
+
+.views summary {
+  min-width: 44px;
+  gap: 4px;
+  padding-inline: 2px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.views summary::-webkit-details-marker {
+  display: none;
+}
+
+.views summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.view-menu {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 144px;
+  padding: 4px;
+  background: var(--bg0);
+  border: 1px solid var(--bg4);
+  border-radius: 8px;
+}
+
+.view-menu a {
+  justify-content: space-between;
+  min-height: 44px;
+  padding-inline: 10px;
 }
 
 .addl {
@@ -443,13 +522,9 @@
 }
 
 @media (max-width: 720px) {
-  .views {
-    gap: 0;
-    justify-content: space-between;
-  }
-
-  .views a {
-    padding: 5px 8px;
+  .views > a,
+  .views summary {
+    min-height: 44px;
   }
 
   .tf {

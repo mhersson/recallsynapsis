@@ -180,11 +180,11 @@ func TestTheMorningTellsWhatTheDayHolds(t *testing.T) {
 
 	got := f.at(t, "2026-11-24 07:00")
 	require.Len(t, got, 2)
-	tells(t, got[0], f.ada, "tasks-morning", "/tasks", []int{5, 3, 2},
+	tells(t, got[0], f.ada, "tasks-morning", "/tasks?view=today", []int{5, 3, 2},
 		"09:30 Paint the fence", "14:00 Ring the carpenter", "Sweep the yard", "Pay rent", "Stain the deck",
 		"Mow", "Prune", "Clean the gutters",
 		"File taxes", "Repot")
-	tells(t, got[1], grace, "tasks-morning", "/tasks", []int{1}, "Feed the cat")
+	tells(t, got[1], grace, "tasks-morning", "/tasks?view=today", []int{1}, "Feed the cat")
 
 	assert.Empty(t, f.at(t, "2026-11-24 07:00:30"), "once")
 
@@ -213,11 +213,11 @@ func TestATimeIsOnTheFirstDayOfItsPlanAlone(t *testing.T) {
 
 	ran := f.at(t, "2026-11-24 07:00")
 	require.Len(t, ran, 1)
-	tells(t, ran[0], f.ada, "tasks-morning", "/tasks", []int{3}, "14:00 Ring the carpenter", "Stain the deck", "Sweep the yard")
+	tells(t, ran[0], f.ada, "tasks-morning", "/tasks?view=today", []int{3}, "14:00 Ring the carpenter", "Stain the deck", "Sweep the yard")
 
 	ran = f.at(t, "2026-11-24 09:00")
 	require.Len(t, ran, 1)
-	tells(t, ran[0], f.ada, "tasks-untimed", "/tasks", []int{2}, "Stain the deck", "Sweep the yard")
+	tells(t, ran[0], f.ada, "tasks-untimed", "/tasks?view=today", []int{2}, "Stain the deck", "Sweep the yard")
 
 	ran = f.at(t, "2026-11-24 14:00")
 	require.Len(t, ran, 1, "the task whose plan begins today, and not the one begun the day before")
@@ -251,11 +251,11 @@ func TestTheDeadlinesAndTheUntimedComeWhenSwitchedOn(t *testing.T) {
 
 	ran := f.at(t, "2026-11-24 07:00")
 	require.Len(t, ran, 1, "her own morning, and not ada's, switched off")
-	tells(t, ran[0], grace, "tasks-morning", "/tasks", []int{1}, "14:00 Feed the cat")
+	tells(t, ran[0], grace, "tasks-morning", "/tasks?view=today", []int{1}, "14:00 Feed the cat")
 
 	ran = f.at(t, "2026-11-24 08:45")
 	require.Len(t, ran, 1, "at her hour")
-	tells(t, ran[0], f.ada, "tasks-untimed", "/tasks", []int{2}, "Sweep the yard", "Stain the deck")
+	tells(t, ran[0], f.ada, "tasks-untimed", "/tasks?view=today", []int{2}, "Sweep the yard", "Stain the deck")
 	assert.Empty(t, f.at(t, "2026-11-24 09:00"), "and not at the first one")
 
 	ran = f.at(t, "2026-11-24 14:00")
