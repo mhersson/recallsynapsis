@@ -1,6 +1,6 @@
 import type { Area, Hit, Linked, Session, Token } from '../api/types.ts'
 import type { Wording } from '../pages/Projects/Brief.tsx'
-import type { Decision, Full } from '../modules/knowledge/api.ts'
+import { fieldsOf, type Decision, type Full, type Wording as Worded } from '../modules/knowledge/api.ts'
 import type { Kind, List, Note, Row, Version } from '../modules/notes/api.ts'
 import type { Entry, Kinds, Now, List as TaskList, Row as TaskRow, Task } from '../modules/tasks/api.ts'
 import { add } from '../modules/tasks/dates.ts'
@@ -725,6 +725,24 @@ for (const d of DRAWN.filter((x) => x.replacing)) {
   const [newer, older] = [DECISIONS.find((x) => x.id === d.id)!, DECISIONS.find((x) => x.id === d.replacing)!]
   newer.replaces = { ref: older.ref, decision: older.decision, decided: older.decided }
   older.replaced_by = { ref: newer.ref, decision: newer.decision, decided: newer.decided }
+}
+
+// What the owner said as a client recorded a decision, and the line of the one mended since as it was recorded.
+const SAID: Record<number, string> = {
+  11: 'Tasks opens on Agenda now. Record it, and that it replaces landing on Today.',
+  10: 'Record that a switch saves at once and a field waits for Save, and that it replaces what I chose first.',
+  6: "Record how a task's page saves, as I chose it in the playground.",
+}
+const RECORDED_AS: Record<number, string> = { 10: 'A switch saves the moment it is flipped, and a field waits for Save' }
+
+// The wording of d as it now reads, as its revision in full gives it.
+export const decisionWording = (d: Decision, said = ''): Worded => ({ revision: d.revision, at: d.changed_at, by: d.changed_by, said, ...fieldsOf(d) })
+
+// The wordings of a fixed decision, oldest first: the one a client recorded and, for the one mended since, the one it has
+// now.
+export function decisionWordings(d: Decision): Worded[] {
+  const first = { ...decisionWording(d, SAID[d.id]), revision: 1, at: d.created_at, by: 'aim', decision: RECORDED_AS[d.id] ?? d.decision }
+  return d.revision === 1 ? [first] : [first, decisionWording(d)]
 }
 
 // The day GET /api/knowledge gives the harness: the decisions are of the days before it.

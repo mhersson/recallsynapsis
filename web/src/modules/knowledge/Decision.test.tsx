@@ -58,7 +58,7 @@ test('Linked from lists each note and task that links to the decision, with its 
 
   await open('/decisions/8')
   await waitFor(() => expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('decision 8'))
-  expect(screen.getByRole('main').querySelector('.sect')).toBeNull()
+  expect(screen.getByRole('main').querySelector('section.sect')).toBeNull()
 })
 
 test.each([
@@ -216,4 +216,79 @@ test('a delete the server refuses keeps the decision, with the server\'s line', 
   await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[1])
   expect(await main().findByRole('alert')).toBeInTheDocument()
   expect(where()).toBe('/decisions/7')
+})
+
+test('History lists each revision once unfolded, the newest first; Read shows that wording, offers no restore, and leads back to the decision', async () => {
+  narrow(false)
+  const [seven, five] = [decision(7, '2026-11-26', { revision: 3 }), decision(5, '2026-11-20')]
+  replace(seven, five)
+  const entry = (revision: number, said = '') => ({ revision, at: `2026-11-2${revision}T10:00:00Z`, by: 'aim', said })
+  // The second wording replaced a decision since deleted, the first one that stands.
+  const wording = (revision: number, replaces: string) => ({ ...entry(revision), decision: `wording ${revision}`, why: 'why then', source: '', decided: '2026-11-25', replaces })
+  const calls = keeper([seven, five], (c) => {
+    if (c.path === '/api/knowledge/7/revisions') return json({ revisions: [entry(3), entry(2), entry(1, 'record it')] })
+    const n = /^\/api\/knowledge\/7\/revisions\/(\d)$/.exec(c.path)?.[1]
+    if (n) return json(wording(Number(n), n === '2' ? 'knowledge:4' : 'knowledge:5'))
+  })
+  await open('/decisions/7')
+  await waitFor(() => expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('decision 7'))
+  const history = () => [...screen.getByRole('main').querySelectorAll<HTMLDetailsElement>('details.sect')].at(-1)!
+  expect(calls.filter((c) => c.path.includes('/revisions'))).toEqual([])
+  await userEvent.click(history().querySelector('summary')!)
+  await waitFor(() => expect(history().querySelectorAll('.hrow')).toHaveLength(3))
+  const rows = () => [...history().querySelectorAll('.hrow')]
+  expect(rows().map((r) => [r.querySelector('.n')!.textContent!.replace(/\D/g, ''), !!r.querySelector('button'), !!r.querySelector('.said')])).toEqual([
+    ['3', false, false],
+    ['2', true, false],
+    ['1', true, true],
+  ])
+
+  const frame = () => screen.getByRole('main').querySelector<HTMLElement>('.revision')!
+  await userEvent.click(rows()[1].querySelector('button')!)
+  await waitFor(() => expect(frame().querySelector('.rt')).toHaveTextContent('wording 2'))
+  expect(within(frame()).getAllByRole('button')).toHaveLength(1)
+  await waitFor(() => expect(frame().querySelector('.lrow .tag')).not.toBeNull())
+  expect(frame().querySelector('.lrow a')).toBeNull()
+  await userEvent.click(within(frame()).getByRole('button'))
+
+  await waitFor(() => expect(history().open).toBe(true))
+  await waitFor(() => expect(rows()).toHaveLength(3))
+  await userEvent.click(rows()[2].querySelector('button')!)
+  await waitFor(() => expect(frame().querySelector('.lrow a')).toHaveAttribute('href', '/decisions/5'))
+  expect(calls.filter((c) => c.method !== 'GET')).toEqual([])
+})
+
+test('nothing is sent to the server but by Save and by Delete for good', async () => {
+  narrow(false)
+  const [seven, five] = [decision(7, '2026-11-26', { revision: 2 }), decision(5, '2026-11-20')]
+  replace(seven, five)
+  const entry = { revision: 1, at: '2026-11-25T10:00:00Z', by: 'aim', said: '' }
+  const calls = keeper([seven, five], (c) =>
+    c.path === '/api/knowledge/7/revisions' ? json({ revisions: [entry] }) : c.path === '/api/knowledge/7/revisions/1' ? json({ ...entry, decision: 'first', why: 'then', source: '', decided: '2026-11-25', replaces: '' }) : undefined,
+  )
+  await open('/decisions/7')
+  await waitFor(() => expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('decision 7'))
+  const head = () => within(screen.getByRole('main').querySelector<HTMLElement>('.page-head')!)
+  const form = () => screen.getByRole('main').querySelector('form')!
+  await userEvent.click([...screen.getByRole('main').querySelectorAll('summary')].at(-1)!)
+  await waitFor(() => expect(screen.getByRole('main').querySelector('.hrow button')).not.toBeNull())
+  await userEvent.click(screen.getByRole('main').querySelector<HTMLElement>('.hrow button')!)
+  await waitFor(() => expect(screen.getByRole('main').querySelector('.rev .rt')).not.toBeNull())
+  await userEvent.click(within(screen.getByRole('main').querySelector<HTMLElement>('.revision')!).getByRole('button'))
+
+  await userEvent.click(head().getAllByRole('button')[0])
+  await userEvent.type(within(form()).getAllByRole('textbox')[1], ' more')
+  fireEvent.change(form().querySelector('input[type="date"]')!, { target: { value: '2026-11-01' } })
+  await userEvent.selectOptions(within(form()).getByRole('combobox'), '')
+  await userEvent.click(within(form()).getByRole('button', { name: (_, b) => b.getAttribute('type') === 'button' }))
+
+  await userEvent.click(head().getAllByRole('button').at(-1)!)
+  await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[0])
+
+  await userEvent.click(head().getAllByRole('link')[0])
+  await waitFor(() => expect(form()).not.toBeNull())
+  await userEvent.type(within(form()).getAllByRole('textbox')[0], 'newer')
+  await userEvent.click(within(form()).getByRole('button', { name: (_, b) => b.getAttribute('type') === 'button' }))
+  await waitFor(() => expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('decision 7'))
+  expect(calls.filter((c) => c.method !== 'GET')).toEqual([])
 })

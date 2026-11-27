@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAreas } from '../../api/areas.ts'
-import { api, message } from '../../api/client.ts'
+import { api, message, useGet } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
 import { day } from '../../components/dates.ts'
 import Dialog from '../../components/Dialog.tsx'
-import { from } from '../../components/history.ts'
+import { from, type Entry } from '../../components/history.ts'
+import { RevisionFrame, Revisions } from '../../components/History.tsx'
 import { LinkRow } from '../../components/Links.tsx'
 import { plain, web } from '../../components/markdown.ts'
 import { Markdown, MarkdownInline } from '../../components/Markdown.tsx'
@@ -14,7 +15,7 @@ import { moment } from '../../components/time.ts'
 import { back } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useAreaShown } from '../../session.ts'
-import { fieldsOf, mark, pathOf, useDecision, useDecisions, type Full, type Line } from './api.ts'
+import { fieldsOf, mark, pathOf, useDecision, useDecisions, type Full, type Line, type Wording } from './api.ts'
 import DecisionForm from './Form.tsx'
 import './Knowledge.css'
 
@@ -81,6 +82,9 @@ function View({ id }: { id: number }) {
   const [editing, setEditing] = useState<Full>()
   const [deleting, setDeleting] = useState(false)
   const [refused, setRefused] = useState('')
+  // History stays unfolded while an earlier wording is read, and as the way back returns from it.
+  const [history, setHistory] = useState(false)
+  const [reading, setReading] = useState<number>()
   const shown = editing ?? d
   const project = useAreas(true).find((a) => a.slug === shown?.area)
   useAreaShown(project?.id)
@@ -104,6 +108,14 @@ function View({ id }: { id: number }) {
       </div>
     )
   if (!d) return <Failed line={failed} />
+
+  if (reading)
+    return (
+      <div className="page narrow decision">
+        {crumb}
+        <Reading d={d} revision={reading} onBack={() => setReading(undefined)} />
+      </div>
+    )
 
   async function remove() {
     setDeleting(false)
@@ -185,15 +197,21 @@ function View({ id }: { id: number }) {
           <Leads line={d.replaces} state="replaced" />
         </Part>
       )}
-      {d.linked_from.length > 0 && (
-        <div className="sects">
+      <div className="sects">
+        {d.linked_from.length > 0 && (
           <Section title="Linked from" count={d.linked_from.length} open>
             {d.linked_from.map((l) => (
               <LinkRow key={l.ref} l={l} />
             ))}
           </Section>
-        </div>
-      )}
+        )}
+        <details className="sect" open={history} onToggle={(e) => setHistory(e.currentTarget.open)}>
+          <summary>
+            History <span className="dim">{count(d.revision)}</span>
+          </summary>
+          {history && <History d={d} onRead={setReading} />}
+        </details>
+      </div>
       {narrow && <div className="acts stack kfoot">{acts}</div>}
       {deleting && (
         <Dialog title="Delete this decision for good?" onClose={() => setDeleting(false)}>
@@ -215,5 +233,59 @@ function View({ id }: { id: number }) {
         </Dialog>
       )}
     </div>
+  )
+}
+
+const count = (n: number) => `${n} ${n === 1 ? 'revision' : 'revisions'}`
+
+// The decision's wordings, the newest first, read again whenever it moves on.
+function History({ d, onRead }: { d: Full; onRead: (revision: number) => void }) {
+  const { got, failed } = useGet<{ revisions: Entry[] }>(`/knowledge/${d.id}/revisions`, d.revision)
+  return (
+    <>
+      {failed && (
+        <p role="alert" className="err">
+          {failed}
+        </p>
+      )}
+      {got && <Revisions list={got.revisions} current={d.revision} onRead={onRead} />}
+    </>
+  )
+}
+
+type ReadingProps = { d: Full; revision: number; onBack: () => void }
+
+// An earlier wording of d, which is read and never restored: mending it back is Edit's. What it replaced then may since
+// be deleted, and then leads nowhere.
+function Reading({ d, revision, onBack }: ReadingProps) {
+  const { got, failed } = useGet<Wording>(`/knowledge/${d.id}/revisions/${revision}`)
+  const decisions = useDecisions(got?.replaces ? d.area : '').got?.decisions
+  const was = got?.replaces && decisions?.find((x) => x.ref === got.replaces)
+  return (
+    <RevisionFrame revision={revision} of={d.revision} got={got} says="This is how the decision read then, not its current text." failed={failed} onBack={onBack}>
+      {got && (
+        <>
+          <h2 className="rt">
+            <MarkdownInline text={got.decision} />
+          </h2>
+          <Part label="Why">
+            <Markdown text={got.why} />
+          </Part>
+          {got.source && (
+            <Part label="Source">
+              <p className="ksource">
+                <Source text={got.source} />
+              </p>
+            </Part>
+          )}
+          <Part label="Decided">{day(got.decided)}</Part>
+          {got.replaces && decisions && (
+            <Part label="Replaces">
+              {was ? <Leads line={was} state={was.state} /> : <LinkRow l={{ ref: got.replaces, kind: 'decision', state: '', title: '', available: false }} />}
+            </Part>
+          )}
+        </>
+      )}
+    </RevisionFrame>
   )
 }

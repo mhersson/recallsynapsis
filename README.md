@@ -88,14 +88,15 @@ session renames a project or archives one.
   a new one, on today, that saves nothing before Save. A decision is read on
   a page of its own, which a link from a note or a task opens too, where
   Edit mends it in place, Replace opens the form of a new decision that
-  replaces it, and Delete deletes it for good after a question. Search
-  finds a decision, standing or replaced, by a word of its line, its why or
-  its source, and lists the decisions' hits after the notes', each leading to
-  its decision's page. An AI client reads a project's brief and the lines of
-  its decisions through the MCP tool `get_knowledge`, and a decision's why
-  when it needs it, and records decisions, on the owner's word, in one
-  package through `update_knowledge`, which Claude Code, connected directly,
-  asks the owner about before every call.
+  replaces it, Delete deletes it for good after a question, and History shows
+  each earlier wording. Search finds a decision, standing or replaced, by a
+  word of its line, its why or its source, and lists the decisions' hits after
+  the notes', each leading to its decision's page. An AI client reads a
+  project's brief and the lines of its decisions through the MCP tool
+  `get_knowledge`, and a decision's why when it needs it, and records
+  decisions, on the owner's word, in one package through `update_knowledge`,
+  which Claude Code, connected directly, asks the owner about before every
+  call.
 - Push sends a module's notifications as Web Push to every browser of the
   owner's in which they are turned on, encrypted for each browser, and a
   browser is turned on or off in Settings, under Notifications, with the

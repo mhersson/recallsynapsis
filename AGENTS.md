@@ -111,7 +111,8 @@ After a change to `web/`, look at the screen before you finish.
   `modules=tasks,notes` switches the named modules on, so Tasks and Search
   find the fixed tasks, and the Inbox, Notes and Search the fixed notes;
   with `knowledge` among them, `recallsynapsis` has eleven fixed decisions,
-  nine that stand and two replaced, which Search finds and a note and a
+  nine that stand, one of them mended in the web app since and at its
+  second revision, and two replaced, which Search finds and a note and a
   done task link to, and no other area has any, and a decision's texts are
   refused as the server refuses them; `backup=old` makes the
   last backup three days old and `backup=none` leaves none; with `push`
@@ -455,7 +456,11 @@ Every package states its one responsibility in its package comment, and
   Save. Replace opens the form of a new decision with Replaces on it, at
   `&replaces=ID`. Delete asks first in the shell's dialog, with the
   decision's line and, for one that replaced another, that the other stands
-  again, and once deleted opens the project's page on Decisions.
+  again, and once deleted opens the project's page on Decisions. Its
+  History, folded, lists its revisions, the newest first, with when, by
+  what and what the owner said, and Read shows an earlier wording in the
+  frame a note's revision is read in, with the way back alone, since no
+  revision of a decision is restored.
   The service worker, `web/public/sw.js`, shows each notification pushed to
   the browser, and a tap on one takes an open window to its path, or opens
   one there.

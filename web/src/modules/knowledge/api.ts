@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError, api, message, useGet } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 import type { Linked } from '../../api/types.ts'
+import type { Entry } from '../../components/history.ts'
 
 // A decision as a line, as another decision names it in replaces or replaced_by.
 export type Line = { ref: string; decision: string; decided: string }
@@ -35,6 +36,9 @@ export type List = { decisions: Decision[]; today: string }
 
 // What a decision's form holds: replaces is a reference, or '' for none.
 export type Fields = Pick<Decision, 'decision' | 'why' | 'source' | 'decided'> & { replaces: string }
+
+// A wording of a decision in full, with the reference it replaced then, or ''.
+export type Wording = Entry & Fields
 
 // The fields of a decision, as its form opens with them.
 export const fieldsOf = (d: Decision): Fields => ({ decision: d.decision, why: d.why, source: d.source, decided: d.decided, replaces: d.replaces?.ref ?? '' })

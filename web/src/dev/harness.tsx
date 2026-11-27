@@ -12,7 +12,7 @@ import type { Area, Token } from '../api/types.ts'
 import type { Wording } from '../pages/Projects/Brief.tsx'
 import { fieldsOf, type Decision, type Fields, type Line } from '../modules/knowledge/api.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, DECIDED_TODAY, DECISIONS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, decisionOf, full, history, listNotes, listed, note, onToday, refs, searchDecisions, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
+import { AREAS, DECIDED_TODAY, DECISIONS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, decisionOf, decisionWording, decisionWordings, full, history, listNotes, listed, note, onToday, refs, searchDecisions, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -185,9 +185,14 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
 // The knowledge routes, as the server answers them: a project's decisions, one in full, a package, and a delete, telling
 // the stream of each decision written or deleted.
 function answerKnowledge(method: string, url: URL, body: Record<string, unknown>): Response {
-  const d = decisions.find((x) => url.pathname === `/api/knowledge/${x.id}`)
+  const [, id, revisions, n] = /^\/api\/knowledge\/(\d+)(\/revisions(?:\/(\d+))?)?$/.exec(url.pathname) ?? []
+  const d = decisions.find((x) => x.id === Number(id))
+  if (method === 'GET' && d && revisions) {
+    const w = n ? kept.get(d.id)!.find((x) => x.revision === Number(n)) : { revisions: kept.get(d.id)!.map(({ revision, at, by, said }) => ({ revision, at, by, said })).reverse() }
+    return w ? json(w) : json({ error: 'not found' }, 404)
+  }
   if (method === 'GET' && d) return json(decisionOf(d, notes, tasks))
-  if (method === 'DELETE' && d) {
+  if (method === 'DELETE' && d && !revisions) {
     decisions.splice(decisions.indexOf(d), 1)
     relink()
     told(d)
@@ -211,6 +216,9 @@ type Mend = Partial<Fields> & { ref: string; revision: number }
 // The decisions save=moved has mended as a client would have.
 const movedDecisions = new Set<number>()
 
+// Each decision's wordings, oldest first.
+const kept = new Map(decisions.map((d) => [d.id, decisionWordings(d)]))
+
 // A package that mends decisions of the project and adds to it, refused whole on a decision that moved on or a text the
 // server refuses. save=moved refuses the first mend of each decision, as if a client had mended it three minutes before.
 function answerPackage(area: Area, add: Fields[], mend: Mend[]): Response {
@@ -221,6 +229,7 @@ function answerPackage(area: Area, add: Fields[], mend: Mend[]): Response {
     if (query.get('save') === 'moved' && !movedDecisions.has(d.id)) {
       movedDecisions.add(d.id)
       Object.assign(d, { why: `${d.why} Confirmed in review.`, revision: d.revision + 1, changed_at: new Date(Date.now() - 3 * 60_000).toISOString(), changed_by: 'aim' })
+      kept.get(d.id)!.push(decisionWording(d, 'Add that the review confirmed it.'))
       told(d)
     }
     if (m.revision !== d.revision) return json({ error: `entry ${i + 1} of mend: ${m.ref} is at revision ${d.revision}, and the mend was made from ${m.revision}: conflict` }, 409)
@@ -240,6 +249,8 @@ function answerPackage(area: Area, add: Fields[], mend: Mend[]): Response {
   })
   decisions.push(...added)
   relink()
+  mended.forEach((x) => kept.get(x.id)!.push(decisionWording(x)))
+  added.forEach((x) => kept.set(x.id, [decisionWording(x)]))
   const saved = [...mended, ...added]
   saved.forEach(told)
   return json({ decisions: saved })

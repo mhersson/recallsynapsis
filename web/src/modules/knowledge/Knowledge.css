@@ -37,6 +37,11 @@
   margin-top: 14px;
 }
 
+/* The frame an earlier wording is read in spaces its Markdown apart from a title; under a label it sits close. */
+.rev .kpart .md {
+  margin: 0;
+}
+
 .kpart > .label {
   display: block;
   font-size: 12.5px;
