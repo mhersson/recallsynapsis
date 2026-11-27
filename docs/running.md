@@ -95,9 +95,10 @@ is kept. A client sends it as `Authorization: Bearer TOKEN`, to `/mcp` or to
 `/api/`. Settings lists each token with its access, when it was made and when it
 was last used. Revoking one refuses it from its next request. No token can list,
 make or revoke tokens, change an area's brief over REST, restore one, rename or
-archive a project, delete a note or a task for good, or attach, read or remove a
-note's file: only a signed-in session can. A `write` token can make a project,
-and replace a brief through the MCP tool `update_area` alone.
+archive a project, add, mend or delete a decision, delete a note or a task for
+good, or attach, read or remove a note's file: only a signed-in session can. A
+`write` token can make a project, and replace a brief through the MCP tool
+`update_area` alone.
 
 ### The MCP tools
 

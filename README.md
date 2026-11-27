@@ -19,7 +19,7 @@ session renames a project or archives one.
 - The owner signs in with a name and a password. AI clients and scripts use API
   tokens made in Settings, each with read or write access.
 - What it keeps comes from feature modules, each switched on in the
-  configuration. This build has three. Notes keeps notes and ideas in the areas,
+  configuration. This build has four. Notes keeps notes and ideas in the areas,
   with their tags, links, attached files and history, an inbox of captures that
   wait to be filed, and a trash. In the web app, Capture saves a thought and the
   Inbox files it; Notes lists the filed notes, each read, edited, moved to
@@ -69,6 +69,18 @@ session renames a project or archives one.
   archived, beside its notes and ideas, and leads to what was done in it. Search
   lists the tasks' hits before the notes', and a task found there or linked from
   a note shows its ring and leads to its page.
+- Knowledge keeps the decisions that shape each project: what was decided, in
+  one line, why, its source, the day it was decided and the decision it
+  replaces, with every wording of it. A decision stands until another
+  replaces it, and replaces one at most and is replaced by one at most. Its
+  REST API, at `/api/knowledge`, lists a project's decisions, the newest day
+  first, reads one with its revisions, and saves a change as one package of
+  decisions added and mended, all or none, which only a signed-in session
+  sends; a mend made from an earlier wording is refused.
+  Only a signed-in session deletes a decision, with its wordings: the one it
+  replaced then stands again. A note or a task links to a decision, which
+  shows its line and whether it stands, and a decision read whole lists what
+  links to it.
 - Push sends a module's notifications as Web Push to every browser of the
   owner's in which they are turned on, encrypted for each browser, and a
   browser is turned on or off in Settings, under Notifications, with the

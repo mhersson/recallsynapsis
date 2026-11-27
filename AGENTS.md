@@ -131,10 +131,10 @@ Every package states its one responsibility in its package comment, and
 - `cmd/recallsynapsis`: the binary. `main.go` holds the verb registry and
   `run(args, stdin, stdout, stderr)`, which the tests call in process; each
   verb registers itself from an `init` in its own file. `datadir.go` holds
-  `modules`, the list of the binary's feature modules, which is notes, tasks
-  and push, with the fake after it in the tests, and every verb that opens the
-  database builds them all, so every module's migrations run whether it is on
-  or not, and gives them the configuration's `public_url`.
+  `modules`, the list of the binary's feature modules, which is notes, tasks,
+  knowledge and push, with the fake after it in the tests, and every verb that
+  opens the database builds them all, so every module's migrations run whether
+  it is on or not, and gives them the configuration's `public_url`.
   `serve` gives the modules the hub of the event streams, whose streams end
   as a signal begins the shutdown, runs the jobs of the modules switched on
   and the nightly backup, and stops them before the store closes.
@@ -210,6 +210,33 @@ Every package states its one responsibility in its package comment, and
   module switched on has the item, finds what links to one, and hands a
   message for a user to each module that delivers. It owns the tables `areas`
   and `area_revisions`.
+- `internal/knowledge`: the knowledge module. It keeps the decisions that
+  shape each user's projects, each in one project, named by the area's slug:
+  what was decided, one line of at most 200 characters; why, at most 2,000;
+  its source, one line of at most 500, or none; the day it was decided,
+  `YYYY-MM-DD`, today in the configured `timezone` unless given; and the
+  decision it replaces. The caps are fixed, are no keys and hold for every
+  writer. A decision is `replaced` while another names it in `replaces` and
+  else `stands`, so no state is kept. It replaces one decision of its own
+  project at most, one that stands, never itself and never through a circle,
+  and is replaced by one at most. A change is one package of one project
+  that adds and mends 1 to 20 decisions, the mends first, saved all or none,
+  and a refusal names the entry. A mend names the revision it was made from
+  and is refused once the decision has moved on, gives only the fields it
+  changes, may change what the decision replaces and clears it with `""`,
+  and writes the next revision with what changed it, unless it leaves the
+  decision as it is; one package mends a decision once. Any revision can be
+  read, and none restored. The personal area has no decisions, and an
+  archived project keeps them and takes more. A list gives every decision of
+  a project, the newest day first, and today's date. Deleting a decision
+  takes its revisions with it: the one it replaced then stands, and the one
+  that replaced it replaces nothing, with no revision written for that. Over
+  REST only the session cookie sends a package or deletes a decision, and
+  every route that reads asks for `read`. A decision keeps no links of its
+  own: a link to one shows its line, the kind `decision` and its state, a
+  link to a deleted one leads nowhere, and a decision in full gives the
+  items that link to it, each as the core resolves it. It owns the tables
+  `decisions` and `decision_revisions`.
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
   settings and their check, migrations, routes, MCP tools, jobs, and
