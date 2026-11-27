@@ -33,6 +33,13 @@ test('the list holds the personal area, then the projects, then the archived one
   expect(main().getAllByRole('button')).toHaveLength(1)
 })
 
+test('each brief shows its first paragraph', async () => {
+  narrow(false)
+  server([{ ...area(1, 'personal', 'Personal'), brief: 'all **of** it' }, { ...area(3, 'project', 'cavu'), brief: 'what it is\n\nand the rest' }, area(4, 'project', 'portal')])
+  await open('/projects')
+  expect([...screen.getByRole('main').querySelectorAll('.row')].map((r) => r.querySelector('.t3')?.textContent)).toEqual(['all **of** it', 'what it is', undefined])
+})
+
 test('Restore brings an archived project back into the list', async () => {
   narrow(false)
   const areas = [area(1, 'personal', 'Personal'), area(6, 'project', 'homelander', true)]
