@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import Count from '../../components/Count.tsx'
 import type { View } from './views.ts'
 
 type Item = { view: View; label: string; to: string; count: number }
@@ -68,11 +69,11 @@ export default function TaskViews({ current, items }: Props) {
       to={item.to}
       hidden={!inMenu && !visible.includes(item)}
       aria-current={item.view === current ? 'page' : undefined}
-      aria-label={`${item.label}, ${item.count} ${item.count === 1 ? 'task' : 'tasks'}`}
+      aria-label={item.count ? `${item.label}, ${item.count} ${item.count === 1 ? 'task' : 'tasks'}` : undefined}
       onClick={inMenu ? (e) => { focusView.current = !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey } : undefined}
     >
       {item.label}
-      {item.count > 0 && <span className="view-count" aria-hidden="true">{item.count}</span>}
+      <Count>{item.count}</Count>
     </Link>
   )
   return (

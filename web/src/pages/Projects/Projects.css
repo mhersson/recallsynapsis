@@ -103,12 +103,6 @@
   margin: 0 0 6px;
 }
 
-.area-parts .part > .dim,
-.area-parts summary > .dim {
-  color: var(--grey1);
-  font-weight: 400;
-}
-
 .area-parts details {
   border-top: 1px solid var(--bg2);
 }
@@ -130,8 +124,7 @@
   }
 }
 
-/* The tabs of a project's page under its brief, in the shape of the views of Tasks. A number after a label is as quiet as
-   a section's count, and nothing on a tab reads as an alert. */
+/* The tabs of a project's page under its brief, in the shape of the views of Tasks. */
 .ptabs {
   display: flex;
   gap: 2px;
@@ -162,15 +155,6 @@
   background: var(--bg2);
   color: var(--fg);
   font-weight: 500;
-}
-
-.ptabs .dim {
-  color: var(--grey1);
-  font-weight: 400;
-}
-
-.ptabs .dim:empty {
-  display: none;
 }
 
 @media (max-width: 720px) {

@@ -56,7 +56,6 @@ test('a list with more says so and shows 50 more, and with nothing done Done say
   await userEvent.click(within(page().querySelector<HTMLElement>('.list-end')!).getByRole('button'))
   await waitFor(() => expect(page().querySelectorAll('.task-row')).toHaveLength(60))
   expect(asked(calls)).toEqual(['/api/tasks?done=true&limit=50', '/api/tasks?done=true&limit=100'])
-  expect(page().querySelector('.views a[aria-current] .view-count')).toHaveTextContent('60')
   expect(page().querySelector('.list-end')).toBeNull()
   view.unmount()
 
@@ -64,6 +63,59 @@ test('a list with more says so and shows 50 more, and with nothing done Done say
   await open('/tasks?view=done')
   await waitFor(() => expect(page().querySelector('.empty')).not.toBeNull())
   expect(page().querySelectorAll('.task-row')).toHaveLength(0)
+})
+
+test('Done carries no number, in the row or under More, though it holds done tasks, and is called by its name alone', async () => {
+  const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    const width = this.matches('.views') ? 360 : this.matches('details') ? 46 : 74
+    return new DOMRect(0, 0, width, 44)
+  })
+  try {
+    narrow(true)
+    tasksServer(tasks())
+    const inRow = await open('/tasks?view=done')
+    await waitFor(() => expect(days()).toHaveLength(3))
+    const current = page().querySelector<HTMLElement>('.views > a[aria-current]')!
+    expect(current).not.toHaveTextContent(/\d/)
+    expect(current).not.toHaveAttribute('aria-label')
+    inRow.unmount()
+
+    const calls = tasksServer(tasks())
+    await open('/tasks')
+    await waitFor(() => expect(page().querySelector('.view-menu a[href="/tasks?view=done"]')).not.toBeNull())
+    const listed = page().querySelector<HTMLElement>('.view-menu a[href="/tasks?view=done"]')!
+    expect(listed).not.toHaveTextContent(/\d/)
+    expect(listed).not.toHaveAttribute('aria-label')
+    expect(asked(calls)).toEqual([])
+  } finally {
+    bounds.mockRestore()
+  }
+})
+
+test('Done shown again after a task was done in another view opens that task first, never what it held before', async () => {
+  narrow(false)
+  const calls = tasksServer(tasks())
+  const { where } = await open('/tasks?view=done')
+  await waitFor(() => expect(where()).toBe('/tasks/4?view=done'))
+  const views = () => within(page().querySelector<HTMLElement>('.views')!).getAllByRole('link')
+  await userEvent.click(views()[0])
+  await waitFor(() => expect(where()).toBe('/tasks/5'))
+  await userEvent.click(ringOf('open'))
+  await waitFor(() => expect(rowOf('open')).toBeUndefined())
+  expect(asked(calls)).toEqual(['/api/tasks?done=true&limit=50'])
+  await userEvent.click(views()[5])
+  await waitFor(() => expect(where()).toBe('/tasks/5?view=done'))
+  expect(rowOf('open')).toHaveClass('done')
+})
+
+test('a read of Done that fails says so on Done alone', async () => {
+  narrow(true)
+  tasksServer(tasks(), monday, (c) => (c.path.includes('done=true') ? json({ error: 'the line the server gave' }, 400) : undefined))
+  await open('/tasks?view=done')
+  expect(await within(page()).findByRole('alert')).toBeInTheDocument()
+  await userEvent.click(within(page().querySelector<HTMLElement>('.views')!).getAllByRole('link')[0])
+  await waitFor(() => expect(page().querySelector('[data-group]')).not.toBeNull())
+  expect(within(page()).queryByRole('alert')).toBeNull()
 })
 
 test('a row ticked in a view of the open is not carried into Done, though its answer lands there, and Done lists it once done', async () => {

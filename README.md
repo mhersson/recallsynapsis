@@ -48,14 +48,14 @@ session renames a project or archives one.
   what is overdue and what today holds. Week shows the rest of the week and
   what lies beyond it. Soon and Someday show their lists. Finished tasks
   appear in Done, newest first, grouped by the day they were done. Each
-  nonempty view shows its count for the selected area. Views that do not fit
-  beside the current view are under More. Capture also makes a task from its
-  first line as the title and the rest as notes, in the area chosen, planned by a shortcut
-  or left to be sorted. Make a task, on a note's or an idea's page, makes one
-  with the fields of a task's form and a link back to the note, which stays
-  and lists it; in the Inbox it makes one to sort at once, of the capture's
-  text, in the area chosen and with what the owner said, and then moves the
-  capture to the trash. A task is added where one stands, and opens
+  nonempty view but Done shows its count for the selected area. Views that do
+  not fit beside the current view are under More. Capture also makes a task from
+  its first line as the title and the rest as notes, in the area chosen, planned
+  by a shortcut or left to be sorted. Make a task, on a note's or an idea's
+  page, makes one with the fields of a task's form and a link back to the note,
+  which stays and lists it; in the Inbox it makes one to sort at once, of the
+  capture's text, in the area chosen and with what the owner said, and then
+  moves the capture to the trash. A task is added where one stands, and opens
   beside the list, or as a page on a phone, where it is read first and edited in
   one form that saves nothing before Save: its title, notes, plan, with
   shortcuts for today, tomorrow, the weekend and next week, deadline, list and

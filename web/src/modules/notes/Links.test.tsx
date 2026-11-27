@@ -46,6 +46,20 @@ test('a note shows what it links to and what links to it, each a link to its pag
   expect([to, gone, from].map((r) => within(r).queryAllByRole('button').length)).toEqual([1, 1, 0])
 })
 
+test('Links carries the number of links each way, and none when the note has none', async () => {
+  narrow(false)
+  server([filed(1, { links: refs('notes:2') }), filed(2), capture(3, 1, { links: refs('notes:1') })])
+  const linked = await open('/notes/1')
+  await waitFor(() => expect(rows()).toHaveLength(2))
+  expect(section().querySelector('.count')).toHaveTextContent('2')
+  linked.unmount()
+
+  server([filed(1)])
+  await open('/notes/1')
+  await waitFor(() => expect(screen.getByRole('main').querySelector('.sect')).not.toBeNull())
+  expect(section().querySelector('h2')).not.toHaveTextContent(/\d/)
+})
+
 test('the x removes a link at once, as a change of the note with its revision, and a refused change shows why and reads the note again', async () => {
   narrow(false)
   const notes = [filed(1, { revision: 4, links: refs('notes:2', 'notes:9') }), filed(2)]

@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import type { Area } from '../../api/types.ts'
+import Count from '../../components/Count.tsx'
 import { day } from '../../components/dates.ts'
 import { AddIcon } from '../../components/icons.tsx'
 import { Markdown, MarkdownInline } from '../../components/Markdown.tsx'
@@ -10,10 +11,10 @@ import { mark, pathOf, useDecisions, type Decision } from './api.ts'
 import { Source } from './Decision.tsx'
 import './Knowledge.css'
 
-// The number of the project's decisions that stand, or nothing when none does.
-export function Count({ area }: { area: Area }) {
+// The number of the project's decisions that stand.
+export function Standing({ area }: { area: Area }) {
   const { got } = useDecisions(area.slug)
-  return got?.decisions.filter((d) => d.state === 'stands').length || null
+  return <Count>{got?.decisions.filter((d) => d.state === 'stands').length ?? 0}</Count>
 }
 
 // What replaced a decision, and when.
@@ -151,7 +152,7 @@ export default function Decisions({ area }: { area: Area }) {
       {replaced.length > 0 && (
         <details className="kfold">
           <summary>
-            Replaced <span className="dim">{replaced.length}</span>
+            Replaced <Count>{replaced.length}</Count>
           </summary>
           {narrow ? (
             <div className="kblocks">{replaced.map((d) => block(d, [['Replaced', replacedBy(d)]]))}</div>

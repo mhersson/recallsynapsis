@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import { nameOf, useAreas } from '../../api/areas.ts'
+import Count from '../../components/Count.tsx'
 import { day } from '../../components/dates.ts'
 import { TrashIcon } from '../../components/icons.tsx'
 import ListEnd from '../../components/ListEnd.tsx'
@@ -49,7 +50,7 @@ export default function Tasks() {
   const [added, setAdded] = useState<number>()
   const here = (t: Row) => !area || t.area === area
   const open = list?.tasks.filter(here) ?? []
-  const done = useMore(alone ? '' : new URLSearchParams({ done: 'true', ...(area && { area }) }).toString(), (t) => t.state === 'done' && !t.trashed_at && here(t), view !== 'done')
+  const done = useMore(view === 'done' && !alone ? new URLSearchParams({ done: 'true', ...(area && { area }) }).toString() : '', (t) => t.state === 'done' && !t.trashed_at && here(t))
   const shown = view === 'done' ? (done.list?.tasks ?? []).toSorted(latest) : open.sort(order)
   const groups = list ? sortInto(view, shown, list.now) : []
   // On desktop the view opens its first task by naming it in the address.
@@ -156,7 +157,7 @@ export default function Tasks() {
       ts.length > 0 ? (
         <section key={g} data-group={g}>
           <h2 className="tgrp">
-            {groupNames[g]} <span className="dim">{ts.length}</span>
+            {groupNames[g]} <Count>{ts.length}</Count>
           </h2>
           <div className="list">{ts.map((t) => row(t, line(t, g, now, areas, !!area)))}</div>
         </section>
@@ -228,10 +229,10 @@ export default function Tasks() {
         {!alone && (
           <div>
             <TaskViews current={view} items={views.map(([v, label]) => {
-              let count
+              // Done carries no count.
+              let count = 0
               if (v === 'agenda') count = open.length
-              else if (v === 'done') count = done.list?.total ?? 0
-              else count = sortInto(v, open, now).reduce((sum, [, ts]) => sum + ts.length, 0)
+              else if (v !== 'done') count = sortInto(v, open, now).reduce((sum, [, ts]) => sum + ts.length, 0)
               return { view: v, label, to: to(v), count }
             })} />
             {view !== 'week' && view !== 'done' && (

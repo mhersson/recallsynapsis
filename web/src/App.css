@@ -329,6 +329,12 @@ a.row[aria-current] {
   display: none;
 }
 
+/* A count that only informs, after its word: no fill and no outline, so it never reads as an alert. */
+.count {
+  color: var(--grey1);
+  font-weight: 400;
+}
+
 .ghd {
   font-size: 12.5px;
   font-weight: 400;

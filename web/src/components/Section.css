@@ -23,11 +23,6 @@
   margin: 0;
 }
 
-.sect .dim {
-  color: var(--grey1);
-  font-weight: 400;
-}
-
 details.sect {
   padding: 0;
 }
