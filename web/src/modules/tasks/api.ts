@@ -135,7 +135,7 @@ const step = 50
 
 // A list starts at 50 and can grow to 500. A change while nothing is asked forgets it, so asked again it shows only once
 // read afresh.
-export function useMore(asked: string, holds: (t: Row) => boolean) {
+export function useMore(asked: string) {
   const [shown, setShown] = useState({ asked, limit: step })
   const limit = shown.asked === asked ? shown.limit : step
   const [got, setGot] = useState<{ asked: string; list: List }>()
@@ -159,12 +159,11 @@ export function useMore(asked: string, holds: (t: Row) => boolean) {
       (e: unknown) => at === n.current && setFailed(message(e)),
     )
   }, [asked, limit, tick])
-  const took = (t: Row) => {
+  const took = (id: number) => {
     n.current++
     setGot((g) => {
       if (!g) return g
-      const rest = g.list.tasks.filter((x) => x.id !== t.id)
-      const tasks = holds(t) ? [t, ...rest] : rest
+      const tasks = g.list.tasks.filter((x) => x.id !== id)
       return { ...g, list: { ...g.list, tasks, total: g.list.total + tasks.length - g.list.tasks.length } }
     })
   }

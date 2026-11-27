@@ -27,7 +27,7 @@ export default function Trashed() {
   const close = useClose('/tasks/trashed')
   const areas = useAreas(true)
   const alone = narrow && !!id
-  const trash = useMore(alone ? '' : 'trashed=true', (t) => !!t.trashed_at)
+  const trash = useMore(alone ? '' : 'trashed=true')
   const opened = useTask(id)
   // The task last restored here, and whether one was restored or deleted: after either, none opens unasked.
   const [restored, setRestored] = useState<Task>()
@@ -49,8 +49,7 @@ export default function Trashed() {
   const act = async (method: string, path: string, done: (t?: Task) => void) => {
     try {
       const t = await api<Task | undefined>(method, path)
-      // A task deleted is out of the trash, as one restored is.
-      trash.took(t ?? { ...opened.task!, trashed_at: null })
+      trash.took(id!)
       done(t)
       return ''
     } catch (e) {
