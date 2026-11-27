@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useEffect } from 'react'
 import type { Group, Session } from './api/types.ts'
 import type { Item, Module } from './modules/registry.ts'
 
@@ -10,6 +10,18 @@ export const SessionContext = createContext<Session | null>(null)
 export const ActionContext = createContext<{ label: string; open: (area: number) => void } | null>(null)
 
 export const useAction = () => useContext(ActionContext)
+
+// What tells the shell the area a page belongs to when its address names none, so the side bar marks it as current.
+export const AreaShownContext = createContext<(id?: number) => void>(() => {})
+
+// Marks the area id as the page's while the page is open.
+export function useAreaShown(id?: number) {
+  const show = useContext(AreaShownContext)
+  useEffect(() => {
+    show(id)
+    return () => show(undefined)
+  }, [show, id])
+}
 
 export function useSession(): Session {
   return useContext(SessionContext)!

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { nameOf } from '../api/areas.ts'
 import { api, message } from '../api/client.ts'
@@ -17,7 +17,6 @@ type Props = { of: Of; areas: Area[]; trashed: boolean; sending: boolean; open?:
 // What an item links to, each removed or added at once as a change of the item, and what links to it. An item in the
 // trash changes nothing, and shows the section only when it has a link. On a phone it is folded unless open.
 export default function Links({ of, areas, trashed, sending, open, onLinks }: Props) {
-  const item = useItem()
   const [finding, setFinding] = useState(false)
   const [refused, setRefused] = useState('')
   const refs = of.links.map((l) => l.ref)
@@ -27,31 +26,15 @@ export default function Links({ of, areas, trashed, sending, open, onLinks }: Pr
       if (!line) setFinding(false)
     })
 
-  const row = (l: Linked, removable: boolean) => {
-    const it = l.available ? item(l.ref, l.kind, l.state) : undefined
-    return (
-      <div key={l.ref} className="lrow">
-        <i className={it ? `mk ${it.mark}` : 'mk'} />
-        {!l.available ? (
-          <>
-            <span className="mono">{l.ref}</span>
-            <span className="tag">unavailable</span>
-          </>
-        ) : it ? (
-          <Link to={it.to} state={back}>
-            {l.title}
-          </Link>
-        ) : (
-          <span>{l.title}</span>
-        )}
-        {removable && !trashed && (
-          <button className="xb" aria-label={`Remove the link to ${l.title || l.ref}`} disabled={sending} onClick={() => void change(refs.filter((r) => r !== l.ref))}>
-            <XIcon />
-          </button>
-        )}
-      </div>
-    )
-  }
+  const row = (l: Linked, removable: boolean) => (
+    <LinkRow key={l.ref} l={l}>
+      {removable && !trashed && (
+        <button className="xb" aria-label={`Remove the link to ${l.title || l.ref}`} disabled={sending} onClick={() => void change(refs.filter((r) => r !== l.ref))}>
+          <XIcon />
+        </button>
+      )}
+    </LinkRow>
+  )
 
   if (trashed && of.links.length + of.linked_from.length === 0) return null
   const add = !trashed && !finding && (
@@ -73,6 +56,32 @@ export default function Links({ of, areas, trashed, sending, open, onLinks }: Pr
       {of.linked_from.length > 0 && <div className="lgrp">linked from</div>}
       {of.linked_from.map((l) => row(l, false))}
     </Section>
+  )
+}
+
+// An item as a link shows it: its mark and its title, which leads to it while its module is switched on, with the tag its
+// module gives it, or its reference once it is gone; what follows it, such as a button that removes it, comes after.
+export function LinkRow({ l, children }: { l: Linked; children?: ReactNode }) {
+  const item = useItem()
+  const it = l.available ? item(l.ref, l.kind, l.state) : undefined
+  return (
+    <div className="lrow">
+      <i className={it ? `mk ${it.mark}` : 'mk'} />
+      {!l.available ? (
+        <>
+          <span className="mono">{l.ref}</span>
+          <span className="tag">unavailable</span>
+        </>
+      ) : it ? (
+        <Link to={it.to} state={back}>
+          {l.title}
+        </Link>
+      ) : (
+        <span>{l.title}</span>
+      )}
+      {it?.tag && <span className="tag">{it.tag}</span>}
+      {children}
+    </div>
   )
 }
 

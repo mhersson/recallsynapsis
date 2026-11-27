@@ -110,9 +110,12 @@ After a change to `web/`, look at the screen before you finish.
   `upload=wait` holds every upload, so it stays under way;
   `modules=tasks,notes` switches the named modules on, so Tasks and Search
   find the fixed tasks, and the Inbox, Notes and Search the fixed notes;
-  `backup=old` makes the last backup three days old and `backup=none`
-  leaves none; with `push` among `modules=`, `push=off`, `on`, `failed`,
-  `home`, `refused` or `none` makes this browser one whose notifications
+  with `knowledge` among them, `recallsynapsis` has eleven fixed decisions,
+  nine that stand and two replaced, which Search finds and a note and a
+  done task link to, and no other area has any; `backup=old` makes the
+  last backup three days old and `backup=none` leaves none; with `push`
+  among `modules=`, `push=off`, `on`, `failed`, `home`, `refused` or
+  `none` makes this browser one whose notifications
   are off, on, or on with the last one failed, an iPhone's Safari tab, one
   that refuses notifications, or one with no Web Push, with two other
   browsers on but for `off`; with `tasks` and `push` among `modules=`,
@@ -391,13 +394,31 @@ Every package states its one responsibility in its package comment, and
   typed when that brief has moved on and saves it over the revision that
   came in, and asks before a change not saved is left. Each module of the
   web app is one folder under `web/src/modules/`, listed in
-  `web/src/modules/registry.ts`, where a module may also give a part of
+  `web/src/modules/registry.ts`, where a module may also give a tab of a
+  project's page, after Activity, which holds the modules' sections: its
+  label with a quiet number after it, its name in the address as `?tab=`,
+  and the path of the module's own pages, which keep Projects current on a
+  phone, or More when Projects has no tab. The personal area's page has no
+  tabs, and a name the page does not know opens Activity. A module may also
+  give the tag a Links row shows after one of its items, a part of
   Settings, shown after Backups, its kinds of notification, which the part
   Notifications shows, and what it does before a person signs out, which
   never keeps the session open. The push module gives no page, only the part
   Notifications, and turns this browser's notifications off as a person
   signs out. The tasks module gives its four kinds of notification, each a
   switch applied as it is flipped, three with an hour that waits for Save.
+  The knowledge module gives no navigation. Its tab of a project's page,
+  Decisions, carries the number of the decisions that stand and lists them,
+  the newest first, as a table of When, The decision, Why, Source and
+  Replaces, each why whole, and the replaced folded beneath it under their
+  count, as a table of When, The decision and Replaced, or on a phone each
+  as a block. A project with none says so. A click on a decision anywhere
+  but on a link in it opens its own page, read, at `/decisions/ID`: its line
+  as the title, with code, bold and italic shown, its state, its day and its
+  last change, its why as Markdown, its source, a link only when the whole
+  of it is one http or https address, the decision it replaces or the one
+  that replaced it, and what links to it. Its way back opens its project's
+  page on Decisions, and the side bar marks that project as current.
   The service worker, `web/public/sw.js`, shows each notification pushed to
   the browser, and a tap on one takes an open window to its path, or opens
   one there.

@@ -4,11 +4,20 @@ import type { Area, Session } from '../../api/types.ts'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, fakeServer, json, narrow, type Call } from '../../test-server.ts'
 
-// A stand-in module whose section is a region named by the id of the area it is shown in.
+// A stand-in module whose section is a region named by the id of the area it is shown in, and one whose tab of a project
+// counts the area's id and shows a region named by the tab and the id, with a page of its own under /facts.
 vi.mock('../../modules/registry.ts', async () => {
   const { createElement } = await import('react')
   const section = ({ area }: { area: Area }) => createElement('section', { 'aria-label': String(area.id) })
-  return { modules: [{ name: 'things', nav: [], tabs: [], more: [], routes: [], section }] }
+  const body = ({ area }: { area: Area }) => createElement('section', { 'aria-label': `facts ${area.id}` })
+  const count = ({ area }: { area: Area }) => (area.id === 2 ? area.id : null)
+  const tab = { name: 'facts', label: 'Facts', count, body, at: '/facts' }
+  return {
+    modules: [
+      { name: 'things', nav: [], tabs: [], more: [], routes: [], section },
+      { name: 'facts', nav: [], tabs: [], more: [], routes: [{ path: '/facts/:id', element: createElement('p') }], tab },
+    ],
+  }
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -308,4 +317,68 @@ test('an edit sends only what was changed in it, so a rename made elsewhere mean
   } finally {
     vi.useRealTimers()
   }
+})
+
+// The tabs of the page, as links in its main part.
+const tabs = () => main().queryByRole('navigation')
+const tabLinks = () => within(tabs()!).getAllByRole('link')
+
+test('with a module that gives a tab, a project shows Activity and the tab under its brief, Activity holding the sections, and the personal area shows none', async () => {
+  narrow(false)
+  server([area(1, 'personal', 'Personal'), area(2, 'project', 'garden')], ['things', 'facts'])
+  const project = await open('/areas/2')
+  expect(tabLinks()).toHaveLength(2)
+  expect(tabLinks()[0]).toHaveAttribute('aria-current', 'page')
+  expect(main().getByRole('region', { name: '2' })).toBeInTheDocument()
+  expect(main().queryByRole('region', { name: 'facts 2' })).toBeNull()
+
+  await userEvent.click(tabLinks()[1])
+  expect(project.where()).toBe('/areas/2?tab=facts')
+  expect(tabLinks()[1]).toHaveAttribute('aria-current', 'page')
+  expect(main().getByRole('region', { name: 'facts 2' })).toBeInTheDocument()
+  expect(main().queryByRole('region', { name: '2' })).toBeNull()
+  project.unmount()
+
+  await open('/areas/1')
+  expect(tabs()).toBeNull()
+  expect(main().getByRole('region', { name: '1' })).toBeInTheDocument()
+})
+
+test('the tab is in the address, so a reload stays on it, and a tab the page does not know opens Activity', async () => {
+  narrow(false)
+  server([area(1, 'personal', 'Personal'), area(2, 'project', 'garden')], ['things', 'facts'])
+  const reloaded = await open('/areas/2?tab=facts')
+  expect(main().getByRole('region', { name: 'facts 2' })).toBeInTheDocument()
+  reloaded.unmount()
+
+  await open('/areas/2?tab=nothing')
+  expect(tabLinks()[0]).toHaveAttribute('aria-current', 'page')
+  expect(main().getByRole('region', { name: '2' })).toBeInTheDocument()
+})
+
+test('a tab carries the number its module counts, and none when it counts nothing', async () => {
+  narrow(false)
+  server([area(1, 'personal', 'Personal'), area(2, 'project', 'garden'), area(3, 'project', 'shed')], ['facts'])
+  const counted = await open('/areas/2')
+  expect(tabLinks()[1].querySelector('.dim')).toHaveTextContent('2')
+  counted.unmount()
+
+  await open('/areas/3')
+  expect(tabLinks()[1].querySelector('.dim')).toBeEmptyDOMElement()
+})
+
+test('with the module off, no page shows tabs', async () => {
+  narrow(false)
+  server([area(1, 'personal', 'Personal'), area(2, 'project', 'garden')], ['things'])
+  await open('/areas/2')
+  expect(tabs()).toBeNull()
+  expect(main().getByRole('region', { name: '2' })).toBeInTheDocument()
+})
+
+test('on a phone a page of a module\'s tab keeps Projects current', async () => {
+  narrow(true)
+  server([area(1, 'personal', 'Personal'), area(2, 'project', 'garden')], ['facts'])
+  await open('/facts/4')
+  const bar = screen.getAllByRole('navigation').at(-1)!
+  expect(within(bar).getAllByRole('link').find((a) => a.getAttribute('aria-current'))).toHaveAttribute('href', '/projects')
 })

@@ -5,11 +5,12 @@ import { AddIcon, ProjectsIcon, SearchIcon, SettingsIcon } from './icons.tsx'
 import { back } from './useClose.ts'
 import './SideBar.css'
 
-type Props = { modules: Module[]; action?: Action; onAction: () => void; live: boolean }
+// area is one the page shown belongs to though its address names none, which is marked as current too.
+type Props = { modules: Module[]; action?: Action; onAction: () => void; live: boolean; area?: number }
 
 const item = ({ isActive }: { isActive: boolean }) => 'side-item' + (isActive ? ' on' : '')
 
-export default function SideBar({ modules, action, onAction, live }: Props) {
+export default function SideBar({ modules, action, onAction, live, area }: Props) {
   // The dialog that makes a project opens over the Projects list, which stays current.
   const { pathname } = useLocation()
   const projects = pathname === '/projects' || pathname === '/areas/new'
@@ -48,7 +49,7 @@ export default function SideBar({ modules, action, onAction, live }: Props) {
         </Link>
       </div>
       {areas.map((a) => (
-        <NavLink key={a.id} to={`/areas/${a.id}`} className={item}>
+        <NavLink key={a.id} to={`/areas/${a.id}`} className={({ isActive }) => item({ isActive: isActive || a.id === area })}>
           <ProjectsIcon />
           <span className={a.kind === 'project' ? 'mono' : undefined}>{a.name}</span>
         </NavLink>

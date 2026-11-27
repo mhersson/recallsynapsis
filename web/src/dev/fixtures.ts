@@ -1,5 +1,6 @@
 import type { Area, Hit, Linked, Session, Token } from '../api/types.ts'
 import type { Wording } from '../pages/Projects/Brief.tsx'
+import type { Decision, Full } from '../modules/knowledge/api.ts'
 import type { Kind, List, Note, Row, Version } from '../modules/notes/api.ts'
 import type { Entry, Kinds, Now, List as TaskList, Row as TaskRow, Task } from '../modules/tasks/api.ts'
 import { add } from '../modules/tasks/dates.ts'
@@ -112,22 +113,27 @@ export const refs = (...to: string[]): Linked[] => to.map((ref) => ({ ref, kind:
 // What a note goes by in a hit and in a link: its title, or the first line of its body.
 const label = (n: Note) => n.title || n.body.split('\n')[0].slice(0, 80)
 
-// A reference as the core resolves it among notes and tasks: unavailable once its item is in the trash or gone.
-function linked(ref: string, notes: Note[], tasks: Task[]): Linked {
+// A reference as the core resolves it among notes, tasks and decisions: unavailable once its item is in the trash or gone.
+function linked(ref: string, notes: Note[], tasks: Task[], decisions: Decision[] = []): Linked {
   const n = notes.find((x) => x.ref === ref && !x.trashed_at)
   if (n) return { ref, kind: n.kind, state: n.inbox ? 'inbox' : 'filed', title: label(n), available: true }
   const t = tasks.find((x) => x.ref === ref && !x.trashed_at)
-  return t ? { ref, kind: 'task', state: t.state, title: t.title, available: true } : refs(ref)[0]
+  if (t) return { ref, kind: 'task', state: t.state, title: t.title, available: true }
+  const d = decisions.find((x) => x.ref === ref)
+  return d ? { ref, kind: 'decision', state: d.state, title: d.decision, available: true } : refs(ref)[0]
 }
 
-// What an item links to as the core resolves it, and the notes and tasks outside the trash that link to it, the notes first.
-export function resolved<T extends Note | Task>(item: T, notes: Note[], tasks: Task[]): T {
-  const from = [...notes, ...tasks].filter((x) => !x.trashed_at && x.links.some((l) => l.ref === item.ref))
-  return { ...item, links: item.links.map((l) => linked(l.ref, notes, tasks)), linked_from: from.map((x) => linked(x.ref, notes, tasks)) }
+// The notes and tasks outside the trash that link to ref, the notes first, as the core resolves them.
+const linking = (ref: string, notes: Note[], tasks: Task[]) =>
+  [...notes, ...tasks].filter((x) => !x.trashed_at && x.links.some((l) => l.ref === ref)).map((x) => linked(x.ref, notes, tasks))
+
+// What an item links to as the core resolves it, among the decisions too when given, and what links to it.
+export function resolved<T extends Note | Task>(item: T, notes: Note[], tasks: Task[], decisions: Decision[] = []): T {
+  return { ...item, links: item.links.map((l) => linked(l.ref, notes, tasks, decisions)), linked_from: linking(item.ref, notes, tasks) }
 }
 
-// GET /api/notes/{id} from notes, and from tasks when given: n with its links and what links to it, resolved.
-export const full = (notes: Note[], n: Note, tasks: Task[] = []): Note => resolved(n, notes, tasks)
+// GET /api/notes/{id} from notes, and from tasks and decisions when given: n with its links and what links to it, resolved.
+export const full = (notes: Note[], n: Note, tasks: Task[] = [], decisions: Decision[] = []): Note => resolved(n, notes, tasks, decisions)
 
 // A note trashed hours ago, changed ten hours before that.
 const trashed = (id: number, hours: number, n: Partial<Note>) => note(id, (hours + 10) * 60, { ...n, trashed_at: before(hours * 60) })
@@ -212,6 +218,13 @@ Brackets for the right wall, see https://example.test/brackets.`,
     links: refs('notes:12'),
   }),
   note(18, 2 * 24 * 60, { area: 'recallsynapsis', tags: ['push'], title: 'Push is switched per module', body: 'Each module says whether it may push, and the owner switches it.' }),
+  note(19, 3 * 24 * 60, {
+    area: 'recallsynapsis',
+    tags: ['web'],
+    title: 'Save and Cancel on item pages',
+    body: "Changes on an item's page go through Save and Cancel. Only a one-tap toggle saves at once, and the rows of a list carry no quick buttons.\n\nA form's buttons sit at its right, Cancel then Save, so Save is furthest right.",
+    links: refs('knowledge:10', 'knowledge:6'),
+  }),
   note(27, 3 * 24 * 60, { area: 'cavu', kind: 'idea', title: 'A read-only status page for the kitchen tablet', body: 'What runs, what waits, and nothing to press.' }),
   note(21, 4 * 24 * 60, { tags: ['hytte'], title: 'Pakkeliste til hytteturen', body: 'Sovepose, hodelykt, ved og fyrstikker.' }),
   note(9, 2 * 24 * 60 + 30, {
@@ -540,6 +553,7 @@ export const DONE: Task[] = (
     [{ title: 'Smøre garasjeporten' }, '2026-11-19', '18:40'],
     [{ title: 'Hente vinterhjulene på dekkhotellet' }, '2026-11-19', '10:15'],
     [{ title: 'Kappe ved til peisen', area: 'hytta' }, '2026-11-18', '20:05'],
+    [{ title: "Put a task's dates, its list and its area behind Save", area: 'recallsynapsis', links: refs('knowledge:10') }, '2026-11-18', '16:30'],
   ] as [Partial<Task>, string, string][]
 ).map(([t, date, time], i) => task(101 + i, (12 + i) * 24 * 60, { ...t, done_at: oslo(date, time), changed_at: oslo(date, time) }))
 
@@ -563,10 +577,19 @@ export const TRASHED: Task[] = (
 export const onToday = (tasks: Task[], now: Now) => sortInto('today', tasks.map(taskRow), now).flatMap(([, ts]) => ts.map((t) => t.id))
 
 // The tasks routes from tasks, as the server answers them, as a status and a body, none with 204, a task in full with its
-// links resolved among notes and tasks; tell hears of each task made, changed or deleted, and of none when the trash is
-// emptied.
-export function answerTasks(tasks: Task[], method: string, url: URL, body: Record<string, unknown>, now: Now, tell: (t?: Task) => void, notes: Note[] = []): [number, unknown] {
-  const whole = (x: Task) => ({ ...resolved(x, notes, tasks), now })
+// links resolved among notes and tasks, and the decisions when given; tell hears of each task made, changed or deleted,
+// and of none when the trash is emptied.
+export function answerTasks(
+  tasks: Task[],
+  method: string,
+  url: URL,
+  body: Record<string, unknown>,
+  now: Now,
+  tell: (t?: Task) => void,
+  notes: Note[] = [],
+  decisions: Decision[] = [],
+): [number, unknown] {
+  const whole = (x: Task) => ({ ...resolved(x, notes, tasks, decisions), now })
   if (url.pathname === '/api/tasks' && method === 'GET') return [200, listTasks(tasks, url.searchParams, now)]
   if (url.pathname === '/api/tasks' && method === 'POST') {
     const made: Task[] = []
@@ -606,4 +629,115 @@ export function answerTasks(tasks: Task[], method: string, url: URL, body: Recor
   if (Array.isArray(changed)) return [changed[0], { error: changed[1] }]
   if (changed === t) return [200, whole(t)]
   return told(Object.assign(t, changed))
+}
+
+// The decisions of recallsynapsis, as the knowledge screens are drawn, the newest day first and, within a day, the most
+// recently made first, as GET /api/knowledge lists them. Most were recorded in one retrospective; one was mended in the
+// web app since. None of another area has any.
+const recorded = { created_at: oslo('2026-11-23', '21:40'), changed_at: oslo('2026-11-23', '21:40'), changed_by: 'aim', revision: 1 }
+type Drawn = Pick<Decision, 'id' | 'decision' | 'why' | 'source' | 'decided'> & Partial<Decision> & { replacing?: number }
+const DRAWN: Drawn[] = [
+  {
+    id: 11,
+    decision: 'Tasks opens on Agenda, where each open task is once, under Scheduled or Unscheduled',
+    why: 'Not recorded: the owner built it directly.',
+    source: 'https://github.com/mhersson/recallsynapsis/pull/41',
+    decided: '2026-11-26',
+    replacing: 7,
+    created_at: oslo('2026-11-26', '22:14'),
+    changed_at: oslo('2026-11-26', '22:14'),
+  },
+  {
+    id: 10,
+    decision: 'A switch saves the moment it is flipped, and a field waits for an explicit Save',
+    why: 'A date or a time has in-between values while it is typed or stepped through, and none of those should be saved. A switch has none.',
+    source: "The owner's words on the built task page; the push playground's verdict",
+    decided: '2026-11-23',
+    replacing: 6,
+    revision: 2,
+    changed_at: oslo('2026-11-24', '09:12'),
+    changed_by: 'web',
+  },
+  {
+    id: 9,
+    decision: "What a person chooses about behaviour is set in the web app's Settings, not in the configuration file",
+    why: '“The most user friendly”. The file is for whoever runs the server.',
+    source: "Push's design pass",
+    decided: '2026-11-23',
+  },
+  { id: 8, decision: 'The list is Soon, not Next', why: 'Next read as next week, beside the shortcut of that name.', source: 'The spec, section 7', decided: '2026-11-23' },
+  {
+    id: 7,
+    decision: 'With tasks on, a person lands on Today',
+    why: 'Chosen in the tasks playground, where Today was the first of the views and held what waits to be sorted, what is left from earlier, what is overdue and what the day holds.',
+    source: "The tasks playground's verdict",
+    decided: '2026-11-23',
+  },
+  {
+    id: 6,
+    decision: "On a task's page the title and the notes are behind Save, and the other controls save as they change",
+    why: "The owner's first choice in the tasks playground. Left the same day, once the owner saw it built.",
+    source: "The tasks playground's verdict",
+    decided: '2026-11-23',
+    created_at: oslo('2026-11-23', '11:32'),
+    changed_at: oslo('2026-11-23', '11:32'),
+  },
+  {
+    id: 5,
+    decision: "A tool is named verb and the module's noun: `create_note`, not `capture`",
+    why: 'So one sees which module a tool belongs to, and `capture` could as well have meant `update_note`.',
+    source: 'Review of the notes plan',
+    decided: '2026-11-22',
+  },
+  {
+    id: 4,
+    decision: 'SQLite, not PostgreSQL',
+    why: "No PostgreSQL runs in the cluster, and Portal, CAVU and ContextMatrix all use pure Go SQLite. Turned down: the requirements note's PostgreSQL.",
+    source: 'The spec, section 2',
+    decided: '2026-11-22',
+  },
+  {
+    id: 3,
+    decision: 'Recall has no approval mechanism. Approval belongs to the client, and only a change to curated knowledge must meet its card',
+    why: "The spec gives the limit the owner accepted, that this guards against an overeager agent and not a hostile client, and no reason beyond it. Turned down: the requirements note's change sets.",
+    source: 'The spec, section 2',
+    decided: '2026-11-22',
+  },
+  {
+    id: 2,
+    decision: 'An idea is a kind of note, and a project is an area',
+    why: "Not recorded. Turned down: the requirements note's Idea and Workspace as things of their own.",
+    source: 'The spec, section 2',
+    decided: '2026-11-22',
+  },
+  { id: 1, decision: 'Tasks are lean: no recurrence, no priority, no subtasks', why: 'Not recorded.', source: 'The spec, section 2', decided: '2026-11-22' },
+]
+export const DECISIONS: Decision[] = DRAWN.map(({ replacing: _, ...d }) => ({
+  ref: `knowledge:${d.id}`,
+  area: 'recallsynapsis',
+  state: DRAWN.some((x) => x.replacing === d.id) ? 'replaced' : 'stands',
+  replaces: null,
+  replaced_by: null,
+  ...recorded,
+  ...d,
+}))
+for (const d of DRAWN.filter((x) => x.replacing)) {
+  const [newer, older] = [DECISIONS.find((x) => x.id === d.id)!, DECISIONS.find((x) => x.id === d.replacing)!]
+  newer.replaces = { ref: older.ref, decision: older.decision, decided: older.decided }
+  older.replaced_by = { ref: newer.ref, decision: newer.decision, decided: newer.decided }
+}
+
+// The day GET /api/knowledge gives the harness: the decisions are of the days before it.
+export const DECIDED_TODAY = '2026-11-27'
+
+// GET /api/knowledge/{id} from decisions: d with the notes and tasks outside the trash that link to it.
+export const decisionOf = (d: Decision, notes: Note[], tasks: Task[]): Full => ({ ...d, linked_from: linking(d.ref, notes, tasks) })
+
+// GET /api/search from decisions, as the knowledge module answers it: every decision, standing or replaced, whose line,
+// why or source holds q, in any case, and in the area asked for, if one is.
+export function searchDecisions(decisions: Decision[], q: string, area: string | null): Hit[] {
+  const has = (d: Decision) => [d.decision, d.why, d.source].join('\n').toLowerCase().includes(q.toLowerCase())
+  return decisions
+    .filter((d) => has(d) && (!area || d.area === area))
+    .map((d) => ({ ref: d.ref, kind: 'decision', title: d.decision, snippet: d.why, area: d.area, state: d.state, changed_at: d.changed_at }))
 }

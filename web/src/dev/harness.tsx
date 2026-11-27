@@ -11,7 +11,7 @@ import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Wording } from '../pages/Projects/Brief.tsx'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
+import { AREAS, DECIDED_TODAY, DECISIONS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, decisionOf, full, history, listNotes, listed, note, onToday, refs, searchDecisions, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -37,6 +37,8 @@ const session = {
   modules: query.get('modules')?.split(',') ?? SESSION.modules,
   last_backup: (query.get('backup') ?? '') in backups ? backups[query.get('backup')!] : SESSION.last_backup,
 }
+// A link to a decision leads nowhere while knowledge is off, as the server resolves it.
+const decisions = session.modules.includes('knowledge') && !empty ? DECISIONS : []
 
 // push=off, on, failed, home, refused or none makes this browser one with Web Push that is off, on, or on with its last
 // notification failed, an iPhone's Safari tab, one that refuses notifications, or one with no Web Push. Two other
@@ -146,11 +148,18 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   if (path.startsWith('/api/areas/')) return answerArea(method, path, body)
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
   if (path.startsWith('/api/push')) return answerPush(method, url)
+  if (path.startsWith('/api/knowledge') && session.modules.includes('knowledge')) return answerKnowledge(method, url)
   if (path === '/api/tasks/notify') return answerNotify(method, body)
   if (path.startsWith('/api/tasks')) {
-    const [status, answered] = answerTasks(tasks, method, url, body, NOW, (t) =>
-      tell(t ? { module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 } : { module: 'tasks', kind: 'trash', id: 0, area: 0 }),
+    const [status, answered] = answerTasks(
+      tasks,
+      method,
+      url,
+      body,
+      NOW,
+      (t) => tell(t ? { module: 'tasks', kind: 'task', id: t.id, area: areas.find((a) => a.slug === t.area)?.id ?? 0 } : { module: 'tasks', kind: 'trash', id: 0, area: 0 }),
       notes,
+      decisions,
     )
     return status === 204 ? new Response(null, { status }) : json(answered, status)
   }
@@ -164,10 +173,23 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
     const groups = [
       { module: 'notes', hits: searchNotes(notes, q, url.searchParams.get('area')) },
       { module: 'tasks', hits: searchTasks(tasks, q, url.searchParams.get('area')) },
+      { module: 'knowledge', hits: searchDecisions(decisions, q, url.searchParams.get('area')) },
     ]
     return json({ groups: groups.filter((g) => session.modules.includes(g.module) && g.hits.length) })
   }
   if (path === '/api/areas') return json({ areas: areas.filter((a) => url.searchParams.get('archived') === 'true' || !a.archived) })
+  return json({ error: 'not found' }, 404)
+}
+
+// The knowledge routes that read, as the server answers them: a project's decisions, and one in full.
+function answerKnowledge(method: string, url: URL): Response {
+  const d = decisions.find((x) => url.pathname === `/api/knowledge/${x.id}`)
+  if (method === 'GET' && d) return json(decisionOf(d, notes, tasks))
+  if (method === 'GET' && url.pathname === '/api/knowledge') {
+    const area = areas.find((a) => [a.slug, a.name.toLowerCase()].includes(url.searchParams.get('area')?.toLowerCase() ?? ''))
+    if (!area) return json({ error: 'not found' }, 404)
+    return json({ decisions: decisions.filter((x) => x.area === area.slug), today: DECIDED_TODAY })
+  }
   return json({ error: 'not found' }, 404)
 }
 
@@ -230,7 +252,7 @@ const historyOf = (n: Note) => versions.get(n.id) ?? versions.set(n.id, history(
 function answerNotes(method: string, url: URL, body: Record<string, unknown>, file?: Blob): Response | Promise<Response> {
   const told = (n: Note) => {
     tell({ module: 'notes', kind: 'note', id: n.id, area: areas.find((a) => a.slug === n.area)?.id ?? 0 })
-    return full(notes, n, tasks)
+    return full(notes, n, tasks, decisions)
   }
   const changed = (n: Note) => {
     Object.assign(n, { revision: n.revision + 1, source: 'web', changed_at: new Date().toISOString() })
@@ -289,7 +311,7 @@ function answerNotes(method: string, url: URL, body: Record<string, unknown>, fi
     if (method === 'POST' && part === 'restore') return json(told(Object.assign(n, { trashed_at: null })))
     return json({ error: 'not found' }, 404)
   }
-  if (method === 'GET') return json(full(notes, n, tasks))
+  if (method === 'GET') return json(full(notes, n, tasks, decisions))
   if (method === 'DELETE') {
     if (!n.trashed_at) return json({ error: `note ${n.id} is not in the trash, and only a note in the trash is deleted: conflict` }, 409)
     notes.splice(notes.indexOf(n), 1)

@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import { nameOf } from '../../api/areas.ts'
 import type { Area } from '../../api/types.ts'
+import { day } from '../../components/dates.ts'
 import { from } from '../../components/history.ts'
 import { ago } from '../../components/time.ts'
 import type { Now, Row } from './api.ts'
-import { day, period } from './dates.ts'
+import { period } from './dates.ts'
 import type { Group } from './views.ts'
 
 // The name of a task's project, or nothing for a task of the personal area.

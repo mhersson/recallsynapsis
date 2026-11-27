@@ -3,8 +3,7 @@ import { areaOf } from '../../api/areas.ts'
 import { ApiError, api, message } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
 import Field from '../../components/Field.tsx'
-import { from } from '../../components/history.ts'
-import { ago } from '../../components/time.ts'
+import { cameIn } from '../../components/history.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useUnsaved } from '../../components/useUnsaved.tsx'
 
@@ -40,7 +39,7 @@ export default function AreaForm({ area: given, dialog, onSaved, onCancel }: Pro
       const now = conflict && 'brief_revision' in body ? await areaOf(area!.id).catch(() => undefined) : undefined
       if (now && now.brief_revision !== revision) {
         setRevision(now.brief_revision)
-        setRefused(`Revision ${now.brief_revision} of the brief came in ${ago(now.brief_changed_at!)}, ${from(now.brief_changed_by)}, while you were editing. Save again to save yours over it.`)
+        setRefused(`Revision ${now.brief_revision} of the brief came in ${cameIn(now.brief_changed_at!, now.brief_changed_by)}, while you were editing. Save again to save yours over it.`)
       } else setRefused(conflict && 'name' in body ? `A project named ${n} exists already.` : message(err))
       setSending(false)
     }

@@ -17,7 +17,7 @@ import AreaPage from './pages/Projects/AreaPage.tsx'
 import Projects from './pages/Projects/Projects.tsx'
 import Search from './pages/Search/Search.tsx'
 import Settings from './pages/Settings/Settings.tsx'
-import { ActionContext, ModulesContext, SessionContext } from './session.ts'
+import { ActionContext, AreaShownContext, ModulesContext, SessionContext } from './session.ts'
 import './App.css'
 
 // The page of a module's action, as a phone opens it.
@@ -40,6 +40,7 @@ function Frame() {
   const area = Number(useMatch('/areas/:id')?.params.id) || undefined
   // The open dialog of the action keeps the area it was opened with.
   const [acting, setActing] = useState<{ area?: number }>()
+  const [shown, setShown] = useState<number>()
   // Read whenever the stream opens or drops: a restart may have switched a module, and an ended session answers 401, which opens sign-in.
   useEffect(() => {
     api<Session>('GET', '/session').then(setSession, () => {})
@@ -59,30 +60,32 @@ function Frame() {
     <SessionContext value={session}>
       <ModulesContext value={on}>
         <ActionContext value={opener ?? null}>
-          <div className={narrow ? 'frame narrow' : 'frame'}>
-            {!narrow && <SideBar modules={on} action={action} onAction={() => setActing({ area })} live={live} />}
-            <main className="main">
-              <Routes>
-                <Route path="/projects" element={<Projects />} />
-                <Route path="/areas/new" element={<Projects making />} />
-                <Route path="/areas/:id" element={<AreaPage />} />
-                <Route path="/search" element={<Search />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/more" element={<More />} />
-                {on.flatMap((m) => m.routes).map((r) => (
-                  <Route key={r.path} path={r.path} element={r.element} />
-                ))}
-                {action && <Route path={action.to} element={<ActionPage action={action} home={home} />} />}
-                <Route path="*" element={<Navigate to={home} replace />} />
-              </Routes>
-            </main>
-            {narrow && <PhoneTabs modules={on} action={action} area={area} />}
-            {acting && action && (
-              <Dialog title={action.label} onClose={() => setActing(undefined)}>
-                <action.form dialog area={acting.area} onClose={() => setActing(undefined)} />
-              </Dialog>
-            )}
-          </div>
+          <AreaShownContext value={setShown}>
+            <div className={narrow ? 'frame narrow' : 'frame'}>
+              {!narrow && <SideBar modules={on} action={action} onAction={() => setActing({ area })} live={live} area={shown} />}
+              <main className="main">
+                <Routes>
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/areas/new" element={<Projects making />} />
+                  <Route path="/areas/:id" element={<AreaPage />} />
+                  <Route path="/search" element={<Search />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/more" element={<More />} />
+                  {on.flatMap((m) => m.routes).map((r) => (
+                    <Route key={r.path} path={r.path} element={r.element} />
+                  ))}
+                  {action && <Route path={action.to} element={<ActionPage action={action} home={home} />} />}
+                  <Route path="*" element={<Navigate to={home} replace />} />
+                </Routes>
+              </main>
+              {narrow && <PhoneTabs modules={on} action={action} area={area} />}
+              {acting && action && (
+                <Dialog title={action.label} onClose={() => setActing(undefined)}>
+                  <action.form dialog area={acting.area} onClose={() => setActing(undefined)} />
+                </Dialog>
+              )}
+            </div>
+          </AreaShownContext>
         </ActionContext>
       </ModulesContext>
     </SessionContext>
