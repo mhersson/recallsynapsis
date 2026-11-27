@@ -91,11 +91,7 @@ function View({ id }: { id: number }) {
           {tabs.map((t) => (
             <Link key={t.name} to={`/areas/${id}?tab=${t.name}`} aria-current={t === tab ? 'page' : undefined}>
               {t.label}
-              {t.count && (
-                <span className="dim">
-                  <t.count area={area} />
-                </span>
-              )}
+              {t.count && <t.count area={area} />}
             </Link>
           ))}
         </nav>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
+import Count from '../../components/Count.tsx'
 import { back } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import AddLine from './AddLine.tsx'
@@ -45,7 +46,7 @@ export default function AreaTasks({ area, first }: { area: Area; first: boolean 
 
   const head = (
     <>
-      Tasks <span className="dim">{open.length}</span>
+      Tasks <Count>{open.length}</Count>
     </>
   )
   const body = (
@@ -68,7 +69,7 @@ export default function AreaTasks({ area, first }: { area: Area; first: boolean 
       {groups.map(([g, ts]) => (
         <section key={g} data-group={g}>
           <h3 className="tgrp">
-            {groupNames[g]} <span className="dim">{ts.length}</span>
+            {groupNames[g]} <Count>{ts.length}</Count>
           </h3>
           <div className="list">
             {ts.map((t) => (

@@ -8,9 +8,10 @@ import { FakeEventSource, fakeServer, json, narrow, type Call } from '../../test
 // counts the area's id and shows a region named by the tab and the id, with a page of its own under /facts.
 vi.mock('../../modules/registry.ts', async () => {
   const { createElement } = await import('react')
+  const { default: Count } = await import('../../components/Count.tsx')
   const section = ({ area }: { area: Area }) => createElement('section', { 'aria-label': String(area.id) })
   const body = ({ area }: { area: Area }) => createElement('section', { 'aria-label': `facts ${area.id}` })
-  const count = ({ area }: { area: Area }) => (area.id === 2 ? area.id : null)
+  const count = ({ area }: { area: Area }) => createElement(Count, null, area.id === 2 ? area.id : 0)
   const tab = { name: 'facts', label: 'Facts', count, body, at: '/facts' }
   return {
     modules: [
@@ -360,11 +361,11 @@ test('a tab carries the number its module counts, and none when it counts nothin
   narrow(false)
   server([area(1, 'personal', 'Personal'), area(2, 'project', 'garden'), area(3, 'project', 'shed')], ['facts'])
   const counted = await open('/areas/2')
-  expect(tabLinks()[1].querySelector('.dim')).toHaveTextContent('2')
+  expect(tabLinks()[1].querySelector('.count')).toHaveTextContent('2')
   counted.unmount()
 
   await open('/areas/3')
-  expect(tabLinks()[1].querySelector('.dim')).toBeEmptyDOMElement()
+  expect(tabLinks()[1]).not.toHaveTextContent(/\d/)
 })
 
 test('with the module off, no page shows tabs', async () => {

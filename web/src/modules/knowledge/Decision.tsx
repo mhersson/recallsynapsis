@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { useAreas } from '../../api/areas.ts'
 import { api, message, useGet } from '../../api/client.ts'
 import type { Area } from '../../api/types.ts'
+import Count from '../../components/Count.tsx'
 import { day } from '../../components/dates.ts'
 import Dialog from '../../components/Dialog.tsx'
 import { from, type Entry } from '../../components/history.ts'
@@ -207,7 +208,7 @@ function View({ id }: { id: number }) {
         )}
         <details className="sect" open={history} onToggle={(e) => setHistory(e.currentTarget.open)}>
           <summary>
-            History <span className="dim">{count(d.revision)}</span>
+            History <Count>{count(d.revision)}</Count>
           </summary>
           {history && <History d={d} onRead={setReading} />}
         </details>

@@ -247,10 +247,6 @@
   padding: 16px 0 6px;
 }
 
-.tgrp .dim {
-  color: inherit;
-}
-
 .task-row:hover,
 .task-row.on {
   background: var(--bg1);

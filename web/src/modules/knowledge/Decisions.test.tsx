@@ -64,13 +64,13 @@ test('Decisions carries the number of those that stand, and none when none does'
   narrow(false)
   const calls = server(garden())
   const counted = await open('/areas/2')
-  await waitFor(() => expect(tabs()!.querySelector('.dim')).toHaveTextContent('2'))
+  await waitFor(() => expect(tabs()!.querySelector('.count')).toHaveTextContent('2'))
   counted.unmount()
 
   await open('/areas/3')
   await waitFor(() => expect(knowledge(calls).map((c) => c.path)).toContain('/api/knowledge?area=shed'))
   await act(async () => {})
-  expect(tabs()!.querySelector('.dim')).toBeEmptyDOMElement()
+  expect(tabs()).not.toHaveTextContent(/\d/)
 })
 
 test('the table lists those that stand, the newest first, and the replaced beneath under their count, folded', async () => {
@@ -80,7 +80,7 @@ test('the table lists those that stand, the newest first, and the replaced benea
   await waitFor(() => expect(rows(standing())).toEqual(['/decisions/7', '/decisions/6']))
   expect(standing().tagName).toBe('TABLE')
   expect(fold().open).toBe(false)
-  expect(fold().querySelector('summary .dim')).toHaveTextContent('1')
+  expect(fold().querySelector('summary .count')).toHaveTextContent('1')
   expect(rows(fold())).toEqual(['/decisions/5'])
 })
 
@@ -141,7 +141,7 @@ test('a decision added, mended or deleted elsewhere shows on the tab without a r
   decisions.unshift(decision(8, '2026-11-27'))
   await told(8)
   await waitFor(() => expect(rows(standing())).toEqual(['/decisions/8', '/decisions/7', '/decisions/6']))
-  expect(tabs()!.querySelector('.dim')).toHaveTextContent('3')
+  expect(tabs()!.querySelector('.count')).toHaveTextContent('3')
 
   six.decision = 'mended'
   await told(6)

@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { task } from '../../dev/fixtures.ts'
+import { listNotes, note, task } from '../../dev/fixtures.ts'
 import { open } from '../../test-app.tsx'
 import { json, narrow, type Call } from '../../test-server.ts'
 import type { Task } from './api.ts'
@@ -42,6 +42,22 @@ test('a project’s page shows its tasks alone, each once, grouped as the views 
   expect(within(rowOf('today')).getByRole('link')).toHaveAttribute('href', '/tasks/2?area=garden')
   expect(part().querySelector('.afoot a')).toHaveAttribute('href', '/tasks?view=done&area=garden')
   expect(writes(calls)).toEqual([])
+})
+
+test('an area’s Tasks, Notes and Ideas carry their number, and none when they hold nothing', async () => {
+  narrow(false)
+  const notes = [note(1, 10, { area: 'garden' }), note(2, 20, { area: 'garden' })]
+  const answer = (c: Call) => (c.path.startsWith('/api/notes') ? json(listNotes(notes, new URL(c.path, 'http://here').searchParams)) : undefined)
+  const heads = () => [...screen.getByRole('main').querySelectorAll('.area-parts .part')].map((h) => h.querySelector('.count')?.textContent ?? '')
+  tasksServer(tasks(), monday, answer, ['tasks', 'notes'])
+  const project = await open('/areas/2')
+  await waitFor(() => expect(heads()).toEqual(['4', '2', '']))
+  project.unmount()
+
+  tasksServer([], monday, answer, ['tasks', 'notes'])
+  await open('/areas/1')
+  await waitFor(() => expect(heads()).toHaveLength(3))
+  expect(screen.getByRole('main').querySelector('.area-parts')).not.toHaveTextContent(/\d/)
 })
 
 test('the add line adds a task to sort to the project, and a ring marks a task done in place, struck through', async () => {

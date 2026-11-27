@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, message } from '../../api/client.ts'
 import { nameOf, useAreas } from '../../api/areas.ts'
+import Count from '../../components/Count.tsx'
 import { day } from '../../components/dates.ts'
 import { TrashIcon } from '../../components/icons.tsx'
 import ListEnd from '../../components/ListEnd.tsx'
@@ -156,7 +157,7 @@ export default function Tasks() {
       ts.length > 0 ? (
         <section key={g} data-group={g}>
           <h2 className="tgrp">
-            {groupNames[g]} <span className="dim">{ts.length}</span>
+            {groupNames[g]} <Count>{ts.length}</Count>
           </h2>
           <div className="list">{ts.map((t) => row(t, line(t, g, now, areas, !!area)))}</div>
         </section>

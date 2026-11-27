@@ -1,4 +1,5 @@
 import type { Area } from '../../api/types.ts'
+import Count from '../../components/Count.tsx'
 import ListEnd from '../../components/ListEnd.tsx'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useList, type List } from './api.ts'
@@ -24,7 +25,7 @@ export default function AreaNotes({ area, first }: { area: Area; first: boolean 
   const part = (title: string, to: (id: number) => string, list: List, more?: () => void) => {
     const head = (
       <>
-        {title} <span className="dim">{list.total}</span>
+        {title} <Count>{list.total}</Count>
       </>
     )
     const body = list.notes.length > 0 && (

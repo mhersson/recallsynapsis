@@ -38,9 +38,9 @@ export type Maker = {
 // and the tag a Links row shows after it, if any.
 export type Item = { to: string; mark: string; state?: string; tag?: string }
 
-// A tab of a project's page, after Activity, which holds the modules' sections: its name in the address, its label, the
-// quiet number after the label, which renders nothing when there is none, what it shows, and the path the module's own
-// pages are under, which keep Projects current on a phone, or More when Projects has no tab.
+// A tab of a project's page, after Activity, which holds the modules' sections: its name in the address, its label, what
+// draws its Count after the label, what it shows, and the path the module's own pages are under, which keep Projects
+// current on a phone, or More when Projects has no tab.
 export type Tab = { name: string; label: string; count?: ComponentType<{ area: Area }>; body: ComponentType<{ area: Area }>; at: string }
 
 // A part of the Settings page: its anchor, its title and what it holds.
