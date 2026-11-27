@@ -84,15 +84,12 @@ func (s *server) mcp() http.Handler {
 		module.NewTool("list_areas", "List the owner's areas, the personal area and the projects, "+
 			"each with its slug, its name, its kind and the first paragraph of its brief, which says what it is. "+
 			"With area, a slug or a name, it gives that one area with its whole brief, in Markdown, and brief_revision, which update_area needs. "+
-			"Read a project's whole brief when a discussion of the project begins. "+
-			"To search one area alone, give its slug or name as the area of search.",
+			"When get_knowledge is not listed, read a project's whole brief here when a discussion of the project begins.",
 			module.Read, s.listAreas),
 		module.NewTool("search", "Search what is kept, in every area or in one. "+
 			"query is the text to find; part of a word is enough, so a stem or one part of a compound word finds the whole word. "+
-			"area, when given, keeps the search to one area: its slug or its name, in any case, as list_areas gives them. "+
-			"The hits come grouped by the module that keeps them, such as notes, the best first in each group. "+
-			"Each hit has its ref (module:id, such as notes:42), its kind, its title, a snippet, the slug of its area, "+
-			"its state and when it last changed.",
+			"area keeps the search to one project or area, by its slug or name as list_areas gives them. "+
+			"Each hit has a ref, such as notes:42, to read it by.",
 			module.Read, s.searchTool),
 		module.NewTool("update_area", "Replace the brief of one of the owner's areas, and only on the owner's word: "+
 			"show them the whole new text in the conversation first, and call this once they have agreed to it. "+
