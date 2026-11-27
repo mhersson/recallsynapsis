@@ -217,12 +217,16 @@ func TestAChangeReachesTheOpenStreamsOfItsUserAlone(t *testing.T) {
 	require.Equal(t, http.StatusOK, code)
 
 	personal := f.personal(t, cookie)
-	code, _ = f.json(t, http.MethodPatch, areaPath(t, personal), `{"description":"Mine."}`, cookie, csrf)
+	code, _ = f.json(t, http.MethodPatch, areaPath(t, personal), `{"brief":"Mine.","brief_revision":0}`, cookie, csrf)
+	require.Equal(t, http.StatusOK, code)
+
+	code, _ = f.json(t, http.MethodPost, areaPath(t, personal)+"/revisions/1/restore", "", cookie, csrf)
 	require.Equal(t, http.StatusOK, code)
 
 	for _, s := range []*stream{web, phone} {
 		s.expect(t, areaEvent(t, garden))
 		s.expect(t, areaEvent(t, garden))
+		s.expect(t, areaEvent(t, personal))
 		s.expect(t, areaEvent(t, personal))
 	}
 
@@ -262,14 +266,16 @@ func TestARefusedOrFailedChangeTellsOfNothing(t *testing.T) {
 		{http.MethodPost, "/api/areas", `{"name":""}`, []string{cookie, csrf}, http.StatusBadRequest},
 		{http.MethodPatch, personal, `{"name":"Home"}`, []string{cookie, csrf}, http.StatusBadRequest},
 		{http.MethodPatch, "/api/areas/999999", `{"archived":true}`, []string{cookie, csrf}, http.StatusNotFound},
-		{http.MethodPatch, areaPath(t, garden), `{"archived":true}`, []string{grace}, http.StatusNotFound},
+		{http.MethodPatch, areaPath(t, garden), `{"archived":true}`, []string{grace}, http.StatusForbidden},
+		{http.MethodPatch, areaPath(t, garden), `{"brief":"Stale.","brief_revision":7}`, []string{cookie, csrf}, http.StatusConflict},
+		{http.MethodPost, areaPath(t, garden) + "/revisions/1/restore", "", []string{cookie, csrf}, http.StatusNotFound},
 	} {
 		code, got := f.json(t, tt.method, tt.target, tt.body, tt.headers...)
 		assert.Equal(t, tt.status, code, tt)
 		refusal(t, got)
 	}
 
-	code, _ = f.json(t, http.MethodPatch, areaPath(t, garden), `{"description":"The beds."}`, cookie, csrf)
+	code, _ = f.json(t, http.MethodPatch, areaPath(t, garden), `{"brief":"The beds.","brief_revision":0}`, cookie, csrf)
 	require.Equal(t, http.StatusOK, code)
 	s.expect(t, areaEvent(t, garden))
 
@@ -413,7 +419,7 @@ func TestAStreamNobodyReadsHoldsNoWriterUpAndEnds(t *testing.T) {
 		f.hub.Changed(ctx, module.Change{Module: "core", Kind: "area", ID: 1, Area: 1})
 	}
 
-	code, _ := f.json(t, http.MethodPatch, personal, `{"description":"Mine."}`, cookie, csrf)
+	code, _ := f.json(t, http.MethodPatch, personal, `{"brief":"Mine.","brief_revision":0}`, cookie, csrf)
 	require.Equal(t, http.StatusOK, code)
 
 	// Its page would miss that change, so the stream ends once it has sent what

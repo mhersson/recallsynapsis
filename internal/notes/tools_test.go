@@ -11,6 +11,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mhersson/recallsynapsis/internal/module"
 )
 
 // use calls the tool through cs, which must answer, and decodes its answer.
@@ -94,7 +96,7 @@ func TestACaptureIsFiledWhereTheOwnerSaid(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	cabin, err := f.core.CreateProject(t.Context(), f.ada, "Hytte og båt", "")
+	cabin, err := f.core.CreateProject(t.Context(), module.Caller{UserID: f.ada}, "Hytte og båt", "")
 	require.NoError(t, err)
 
 	cs := f.client(t, f.laptop)

@@ -181,7 +181,7 @@ func TestMCPToolsActForTheTokensUser(t *testing.T) {
 	f.load(t, map[string]any{"enabled": true})
 	cookie := f.signIn(t)
 
-	code, _ := f.json(t, http.MethodPost, "/api/areas", `{"name":"Garden","description":"Beds and seeds"}`, cookie, csrf)
+	code, _ := f.json(t, http.MethodPost, "/api/areas", `{"name":"Garden","brief":"Beds and seeds.\n\nAnd the greenhouse."}`, cookie, csrf)
 	require.Equal(t, http.StatusCreated, code)
 
 	code, shed := f.json(t, http.MethodPost, "/api/areas", `{"name":"Shed"}`, cookie, csrf)
@@ -193,9 +193,9 @@ func TestMCPToolsActForTheTokensUser(t *testing.T) {
 	cs := f.client(t, f.token(t, "laptop", "write"))
 
 	assert.Equal(t, map[string]any{"areas": []any{
-		map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "description": ""},
-		map[string]any{"slug": "garden", "name": "Garden", "kind": "project", "description": "Beds and seeds"},
-	}}, call(t, cs, "list_areas", nil), "the areas not archived, with no id and no archived mark")
+		map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": ""},
+		map[string]any{"slug": "garden", "name": "Garden", "kind": "project", "brief": "Beds and seeds.\n\nAnd the greenhouse."},
+	}}, call(t, cs, "list_areas", nil), "the areas not archived, each brief whole, with no id and no archived mark")
 
 	beds := call(t, cs, "add_item", map[string]any{"title": "Raised beds", "area": "GARDEN"})
 	assert.Equal(t, []any{map[string]any{"module": "fake", "hits": []any{map[string]any{
@@ -245,7 +245,7 @@ func TestMCPASecondUsersAreasAndHitsNeverReachTheFirst(t *testing.T) {
 	require.NoError(t, f.store.QueryRowContext(t.Context(), `INSERT INTO users (name, created_at) VALUES ('grace', 0) RETURNING id`).Scan(&grace))
 	require.NoError(t, f.core.EnsurePersonal(t.Context(), grace))
 
-	_, err := f.core.CreateProject(t.Context(), grace, "Orchard", "")
+	_, err := f.core.CreateProject(t.Context(), module.Caller{UserID: grace}, "Orchard", "")
 	require.NoError(t, err)
 
 	_, text, err := f.auth.CreateToken(t.Context(), grace, "laptop", "write")
@@ -257,7 +257,7 @@ func TestMCPASecondUsersAreasAndHitsNeverReachTheFirst(t *testing.T) {
 	mine := f.client(t, f.token(t, "laptop", "write"))
 	ref := call(t, mine, "add_item", map[string]any{"title": "Beds of ada", "area": "personal"})["ref"]
 
-	assert.Equal(t, []any{map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "description": ""}},
+	assert.Equal(t, []any{map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": ""}},
 		call(t, mine, "list_areas", nil)["areas"])
 
 	groups := call(t, mine, "search", map[string]any{"query": "beds"})["groups"].([]any)

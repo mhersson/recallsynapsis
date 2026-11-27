@@ -30,15 +30,15 @@ func (s *server) areas(w http.ResponseWriter, r *http.Request) error {
 
 func (s *server) createArea(w http.ResponseWriter, r *http.Request) error {
 	var in struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
+		Name  string `json:"name"`
+		Brief string `json:"brief"`
 	}
 
 	if err := module.Decode(w, r, &in); err != nil {
 		return err
 	}
 
-	a, err := s.Core.CreateProject(r.Context(), caller(r).UserID, in.Name, in.Description)
+	a, err := s.Core.CreateProject(r.Context(), caller(r), in.Name, in.Brief)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (s *server) createArea(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *server) changeArea(w http.ResponseWriter, r *http.Request) error {
-	id, err := pathID(r)
+	id, err := pathID(r, "id")
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (s *server) changeArea(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	a, err := s.Core.ChangeArea(r.Context(), caller(r).UserID, id, in)
+	a, err := s.Core.ChangeArea(r.Context(), caller(r), id, in)
 	if err != nil {
 		return err
 	}
@@ -69,6 +69,67 @@ func (s *server) changeArea(w http.ResponseWriter, r *http.Request) error {
 	module.Reply(w, http.StatusOK, a)
 
 	return nil
+}
+
+func (s *server) areaHistory(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+
+	out, err := s.Core.History(r.Context(), caller(r).UserID, id)
+	if err != nil {
+		return err
+	}
+
+	module.Reply(w, http.StatusOK, map[string][]core.Entry{"revisions": out})
+
+	return nil
+}
+
+func (s *server) areaRevision(w http.ResponseWriter, r *http.Request) error {
+	id, rev, err := revisionPath(r)
+	if err != nil {
+		return err
+	}
+
+	v, err := s.Core.Revision(r.Context(), caller(r).UserID, id, rev)
+	if err != nil {
+		return err
+	}
+
+	module.Reply(w, http.StatusOK, v)
+
+	return nil
+}
+
+func (s *server) restoreArea(w http.ResponseWriter, r *http.Request) error {
+	id, rev, err := revisionPath(r)
+	if err != nil {
+		return err
+	}
+
+	a, err := s.Core.Restore(r.Context(), caller(r), id, rev)
+	if err != nil {
+		return err
+	}
+
+	s.areaChanged(r, a)
+	module.Reply(w, http.StatusOK, a)
+
+	return nil
+}
+
+// revisionPath reads the area's id and the revision in the path.
+func revisionPath(r *http.Request) (int64, int64, error) {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	rev, err := pathID(r, "revision")
+
+	return id, rev, err
 }
 
 // areaChanged tells the caller's open pages that the area a changed: it is

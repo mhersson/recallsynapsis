@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,16 +61,20 @@ func TestAreas(t *testing.T) {
 	personal, ok := list[0].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, map[string]any{
-		"id": personal["id"], "kind": "personal", "name": "Personal", "slug": "personal", "description": "", "archived": false,
+		"id": personal["id"], "kind": "personal", "name": "Personal", "slug": "personal",
+		"brief": "", "brief_revision": float64(0), "brief_changed_at": nil, "brief_changed_by": "", "archived": false,
 	}, personal)
 
-	code, garden := f.json(t, http.MethodPost, "/api/areas", `{"name":" Garden ","description":"The beds."}`, cookie, csrf)
+	code, garden := f.json(t, http.MethodPost, "/api/areas", `{"name":" Garden ","brief":"The beds."}`, cookie, csrf)
 	require.Equal(t, http.StatusCreated, code)
+	assert.NotEmpty(t, garden["brief_changed_at"])
 	assert.Equal(t, map[string]any{
-		"id": garden["id"], "kind": "project", "name": "Garden", "slug": "garden", "description": "The beds.", "archived": false,
+		"id": garden["id"], "kind": "project", "name": "Garden", "slug": "garden",
+		"brief": "The beds.", "brief_revision": float64(1), "brief_changed_at": garden["brief_changed_at"], "brief_changed_by": "web",
+		"archived": false,
 	}, garden)
 
-	code, got = f.json(t, http.MethodPost, "/api/areas", `{"name":"gARDEN","description":""}`, cookie, csrf)
+	code, got = f.json(t, http.MethodPost, "/api/areas", `{"name":"gARDEN","brief":""}`, cookie, csrf)
 	assert.Equal(t, http.StatusConflict, code, "a second project with the same name in any case")
 	refusal(t, got)
 
@@ -93,9 +98,9 @@ func TestAreas(t *testing.T) {
 		refusal(t, got)
 	}
 
-	code, got = f.json(t, http.MethodPatch, areaPath(t, personal), `{"description":"Mine."}`, cookie, csrf)
+	code, got = f.json(t, http.MethodPatch, areaPath(t, personal), `{"brief":"Mine.","brief_revision":0}`, cookie, csrf)
 	require.Equal(t, http.StatusOK, code)
-	assert.Equal(t, "Mine.", got["description"], "the personal area's description can change")
+	assert.Equal(t, "Mine.", got["brief"], "the personal area's brief can change")
 	assert.Equal(t, "Personal", got["name"])
 
 	code, got = f.json(t, http.MethodPatch, areaPath(t, garden), `{"archived":true}`, cookie, csrf)
@@ -122,6 +127,77 @@ func TestAreas(t *testing.T) {
 	}
 }
 
+func TestTheBriefsRevisions(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, "https://recall.example.org")
+	cookie := f.signIn(t)
+
+	code, garden := f.json(t, http.MethodPost, "/api/areas", `{"name":"Garden","brief":"One."}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	path := areaPath(t, garden)
+
+	code, got := f.json(t, http.MethodPatch, path, `{"brief":"One.\n\nTwo.","brief_revision":1}`, cookie, csrf)
+	require.Equal(t, http.StatusOK, code)
+	assert.InDelta(t, 2, got["brief_revision"], 0)
+
+	for _, tt := range []struct {
+		body   string
+		status int
+	}{
+		{`{"brief":"Stale.","brief_revision":1}`, http.StatusConflict},
+		{`{"brief":"Blind."}`, http.StatusBadRequest},
+		{`{"brief":"` + strings.Repeat("a", 4001) + `","brief_revision":2}`, http.StatusBadRequest},
+	} {
+		code, got := f.json(t, http.MethodPatch, path, tt.body, cookie, csrf)
+		assert.Equal(t, tt.status, code, tt.body)
+		refusal(t, got)
+	}
+
+	code, got = f.json(t, http.MethodGet, path+"/revisions", "", cookie)
+	require.Equal(t, http.StatusOK, code)
+
+	list, ok := got["revisions"].([]any)
+	require.True(t, ok, got)
+	require.Len(t, list, 2, "a refused change writes no revision")
+
+	newest, ok := list[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, map[string]any{"revision": float64(2), "at": newest["at"], "by": "web", "said": "", "restored_from": nil}, newest)
+
+	code, got = f.json(t, http.MethodGet, path+"/revisions/1", "", cookie)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, map[string]any{"revision": float64(1), "at": got["at"], "by": "web", "said": "", "restored_from": nil, "brief": "One."}, got)
+
+	code, got = f.json(t, http.MethodPost, path+"/revisions/1/restore", "", cookie, csrf)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "One.", got["brief"])
+	assert.InDelta(t, 3, got["brief_revision"], 0)
+
+	code, got = f.json(t, http.MethodGet, path+"/revisions/3", "", cookie)
+	require.Equal(t, http.StatusOK, code)
+	assert.InDelta(t, 1, got["restored_from"], 0)
+
+	for _, target := range []string{path + "/revisions/9", path + "/revisions/x", "/api/areas/999999/revisions", "/api/areas/999999/revisions/1"} {
+		code, got := f.json(t, http.MethodGet, target, "", cookie)
+		assert.Equal(t, http.StatusNotFound, code, target)
+		refusal(t, got)
+	}
+
+	code, got = f.json(t, http.MethodPost, path+"/revisions/9/restore", "", cookie, csrf)
+	assert.Equal(t, http.StatusNotFound, code)
+	refusal(t, got)
+
+	code, got = f.json(t, http.MethodPost, "/api/areas", `{"name":"Shed"}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+	assert.InDelta(t, 0, got["brief_revision"], 0, "a project made with no brief is at 0")
+
+	code, got = f.json(t, http.MethodGet, areaPath(t, got)+"/revisions", "", cookie)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, map[string]any{"revisions": []any{}}, got, "and has no history")
+}
+
 func TestTheAccessOfTheAreaRoutes(t *testing.T) {
 	t.Parallel()
 
@@ -131,20 +207,46 @@ func TestTheAccessOfTheAreaRoutes(t *testing.T) {
 
 	assert.Equal(t, []string{"Personal"}, f.listed(t, "/api/areas", readToken), "a read token reads")
 
-	code, garden := f.json(t, http.MethodPost, "/api/areas", `{"name":"garden"}`, writeToken)
-	require.Equal(t, http.StatusCreated, code, "a write token writes")
+	code, garden := f.json(t, http.MethodPost, "/api/areas", `{"name":"garden","brief":"Beds."}`, writeToken)
+	require.Equal(t, http.StatusCreated, code, "a write token makes a project")
+	assert.Equal(t, "laptop", garden["brief_changed_by"])
 
-	for _, headers := range [][]string{{readToken}, {cookie}} {
-		code, got := f.json(t, http.MethodPost, "/api/areas", `{"name":"shed"}`, headers...)
-		assert.Equal(t, http.StatusForbidden, code)
-		refusal(t, got)
+	path := areaPath(t, garden)
 
-		code, got = f.json(t, http.MethodPatch, areaPath(t, garden), `{"archived":true}`, headers...)
+	for _, headers := range [][]string{{readToken}, {writeToken}} {
+		for _, target := range []string{path + "/revisions", path + "/revisions/1"} {
+			code, got := f.json(t, http.MethodGet, target, "", headers...)
+			assert.Equal(t, http.StatusOK, code, "a token reads the history: %s %v", target, got)
+		}
+	}
+
+	for _, headers := range [][]string{{readToken}, {writeToken}, {cookie}} {
+		if headers[0] == readToken {
+			code, got := f.json(t, http.MethodPost, "/api/areas", `{"name":"shed"}`, headers...)
+			assert.Equal(t, http.StatusForbidden, code)
+			refusal(t, got)
+		}
+
+		for _, body := range []string{`{"brief":"Theirs.","brief_revision":1}`, `{"name":"orchard"}`, `{"archived":true}`} {
+			code, got := f.json(t, http.MethodPatch, path, body, headers...)
+			assert.Equal(t, http.StatusForbidden, code, body)
+			refusal(t, got)
+		}
+
+		code, got := f.json(t, http.MethodPost, path+"/revisions/1/restore", "", headers...)
 		assert.Equal(t, http.StatusForbidden, code)
 		refusal(t, got)
 	}
 
-	assert.Equal(t, []string{"Personal", "garden"}, f.listed(t, "/api/areas", cookie), "nothing was made or archived")
+	code, got := f.json(t, http.MethodPost, "/api/areas", `{"name":"shed"}`, cookie)
+	assert.Equal(t, http.StatusForbidden, code, "the cookie needs the CSRF header to make one")
+	refusal(t, got)
+
+	assert.Equal(t, []string{"Personal", "garden"}, f.listed(t, "/api/areas", cookie), "nothing was made, renamed or archived")
+
+	code, got = f.json(t, http.MethodGet, path+"/revisions", "", cookie)
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, got["revisions"], 1, "and no brief was changed or restored")
 }
 
 func TestAUsersAreasAreInvisibleToAnother(t *testing.T) {
@@ -167,11 +269,16 @@ func TestAUsersAreasAreInvisibleToAnother(t *testing.T) {
 
 	assert.Equal(t, []string{"Personal"}, f.listed(t, "/api/areas?archived=true", grace))
 
-	code, got := f.json(t, http.MethodPatch, areaPath(t, garden), `{"name":"mine"}`, grace)
-	assert.Equal(t, http.StatusNotFound, code)
-	refusal(t, got)
+	code, _ = f.json(t, http.MethodPatch, areaPath(t, garden), `{"brief":"Mine.","brief_revision":0}`, ada, csrf)
+	require.Equal(t, http.StatusOK, code)
 
-	code, got = f.json(t, http.MethodPost, "/api/areas", `{"name":"Garden"}`, grace)
+	for _, target := range []string{areaPath(t, garden) + "/revisions", areaPath(t, garden) + "/revisions/1"} {
+		code, got := f.json(t, http.MethodGet, target, "", grace)
+		assert.Equal(t, http.StatusNotFound, code, target)
+		refusal(t, got)
+	}
+
+	code, got := f.json(t, http.MethodPost, "/api/areas", `{"name":"Garden"}`, grace)
 	require.Equal(t, http.StatusCreated, code)
 	assert.Equal(t, "garden", got["slug"], "names and slugs are unique per user")
 

@@ -146,18 +146,22 @@ Every package states its one responsibility in its package comment, and
   `owner`, and one check admits a bearer token, else the session cookie,
   refuses a cookie request that changes something without the
   `X-Recallsynapsis-CSRF` header, and puts the `module.Caller` in the
-  request's context. At `GET /api/events` one hub, which the area routes and
-  the modules' `Deps.Changed` tell, streams each change to the open streams of
-  the user whose change it is, and keeps none. A stream ends when it falls
+  request's context. A change of an area and the restore of its brief ask for
+  the session cookie alone, so no token renames, archives or changes the
+  brief of one over REST; a `write` token makes a project. At
+  `GET /api/events` one hub, which the area routes and the modules'
+  `Deps.Changed` tell, streams each change to the open streams of the user
+  whose change it is, and keeps none. A stream ends when it falls
   behind, rather than hold up a writer, when the server stops, and after an
   hour, so its access is checked again when it is opened again. At `/mcp` it
   serves MCP over streamable HTTP, stateless, with JSON responses and tools
-  only: the core's `list_areas` and `search`, each calling what its REST route
-  calls, and the tools of the modules switched on; two tools of one name stop
-  the start. The SDK's bearer check admits an API token alone, so a session
-  cookie is no authority there, and one guard refuses a call the token's
-  access does not cover before the tool runs, puts the token's `module.Caller`
-  in the tool's context, and gives an error as the line REST would answer.
+  only: the core's `list_areas`, which gives each area's brief whole, and
+  `search`, each calling what its REST route calls, and the tools of the
+  modules switched on; two tools of one name stop the start. The SDK's
+  bearer check admits an API token alone, so a session cookie is no authority
+  there, and one guard refuses a call the token's access does not cover
+  before the tool runs, puts the token's `module.Caller` in the tool's
+  context, and gives an error as the line REST would answer.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables
@@ -175,17 +179,24 @@ Every package states its one responsibility in its package comment, and
   with no table is off.
 - `internal/core`: keeps the areas: each user's one personal area, which keeps
   its name and is never archived, and their projects, each with a name unique
-  in any case and a slug made from it. It finds one of a user's areas by its
-  id, its slug or its name. It builds the feature modules the binary lists: it
-  decodes each one's table and checks its settings, on or off, refuses a
-  table no module has, a module route that is open and a module tool that
-  asks for neither read nor write, and applies every module's migrations, on
-  or off, after auth's and its own.
+  in any case and a slug made from it. Each area has a brief, Markdown of at
+  most 4,000 characters, kept in the column `description`, so an image rolled
+  back still reads the areas, and every wording of it is kept as a revision.
+  A change of the brief names the revision it was made from and is refused
+  once the brief has moved on, and it writes the next revision with what
+  changed it; a change of the name or the archived mark writes none. Any
+  revision can be read, and restoring one writes a new one that names it. It
+  finds one of a user's areas by its id, its slug or its name. It builds the
+  feature modules the binary lists: it decodes each one's table and checks its
+  settings, on or off, refuses a table no module has, a module route that is
+  open and a module tool that asks for neither read nor write, and applies
+  every module's migrations, on or off, after auth's and its own.
   Over the modules switched on it searches, grouping the hits by module,
   giving each its area's slug and failing on a hit outside the caller's
   areas, resolves a reference, unavailable rather than an error when no
   module switched on has the item, finds what links to one, and hands a
-  message for a user to each module that delivers. It owns the table `areas`.
+  message for a user to each module that delivers. It owns the tables `areas`
+  and `area_revisions`.
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
   settings and their check, migrations, routes, MCP tools, jobs, and
@@ -193,7 +204,8 @@ Every package states its one responsibility in its package comment, and
   reference, and the delivery of a message to a user; the `Deps` it is built
   with, among them `Notify`, which sends a message to a user through the
   modules switched on that deliver and returns nothing, and `PublicURL`; and
-  the shapes they exchange, among them the `Area` and the `Message`: a title,
+  the shapes they exchange, among them the `Area`, with its brief, the brief's
+  revision, when it changed and what changed it, and the `Message`: a title,
   a text, the path a tap opens and a tag, by which a newer message replaces
   an older one.
   `NewTool` makes a tool from a typed function, so no module touches the MCP

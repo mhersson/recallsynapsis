@@ -42,10 +42,15 @@ func (f *fixture) user(t *testing.T, name string) int64 {
 	return id
 }
 
+// web is the user as the session cookie signs them in.
+func web(user int64) module.Caller {
+	return module.Caller{UserID: user, Source: "web"}
+}
+
 func (f *fixture) project(t *testing.T, user int64, name string) module.Area {
 	t.Helper()
 
-	a, err := f.svc.CreateProject(t.Context(), user, name, "")
+	a, err := f.svc.CreateProject(t.Context(), web(user), name, "")
 	require.NoError(t, err)
 
 	return a
@@ -104,14 +109,14 @@ func TestAProjectNameIsUniqueInAnyCase(t *testing.T) {
 	f.project(t, ada, "Ærlig")
 
 	for _, name := range []string{"hytta", "HYTTA", " Hytta ", "ærlig", "personal"} {
-		_, err := f.svc.CreateProject(t.Context(), ada, name, "")
+		_, err := f.svc.CreateProject(t.Context(), web(ada), name, "")
 		require.ErrorIs(t, err, store.ErrConflict, name)
 	}
 
-	_, err := f.svc.ChangeArea(t.Context(), ada, hytta.ID, Change{Name: new("ÆRLIG")})
+	_, err := f.svc.ChangeArea(t.Context(), web(ada), hytta.ID, Change{Name: new("ÆRLIG")})
 	require.ErrorIs(t, err, store.ErrConflict)
 
-	renamed, err := f.svc.ChangeArea(t.Context(), ada, hytta.ID, Change{Name: new("hytta")})
+	renamed, err := f.svc.ChangeArea(t.Context(), web(ada), hytta.ID, Change{Name: new("hytta")})
 	require.NoError(t, err, "a project may change the case of its own name")
 	assert.Equal(t, "hytta", renamed.Name)
 	assert.Equal(t, hytta.Slug, renamed.Slug, "and keeps its slug")
@@ -132,10 +137,10 @@ func TestThePersonalAreaKeepsItsNameAndIsNeverArchived(t *testing.T) {
 		{Name: new("Home")},
 		{Name: new("personal")},
 		{Archived: new(true)},
-		{Name: new("Home"), Description: new("refused")},
-		{Archived: new(true), Description: new("refused")},
+		{Name: new("Home"), Brief: new("refused"), BriefRevision: new(int64(0))},
+		{Archived: new(true), Brief: new("refused"), BriefRevision: new(int64(0))},
 	} {
-		_, err := f.svc.ChangeArea(t.Context(), ada, p.ID, ch)
+		_, err := f.svc.ChangeArea(t.Context(), web(ada), p.ID, ch)
 		require.ErrorIs(t, err, store.ErrInvalid)
 	}
 
@@ -143,13 +148,21 @@ func TestThePersonalAreaKeepsItsNameAndIsNeverArchived(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, p, unchanged, "a refused change writes nothing")
 
-	got, err := f.svc.ChangeArea(t.Context(), ada, p.ID, Change{Name: new(" Personal "), Description: new(" mine "), Archived: new(false)})
+	got, err := f.svc.ChangeArea(t.Context(), web(ada), p.ID,
+		Change{Name: new(" Personal "), Brief: new(" mine "), BriefRevision: new(int64(0)), Archived: new(false)})
 	require.NoError(t, err, "its own name and staying unarchived change nothing")
-	assert.Equal(t, module.Area{ID: p.ID, Kind: personal, Name: "Personal", Slug: "personal", Description: "mine"}, got)
+	assert.Equal(t, module.Area{
+		ID: p.ID, Kind: personal, Name: "Personal", Slug: "personal",
+		Brief: "mine", BriefRevision: 1, BriefChangedAt: got.BriefChangedAt, BriefChangedBy: "web",
+	}, got)
+
+	restored, err := f.svc.Restore(t.Context(), web(ada), p.ID, 1)
+	require.NoError(t, err, "its brief is restored as a project's is")
+	assert.Equal(t, int64(2), restored.BriefRevision)
 
 	again, err := f.svc.Area(t.Context(), ada, p.ID)
 	require.NoError(t, err)
-	assert.Equal(t, got, again)
+	assert.Equal(t, restored, again)
 }
 
 func TestAnArchivedProjectIsLeftOutUnlessAskedForAndCanBeRestored(t *testing.T) {
@@ -160,17 +173,17 @@ func TestAnArchivedProjectIsLeftOutUnlessAskedForAndCanBeRestored(t *testing.T) 
 	garden := f.project(t, ada, "garden")
 	f.project(t, ada, "shed")
 
-	archived, err := f.svc.ChangeArea(t.Context(), ada, garden.ID, Change{Archived: new(true)})
+	archived, err := f.svc.ChangeArea(t.Context(), web(ada), garden.ID, Change{Archived: new(true)})
 	require.NoError(t, err)
 	assert.True(t, archived.Archived)
 
 	assert.Equal(t, []string{"Personal", "shed"}, f.names(t, ada, false))
 	assert.Equal(t, []string{"Personal", "garden", "shed"}, f.names(t, ada, true))
 
-	_, err = f.svc.CreateProject(t.Context(), ada, "Garden", "")
+	_, err = f.svc.CreateProject(t.Context(), web(ada), "Garden", "")
 	require.ErrorIs(t, err, store.ErrConflict, "an archived project keeps its name")
 
-	restored, err := f.svc.ChangeArea(t.Context(), ada, garden.ID, Change{Archived: new(false)})
+	restored, err := f.svc.ChangeArea(t.Context(), web(ada), garden.ID, Change{Archived: new(false)})
 	require.NoError(t, err)
 	assert.Equal(t, garden, restored)
 	assert.Equal(t, []string{"Personal", "garden", "shed"}, f.names(t, ada, false))
@@ -210,21 +223,21 @@ func TestTwoNamesThatGiveTheSameSlugGetDifferentSlugs(t *testing.T) {
 	first, err := f.svc.Find(t.Context(), ada, "garden")
 	require.NoError(t, err)
 
-	moved, err := f.svc.ChangeArea(t.Context(), ada, first.ID, Change{Name: new("Allotment")})
+	moved, err := f.svc.ChangeArea(t.Context(), web(ada), first.ID, Change{Name: new("Allotment")})
 	require.NoError(t, err)
 	assert.Equal(t, "allotment", moved.Slug)
 
 	second, err := f.svc.Find(t.Context(), ada, "garden-2")
 	require.NoError(t, err)
 
-	cased, err := f.svc.ChangeArea(t.Context(), ada, second.ID, Change{Name: new("GARDEN!")})
+	cased, err := f.svc.ChangeArea(t.Context(), web(ada), second.ID, Change{Name: new("GARDEN!")})
 	require.NoError(t, err)
 	assert.Equal(t, "garden-2", cased.Slug, "a change of case alone keeps the slug")
 
 	third, err := f.svc.Find(t.Context(), ada, "garden-3")
 	require.NoError(t, err)
 
-	back, err := f.svc.ChangeArea(t.Context(), ada, third.ID, Change{Name: new("Garden")})
+	back, err := f.svc.ChangeArea(t.Context(), web(ada), third.ID, Change{Name: new("Garden")})
 	require.NoError(t, err)
 	assert.Equal(t, "garden", back.Slug)
 }
@@ -275,7 +288,22 @@ func TestAUsersAreasAreInvisibleToAnother(t *testing.T) {
 	_, err = f.svc.Find(t.Context(), grace, "garden")
 	require.ErrorIs(t, err, store.ErrNotFound)
 
-	_, err = f.svc.ChangeArea(t.Context(), grace, garden.ID, Change{Archived: new(true)})
+	_, err = f.svc.ChangeArea(t.Context(), web(grace), garden.ID, Change{Archived: new(true)})
+	require.ErrorIs(t, err, store.ErrNotFound)
+
+	garden, err = f.svc.ChangeArea(t.Context(), web(ada), garden.ID, Change{Brief: new("Beds."), BriefRevision: new(int64(0))})
+	require.NoError(t, err)
+
+	_, err = f.svc.History(t.Context(), grace, garden.ID)
+	require.ErrorIs(t, err, store.ErrNotFound)
+
+	_, err = f.svc.Revision(t.Context(), grace, garden.ID, 1)
+	require.ErrorIs(t, err, store.ErrNotFound)
+
+	_, err = f.svc.Restore(t.Context(), web(grace), garden.ID, 1)
+	require.ErrorIs(t, err, store.ErrNotFound)
+
+	_, err = f.svc.ChangeArea(t.Context(), web(grace), garden.ID, Change{Brief: new("Mine."), BriefRevision: new(int64(1))})
 	require.ErrorIs(t, err, store.ErrNotFound)
 
 	theirs := f.project(t, grace, "garden")
@@ -286,36 +314,44 @@ func TestAUsersAreasAreInvisibleToAnother(t *testing.T) {
 	assert.Equal(t, garden, got, "and nothing of ada's changed")
 }
 
-func TestNamesAndDescriptionsAreChecked(t *testing.T) {
+func TestNamesAndBriefsAreChecked(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
 	ada := f.user(t, "ada")
 
-	a, err := f.svc.CreateProject(t.Context(), ada, "  garden  ", "  The beds.\n\tAnd the greenhouse.  ")
+	a, err := f.svc.CreateProject(t.Context(), web(ada), "  garden  ", "  The beds.\n\tAnd the greenhouse.  ")
 	require.NoError(t, err)
-	assert.Equal(t, module.Area{ID: a.ID, Kind: project, Name: "garden", Slug: "garden", Description: "The beds.\n\tAnd the greenhouse."}, a)
+	assert.Equal(t, "garden", a.Name)
+	assert.Equal(t, "The beds.\n\tAnd the greenhouse.", a.Brief)
 
-	_, err = f.svc.CreateProject(t.Context(), ada, strings.Repeat("å", maxName), strings.Repeat("ø", maxDescription))
+	long, err := f.svc.CreateProject(t.Context(), web(ada), strings.Repeat("å", maxName), strings.Repeat("ø", maxBrief))
 	require.NoError(t, err, "the limits count characters")
+	assert.Equal(t, strings.Repeat("ø", maxBrief), long.Brief)
+
+	long, err = f.svc.ChangeArea(t.Context(), web(ada), long.ID, Change{Brief: new(strings.Repeat("æ", maxBrief)), BriefRevision: &long.BriefRevision})
+	require.NoError(t, err, "and hold for a change as for a new project")
+	assert.Equal(t, strings.Repeat("æ", maxBrief), long.Brief)
 
 	for _, name := range []string{"", "   ", strings.Repeat("a", maxName+1), "a\nb", "a\x00b"} {
-		_, err := f.svc.CreateProject(t.Context(), ada, name, "")
+		_, err := f.svc.CreateProject(t.Context(), web(ada), name, "")
 		require.ErrorIs(t, err, store.ErrInvalid, name)
 
-		_, err = f.svc.ChangeArea(t.Context(), ada, a.ID, Change{Name: &name})
+		_, err = f.svc.ChangeArea(t.Context(), web(ada), a.ID, Change{Name: &name})
 		require.ErrorIs(t, err, store.ErrInvalid, name)
 	}
 
-	for _, description := range []string{strings.Repeat("a", maxDescription+1), "a\x1b[2Jb", "a\rb", "a\x00b"} {
-		_, err = f.svc.CreateProject(t.Context(), ada, "shed", description)
-		require.ErrorIs(t, err, store.ErrInvalid, description)
+	for _, brief := range []string{strings.Repeat("a", maxBrief+1), "a\x1b[2Jb", "a\rb", "a\x00b"} {
+		_, err = f.svc.CreateProject(t.Context(), web(ada), "shed", brief)
+		require.ErrorIs(t, err, store.ErrInvalid, brief)
 
-		_, err = f.svc.ChangeArea(t.Context(), ada, a.ID, Change{Description: &description})
-		require.ErrorIs(t, err, store.ErrInvalid, description)
+		_, err = f.svc.ChangeArea(t.Context(), web(ada), a.ID, Change{Brief: &brief, BriefRevision: &a.BriefRevision})
+		require.ErrorIs(t, err, store.ErrInvalid, brief)
 	}
 
 	got, err := f.svc.Area(t.Context(), ada, a.ID)
 	require.NoError(t, err)
 	assert.Equal(t, a, got, "a refused change changes nothing")
+	assert.Equal(t, []string{"Personal", "garden", strings.Repeat("å", maxName)}, f.names(t, ada, true), "and a refused project is not made")
+	assert.Len(t, f.history(t, ada, a.ID), 1, "nor is a revision written")
 }

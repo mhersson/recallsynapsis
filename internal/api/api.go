@@ -48,7 +48,10 @@ var routes = []route{
 	{"GET /api/session", module.Read, (*server).session},
 	{"GET /api/areas", module.Read, (*server).areas},
 	{"POST /api/areas", module.Write, (*server).createArea},
-	{"PATCH /api/areas/{id}", module.Write, (*server).changeArea},
+	{"PATCH /api/areas/{id}", module.Owner, (*server).changeArea},
+	{"GET /api/areas/{id}/revisions", module.Read, (*server).areaHistory},
+	{"GET /api/areas/{id}/revisions/{revision}", module.Read, (*server).areaRevision},
+	{"POST /api/areas/{id}/revisions/{revision}/restore", module.Owner, (*server).restoreArea},
 	{"GET /api/search", module.Read, (*server).search},
 	{"GET /api/events", module.Read, (*server).events},
 	{"GET /api/tokens", module.Owner, (*server).tokens},
@@ -126,11 +129,11 @@ func classify(ctx context.Context, route string, err error) (int, string) {
 	return http.StatusInternalServerError, "internal error"
 }
 
-// pathID reads the id in the path; one that is not a number names no row.
-func pathID(r *http.Request) (int64, error) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+// pathID reads the number under key in the path; one that is not a number names no row.
+func pathID(r *http.Request, key string) (int64, error) {
+	id, err := strconv.ParseInt(r.PathValue(key), 10, 64)
 	if err != nil {
-		return 0, &module.Refusal{Status: http.StatusNotFound, Text: "the id in the path is not a number"}
+		return 0, &module.Refusal{Status: http.StatusNotFound, Text: "the " + key + " in the path is not a number"}
 	}
 
 	return id, nil
