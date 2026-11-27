@@ -40,6 +40,17 @@ test('Trashed lists the whole trash, the most recently trashed first, and a tras
   expect(writes(calls)).toEqual([])
 })
 
+test('a trash with more says so and shows 50 more', async () => {
+  narrow(true)
+  const calls = tasksServer(Array.from({ length: 60 }, (_, i) => task(i + 1, 60, { title: `trashed ${i + 1}`, trashed_at: ago(i + 1) })))
+  await open('/tasks/trashed')
+  await waitFor(() => expect(titles()).toHaveLength(50))
+  await userEvent.click(within(page().querySelector<HTMLElement>('.list-end')!).getByRole('button'))
+  await waitFor(() => expect(titles()).toHaveLength(60))
+  expect(calls.filter((c) => c.path.includes('trashed=true')).map((c) => c.path)).toEqual(['/api/tasks?trashed=true&limit=50', '/api/tasks?trashed=true&limit=100'])
+  expect(page().querySelector('.list-end')).toBeNull()
+})
+
 test('Restore puts a task back where it was, and the trash no longer lists it', async () => {
   narrow(true)
   const calls = tasksServer(tasks())
@@ -78,6 +89,18 @@ test('deleting for good asks first, with keeping it first and plain, and Keep it
   await waitFor(() => expect(where()).toBe('/tasks/trashed'))
   await waitFor(() => expect(titles()).toEqual(['done']))
   expect(writes(calls)).toEqual([['DELETE', '/api/tasks/1']])
+})
+
+test('on desktop a task restored leaves the trash at once, with no read of it again', async () => {
+  narrow(false)
+  const calls = tasksServer(tasks())
+  await open('/tasks/trashed/1')
+  const [restore] = await waitFor(() => within(taskView()).getAllByRole('button'))
+  await waitFor(() => expect(titles()).toEqual(['done', 'planned']))
+  await userEvent.click(restore)
+  await waitFor(() => expect(titles()).toEqual(['done']))
+  expect(calls.filter((c) => c.path.includes('trashed=true'))).toHaveLength(1)
+  expect(page().querySelector('.list-end')).toBeNull()
 })
 
 test('Empty the trash asks first and says how many tasks go, and then the trash is empty', async () => {

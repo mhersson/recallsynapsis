@@ -85,3 +85,13 @@ export function useGet<T>(path: string, again?: unknown): { got?: T; failed: str
   }, [path, again])
   return { got, failed }
 }
+
+export const step = 50
+
+// The limit of a list for the query asked: 50, and 50 more each time more is called, up to the 500 a list gives. A new
+// query starts again at 50.
+export function useLimit(asked: string) {
+  const [shown, setShown] = useState({ asked, limit: step })
+  const limit = shown.asked === asked ? shown.limit : step
+  return { limit, more: limit < 500 ? () => setShown({ asked, limit: limit + step }) : undefined }
+}

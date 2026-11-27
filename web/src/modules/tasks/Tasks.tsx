@@ -50,7 +50,7 @@ export default function Tasks() {
   const [added, setAdded] = useState<number>()
   const here = (t: Row) => !area || t.area === area
   const open = list?.tasks.filter(here) ?? []
-  const done = useMore(view === 'done' && !alone ? new URLSearchParams({ done: 'true', ...(area && { area }) }).toString() : '', (t) => t.state === 'done' && !t.trashed_at && here(t))
+  const done = useMore(view === 'done' && !alone ? new URLSearchParams({ done: 'true', ...(area && { area }) }).toString() : '')
   const shown = view === 'done' ? (done.list?.tasks ?? []).toSorted(latest) : open.sort(order)
   const groups = list ? sortInto(view, shown, list.now) : []
   // On desktop the view opens its first task by naming it in the address.

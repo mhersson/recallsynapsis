@@ -94,7 +94,7 @@ test('no note under the filters offers to clear them', async () => {
   await waitFor(() => expect(rows()).toHaveLength(1))
 })
 
-test('a list with more says so and shows 50 more on asking, up to the 500 a list gives', async () => {
+test('a list with more says so and shows 50 more on asking, up to the 500 a list gives, and a new question starts again at 50', async () => {
   narrow(false)
   const many: Row[] = Array.from({ length: 50 }, (_, i) => filed(i + 1, i + 1))
   const calls = server([], (c) => (c.path.startsWith('/api/notes?') ? json({ notes: many, total: 900 }) : undefined))
@@ -104,6 +104,8 @@ test('a list with more says so and shows 50 more on asking, up to the 500 a list
   expect(lists(calls)).toEqual(['/api/notes?inbox=false', ...[100, 150, 200, 250, 300, 350, 400, 450, 500].map((n) => `/api/notes?inbox=false&limit=${n}`)])
   expect(more()).not.toBeNull()
   expect(within(more()!).queryByRole('button')).toBeNull()
+  await userEvent.selectOptions(selects()[1], 'idea')
+  await waitFor(() => expect(lists(calls).at(-1)).toBe('/api/notes?inbox=false&kind=idea'))
 })
 
 test('on a phone a note picked opens as a page of its own, whose crumb leads back to the list as it was filtered', async () => {
