@@ -213,14 +213,17 @@ Every package states its one responsibility in its package comment, and
   a text, the path a tap opens and a tag, by which a newer message replaces
   an older one.
   `NewTool` makes a tool from a typed function, so no module touches the MCP
-  SDK. Beside it: `Capped`, which refuses a text a tool is given over a module's
-  cap, counted in characters; the `Caller` an authorised request carries in its
-  context, with the user, the source of the request and whether it may write;
-  the access levels a route or a tool declares; the links an item keeps, at most
-  100 references, each well formed and kept once, which `Deps.Items` reads as
-  the core resolves them; and the refusal, the JSON reply and the strict
-  decoding of a JSON body that every route taking one uses, with the 1 MiB cap
-  on a body that `/mcp` keeps too.
+  SDK, and `Asked` marks one with `_meta`
+  `"anthropic/requiresUserInteraction": true` in `tools/list`, so Claude Code
+  asks its user before every call of it. Beside them: `Capped`, which refuses
+  a text a tool is given over a module's cap, counted in characters; the
+  `Caller` an authorised request carries in its context, with the user, the
+  source of the request and whether it may write; the access levels a route or
+  a tool declares; the links an item keeps, at most 100 references, each well
+  formed and kept once, which `Deps.Items` reads as the core resolves them;
+  and the refusal, the JSON reply and the strict decoding of a JSON body that
+  every route taking one uses, with the 1 MiB cap on a body that `/mcp` keeps
+  too.
   Depguard rules in `.golangci.yaml` let a module package's code import
   `module` and `store` and no other package of this binary, let nothing but
   `api` and `cmd` import a module, and let only tests import the fake; tests

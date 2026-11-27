@@ -115,3 +115,28 @@ func TestAGuardThatRefusesRunsNothing(t *testing.T) {
 	assert.True(t, res.IsError)
 	assert.False(t, ran)
 }
+
+func TestAnAskedToolCarriesClaudeCodesMarker(t *testing.T) {
+	t.Parallel()
+
+	echo := module.NewTool("echo", "Say the text back.", module.Write, func(_ context.Context, in echoIn) (echoOut, error) {
+		return echoOut{Text: in.Text}, nil
+	})
+	run := func(ctx context.Context, _ *mcp.CallToolRequest, _ module.Access, run func(context.Context) error) error {
+		return run(ctx)
+	}
+
+	for _, tt := range []struct {
+		tool module.Tool
+		meta mcp.Meta
+	}{
+		{echo, nil},
+		{echo.Asked(), mcp.Meta{"anthropic/requiresUserInteraction": true}},
+	} {
+		list, err := session(t, tt.tool, run).ListTools(t.Context(), nil)
+		require.NoError(t, err)
+		require.Len(t, list.Tools, 1)
+		assert.Equal(t, "echo", list.Tools[0].Name)
+		assert.Equal(t, tt.meta, list.Tools[0].Meta)
+	}
+}
