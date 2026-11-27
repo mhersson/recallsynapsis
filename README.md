@@ -11,10 +11,10 @@ it is kept, any can be read and restored through the API, and a change made
 from a wording that has since been replaced is refused. In the web app the brief
 heads its area's page, folded to its first paragraph, with its revision and its
 History, where any earlier wording is read and, unless the project is archived,
-restored. A signed-in session changes a brief, and so does an AI client through
-the MCP tool `update_area`, which Claude Code, connected directly, asks the
-owner about before every call; only a signed-in session renames a project or
-archives one.
+restored, and the area's Edit changes it. A signed-in session changes a brief,
+and so does an AI client through the MCP tool `update_area`, which Claude Code,
+connected directly, asks the owner about before every call; only a signed-in
+session renames a project or archives one.
 
 - The owner signs in with a name and a password. AI clients and scripts use API
   tokens made in Settings, each with read or write access.

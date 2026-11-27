@@ -100,13 +100,13 @@ After a change to `web/`, look at the screen before you finish.
   picker of the note being read; given more than once, they run
   in the order given, and `end=1` then scrolls the page, and what is open
   beside a list, to their end.
-  `login=wrong` refuses a sign-in and `login=wait` makes it wait;
-  `lapsed=1` ends the access to the page; `empty=1` starts with the
-  personal area alone, no token, no note and no task; `brief=none` starts
-  every area with no brief; `many=1` adds older
-  notes and done tasks, so a list holds more than it shows; `today=none`
-  leaves out the tasks Today would show; `save=moved` refuses the first
-  save of each note's text, as if a client had saved the note meanwhile;
+  `login=wrong` refuses a sign-in and `login=wait` makes it wait; `lapsed=1`
+  ends the access to the page; `empty=1` starts with the personal area
+  alone, no token, no note and no task; `brief=none` starts every area with
+  no brief; `many=1` adds older notes and done tasks, so a list holds more
+  than it shows; `today=none` leaves out the tasks Today would show;
+  `save=moved` refuses the first save of each note's text and of each brief,
+  as if a client had saved it meanwhile;
   `upload=wait` holds every upload, so it stays under way;
   `modules=tasks,notes` switches the named modules on, so Tasks and Search
   find the fixed tasks, and the Inbox, Notes and Search the fixed notes;
@@ -357,19 +357,23 @@ Every package states its one responsibility in its package comment, and
   package that embeds its build from `web/dist/app` and serves it in front of
   the API. A binary built without the app serves the committed
   `web/dist/placeholder.html` in its place. An area's page is headed by its
-  brief, as Markdown folded to its first paragraph, with its revision and its
-  History, whose rows and the frame a revision is read in it shares with a
-  note's page from `web/src/components/`. Each module of the web app is one
-  folder under `web/src/modules/`, listed in `web/src/modules/registry.ts`,
-  where a module may also give a part of Settings, shown after Backups, its
-  kinds of notification, which the part Notifications shows, and what it
-  does before a person signs out, which never keeps the session open. The
-  push module gives no page, only the part Notifications, and turns this
-  browser's notifications off as a person signs out. The tasks module gives
-  its four kinds of notification, each a switch applied as it is flipped,
-  three with an hour that waits for Save. The service worker,
-  `web/public/sw.js`, shows each notification pushed to the browser, and a
-  tap on one takes an open window to its path, or opens one there.
+  brief, as Markdown folded to its first paragraph, with its revision and
+  its History, whose rows and the frame a revision is read in it shares with
+  a note's page from `web/src/components/`. Its Edit opens the area's form,
+  which sends the brief with the revision it was read at, keeps what was
+  typed when that brief has moved on and saves it over the revision that
+  came in, and asks before a change not saved is left. Each module of the
+  web app is one folder under `web/src/modules/`, listed in
+  `web/src/modules/registry.ts`, where a module may also give a part of
+  Settings, shown after Backups, its kinds of notification, which the part
+  Notifications shows, and what it does before a person signs out, which
+  never keeps the session open. The push module gives no page, only the part
+  Notifications, and turns this browser's notifications off as a person
+  signs out. The tasks module gives its four kinds of notification, each a
+  switch applied as it is flipped, three with an hour that waits for Save.
+  The service worker, `web/public/sw.js`, shows each notification pushed to
+  the browser, and a tap on one takes an open window to its path, or opens
+  one there.
 - `scripts/`: the scans and the line count that `make` runs.
 - `Dockerfile`: Node builds the web app, Go builds the binary with it
   embedded, and a distroless static image runs it as user 65532. Every base

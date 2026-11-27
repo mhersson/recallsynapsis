@@ -171,12 +171,15 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   return json({ error: 'not found' }, 404)
 }
 
-// Each area's wordings of its brief, oldest first, from when the page first asks of the area.
+// Each area's wordings of its brief, oldest first, from when the page first asks of the area, and the areas whose brief
+// save=moved has moved.
 const briefs = new Map<number, Wording[]>()
+const movedBriefs = new Set<number>()
 const wordingsOf = (a: Area) => briefs.get(a.id) ?? briefs.set(a.id, wordings(a)).get(a.id)!
 
 // An area's routes, as the server answers them, telling the stream of every change. A brief, changed or restored to
-// another text, is the next revision, by the web app.
+// another text, is the next revision, by the web app. save=moved refuses the first save of each brief, as a client had
+// saved it three minutes before.
 function answerArea(method: string, path: string, body: Record<string, unknown>): Response {
   const [, id, revisions, sub, restore] = /^\/api\/areas\/(\d+)(\/revisions(?:\/(\d+)(\/restore)?)?)?$/.exec(path) ?? []
   const a = areas.find((x) => x.id === Number(id))
@@ -197,6 +200,12 @@ function answerArea(method: string, path: string, body: Record<string, unknown>)
       return told()
     }
     if ([...brief.trim()].length > 4000) return json({ error: 'a brief is at most 4000 characters, with no control characters but newlines and tabs: invalid' }, 400)
+    if (query.get('save') === 'moved' && !movedBriefs.has(a.id)) {
+      movedBriefs.add(a.id)
+      Object.assign(a, { brief: `${a.brief}\n\nKept up to date by the coding sessions.`.trim(), brief_revision: a.brief_revision + 1, brief_changed_at: new Date(Date.now() - 3 * 60_000).toISOString(), brief_changed_by: 'aim' })
+      kept.push({ revision: a.brief_revision, at: a.brief_changed_at!, by: 'aim', said: '', restored_from: null, brief: a.brief })
+      tell({ module: 'core', kind: 'area', id: a.id, area: a.id })
+    }
     if (body.brief_revision !== a.brief_revision) return json({ error: `the brief is at revision ${a.brief_revision}, and the change was made from ${body.brief_revision}: conflict` }, 409)
     Object.assign(a, change)
     return told(brief.trim())

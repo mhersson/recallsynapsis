@@ -1,11 +1,28 @@
 .page-form {
-  max-width: 560px;
+  max-width: 760px;
   margin: 16px 0 22px;
 }
 
-.area-form textarea {
+/* The brief is Markdown, written in the type of a note's editor. */
+.area-form .ta {
+  display: block;
   min-height: 62px;
   resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+.page-form .ta {
+  min-height: 240px;
+  field-sizing: content;
+}
+
+@media (max-width: 720px) {
+  .page-form .ta {
+    min-height: 300px;
+  }
 }
 
 .area-form > .err,

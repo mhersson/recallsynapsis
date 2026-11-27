@@ -9,6 +9,9 @@ export const nameOf = (areas: Area[], slug: string) => areas.find((a) => a.slug 
 // The first paragraph of a brief: the text before the first blank line.
 export const first = (brief: string) => brief.split(/\n\s*\n/, 1)[0]
 
+// The user's area with the id, archived or not, or undefined when there is none.
+export const areaOf = (id: number) => api<{ areas: Area[] }>('GET', '/areas?archived=true').then((r) => r.areas.find((a) => a.id === id))
+
 // The areas that are not archived, or every area when archived is true, the personal area first, read again whenever
 // one changes.
 export function useAreas(archived = false): Area[] {
