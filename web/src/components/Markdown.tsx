@@ -102,6 +102,7 @@ export function Markdown({ text, end }: { text: string; end?: ReactNode }) {
   )
 }
 
+// A line as a title shows it: code, bold and italic, and no link, since a title is often a link itself.
 export function MarkdownInline({ text }: { text: string }) {
-  return <span className="md">{spans(inlines(text))}</span>
+  return <span className="md">{spans(inlines(text, false))}</span>
 }

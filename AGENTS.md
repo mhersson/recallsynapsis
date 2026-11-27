@@ -404,7 +404,14 @@ Every package states its one responsibility in its package comment, and
   module gives no page, only the part Notifications, and turns this
   browser's notifications off as a person signs out. The tasks module gives
   its four kinds of notification, each a switch applied as it is flipped,
-  three with an hour that waits for Save.
+  three with an hour that waits for Save. The knowledge module gives no
+  navigation, and a decision's own page, read, at `/decisions/ID`: its line
+  as the title, with code, bold and italic shown, its state, its day and
+  its last change, its why as Markdown, its source, a link only when the
+  whole of it is one http or https address, the decision it replaces or
+  the one that replaced it, and what links to it. Its way back opens its
+  project's page on Decisions, and the side bar marks that project as
+  current.
   The service worker, `web/public/sw.js`, shows each notification pushed to
   the browser, and a tap on one takes an open window to its path, or opens
   one there.

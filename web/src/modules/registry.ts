@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react'
 import type { Area, Linked } from '../api/types.ts'
+import { knowledge } from './knowledge/index.tsx'
 import { notes } from './notes/index.tsx'
 import { push } from './push/index.tsx'
 import { tasks } from './tasks/index.tsx'
@@ -79,4 +80,4 @@ export type Module = {
 }
 
 // Every module, one line each, in the order the navigation shows them.
-export const modules: Module[] = [tasks, notes, push]
+export const modules: Module[] = [tasks, notes, knowledge, push]

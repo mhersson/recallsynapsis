@@ -56,6 +56,10 @@
 
   /* The mark of something that waits on the owner. */
   --wait-yellow: var(--yellow);
+
+  /* The mark of a decision: green while it stands, grey once it is replaced. */
+  --decision-stands: var(--green);
+  --decision-replaced: var(--grey0);
 }
 
 /* Copper - light palette */

@@ -72,3 +72,9 @@ test('what ends the text sits in its last paragraph, or after any other last blo
     ['P', true],
   ])
 })
+
+test('a line shows code, bold and italic, and makes no link, since it is often inside one', () => {
+  const { container } = render(<MarkdownInline text="`create_note`, **bold**, _italic_, [docs](https://example.test/d) and https://example.test/a" />)
+  expect([...container.querySelectorAll('code, strong, em')].map((e) => e.tagName)).toEqual(['CODE', 'STRONG', 'EM'])
+  expect(container.querySelector('a')).toBeNull()
+})

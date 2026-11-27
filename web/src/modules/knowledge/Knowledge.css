@@ -1,0 +1,67 @@
+/* The mark of a decision, a diamond drawn as a line. It takes a square mark's room, so the titles of mixed rows line up. */
+.mk.m-decision {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: transparent;
+  border: 1.5px solid var(--decision-stands);
+  transform: rotate(45deg);
+}
+
+.mk.m-decision.d-replaced {
+  border-color: var(--decision-replaced);
+}
+
+/* A decision read on its own page: its line as the title, then its parts, each under a quiet label. */
+.decision .page-head h1 {
+  font-size: 20px;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
+.decision-meta {
+  align-items: center;
+  margin-top: 2px;
+}
+
+.decision-meta .mk {
+  margin-top: 0;
+}
+
+.kpart {
+  margin-top: 14px;
+}
+
+.kpart > .label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--grey2);
+  margin-bottom: 2px;
+}
+
+.ksource {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A row that leads to a decision shows its line whole. */
+.lrow.whole {
+  align-items: flex-start;
+  min-height: 0;
+  padding: 3px 0;
+}
+
+.lrow.whole > a {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.lrow.whole .mk {
+  margin-top: 7px;
+}
+
+@media (max-width: 720px) {
+  .decision .page-head h1 {
+    font-size: 18px;
+  }
+}

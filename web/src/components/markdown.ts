@@ -135,7 +135,7 @@ const run = (s: string, i: number) => {
 }
 
 // Only an absolute http or https address becomes a link: without a base, new URL throws on a relative one.
-function web(address: string): boolean {
+export function web(address: string): boolean {
   try {
     return ['http:', 'https:'].includes(new URL(address).protocol)
   } catch {
@@ -209,6 +209,7 @@ function parse(s: string, links: boolean): Inline[] {
   return out
 }
 
-export function inlines(text: string): Inline[] {
-  return parse(text, true)
+// links is false where the text sits inside a link of its own.
+export function inlines(text: string, links = true): Inline[] {
+  return parse(text, links)
 }
