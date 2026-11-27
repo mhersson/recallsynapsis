@@ -400,18 +400,22 @@ Every package states its one responsibility in its package comment, and
   give the tag a Links row shows after one of its items, a part of
   Settings, shown after Backups, its kinds of notification, which the part
   Notifications shows, and what it does before a person signs out, which
-  never keeps the session open. The push
-  module gives no page, only the part Notifications, and turns this
-  browser's notifications off as a person signs out. The tasks module gives
-  its four kinds of notification, each a switch applied as it is flipped,
-  three with an hour that waits for Save. The knowledge module gives no
-  navigation, and a decision's own page, read, at `/decisions/ID`: its line
-  as the title, with code, bold and italic shown, its state, its day and
-  its last change, its why as Markdown, its source, a link only when the
-  whole of it is one http or https address, the decision it replaces or
-  the one that replaced it, and what links to it. Its way back opens its
-  project's page on Decisions, and the side bar marks that project as
-  current.
+  never keeps the session open. The push module gives no page, only the part
+  Notifications, and turns this browser's notifications off as a person
+  signs out. The tasks module gives its four kinds of notification, each a
+  switch applied as it is flipped, three with an hour that waits for Save.
+  The knowledge module gives no navigation. Its tab of a project's page,
+  Decisions, carries the number of the decisions that stand and lists them,
+  the newest first, as a table of When, The decision, Why, Source and
+  Replaces, each why whole, and the replaced folded beneath it under their
+  count, as a table of When, The decision and Replaced, or on a phone each
+  as a block. A project with none says so. A click on a decision anywhere
+  but on a link in it opens its own page, read, at `/decisions/ID`: its line
+  as the title, with code, bold and italic shown, its state, its day and its
+  last change, its why as Markdown, its source, a link only when the whole
+  of it is one http or https address, the decision it replaces or the one
+  that replaced it, and what links to it. Its way back opens its project's
+  page on Decisions, and the side bar marks that project as current.
   The service worker, `web/public/sw.js`, shows each notification pushed to
   the browser, and a tap on one takes an open window to its path, or opens
   one there.

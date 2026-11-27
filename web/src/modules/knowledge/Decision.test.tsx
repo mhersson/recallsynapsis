@@ -95,7 +95,7 @@ test.each([
   expect(a).toHaveAttribute('target', '_blank')
 })
 
-test('a decision mended elsewhere shows without a reload, and one deleted elsewhere says it is gone', async () => {
+test('a decision mended or replaced elsewhere shows without a reload, and one deleted elsewhere says it is gone', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   narrow(false)
   const d = decision(7, '2026-11-26')
@@ -110,6 +110,15 @@ test('a decision mended elsewhere shows without a reload, and one deleted elsewh
   act(() => es.send({ module: 'knowledge', kind: 'decision', id: 7, area: 2 }))
   await act(() => vi.advanceTimersByTimeAsync(2000))
   await waitFor(() => expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('mended'))
+
+  // A decision added as replacing this one is all the stream names.
+  const newer = decision(9, '2026-11-27')
+  replace(newer, d)
+  decisions.push(newer)
+  act(() => es.send({ module: 'knowledge', kind: 'decision', id: 9, area: 2 }))
+  await act(() => vi.advanceTimersByTimeAsync(2000))
+  await waitFor(() => expect(screen.getByRole('main').querySelector('.decision-meta .mk')).toHaveClass('d-replaced'))
+  expect(leads()).toEqual([['/decisions/9', 'mk m-decision']])
 
   decisions.length = 0
   act(() => es.send({ module: 'knowledge', kind: 'decision', id: 7, area: 2 }))

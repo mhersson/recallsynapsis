@@ -80,7 +80,11 @@ session renames a project or archives one.
   Only a signed-in session deletes a decision, with its wordings: the one it
   replaced then stands again. A note or a task links to a decision, which
   shows its line and whether it stands, and a decision read whole lists what
-  links to it.
+  links to it. In the web app a project's page has two tabs under its brief:
+  Activity, with what the other modules keep in the project, and Decisions,
+  with the number of the decisions that stand, which lists them as a table,
+  the newest first, with the replaced folded beneath it. A decision is read
+  on a page of its own, which a link from a note or a task opens too.
 - Push sends a module's notifications as Web Push to every browser of the
   owner's in which they are turned on, encrypted for each browser, and a
   browser is turned on or off in Settings, under Notifications, with the
