@@ -6,6 +6,7 @@ import type { Area } from '../../api/types.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useAction, useModules, useSession } from '../../session.ts'
 import AreaForm from './AreaForm.tsx'
+import Brief from './Brief.tsx'
 import './Projects.css'
 
 // Keyed by the id, so going to another area ends an edit.
@@ -103,7 +104,7 @@ function View({ id }: { id: number }) {
         />
       ) : (
         <>
-          <p className="sub">{area.brief}</p>
+          <Brief area={area} onRestored={setArea} />
           {refused && (
             <p role="alert" className="err">
               {refused}

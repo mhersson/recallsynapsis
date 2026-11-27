@@ -84,8 +84,22 @@ function block(b: Block, key: number): ReactNode {
   }
 }
 
-export function Markdown({ text }: { text: string }) {
-  return <div className="md">{blocks(text).map(block)}</div>
+// end follows the text: in its last paragraph, or as a paragraph of its own after any other block.
+export function Markdown({ text, end }: { text: string; end?: ReactNode }) {
+  const list = blocks(text)
+  const last = list.at(-1)
+  const into = !!end && last?.kind === 'paragraph'
+  return (
+    <div className="md">
+      {(into ? list.slice(0, -1) : list).map(block)}
+      {end && (
+        <p>
+          {into && <>{spans(inlines(last.text))} </>}
+          {end}
+        </p>
+      )}
+    </div>
+  )
 }
 
 export function MarkdownInline({ text }: { text: string }) {

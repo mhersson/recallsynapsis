@@ -90,18 +90,20 @@ After a change to `web/`, look at the screen before you finish.
   Use `390 844` for a phone.
 - `web/harness.html` shows the app on the fixed data of
   `web/src/dev/fixtures.ts`, whose tasks are on a fixed day, Monday 23
-  November 2026. Its `palette` is `copper` or `catppuccin`, its
-  `theme` is `dark` or `light`, and its `path` picks the route, for example
-  `path=/settings`. `click=TEXT` clicks the first button, link, summary or
-  label whose text, or label, starts with TEXT, in the dialog open last when
-  one is, `type=TEXT` types TEXT into the field that has the focus, and
-  `choose=N` chooses an image of N bytes in the file picker of the note
-  being read; given more than once, they run
+  November 2026, and whose areas each have a brief, `recallsynapsis` one of
+  four paragraphs at its third revision. Its `palette` is `copper` or
+  `catppuccin`, its `theme` is `dark` or `light`, and its `path` picks the
+  route, for example `path=/settings`. `click=TEXT` clicks the first button,
+  link, summary or label whose text, or label, starts with TEXT, in the
+  dialog open last when one is, `type=TEXT` types TEXT into the field that
+  has the focus, and `choose=N` chooses an image of N bytes in the file
+  picker of the note being read; given more than once, they run
   in the order given, and `end=1` then scrolls the page, and what is open
   beside a list, to their end.
   `login=wrong` refuses a sign-in and `login=wait` makes it wait;
   `lapsed=1` ends the access to the page; `empty=1` starts with the
-  personal area alone, no token, no note and no task; `many=1` adds older
+  personal area alone, no token, no note and no task; `brief=none` starts
+  every area with no brief; `many=1` adds older
   notes and done tasks, so a list holds more than it shows; `today=none`
   leaves out the tasks Today would show; `save=moved` refuses the first
   save of each note's text, as if a client had saved the note meanwhile;
@@ -116,8 +118,8 @@ After a change to `web/`, look at the screen before you finish.
   browsers on but for `off`; with `tasks` and `push` among `modules=`,
   Settings shows the kinds of notification at their first values, and
   `notify=refused` refuses every change of them. What the page changes holds
-  until it reloads, and a change of a note, a task, a browser or a kind of
-  notification reaches the event stream, as the server's does.
+  until it reloads, and a change of an area, a note, a task, a browser or a
+  kind of notification reaches the event stream, as the server's does.
 - Read the PNG and say what you see. Fix what looks wrong and shoot again.
 - Stop Vite by the pid you recorded, never by port or name.
 
@@ -354,7 +356,10 @@ Every package states its one responsibility in its package comment, and
 - `web`: the web app's npm package, with its sources in `web/src`, and the Go
   package that embeds its build from `web/dist/app` and serves it in front of
   the API. A binary built without the app serves the committed
-  `web/dist/placeholder.html` in its place. Each module of the web app is one
+  `web/dist/placeholder.html` in its place. An area's page is headed by its
+  brief, as Markdown folded to its first paragraph, with its revision and its
+  History, whose rows and the frame a revision is read in it shares with a
+  note's page from `web/src/components/`. Each module of the web app is one
   folder under `web/src/modules/`, listed in `web/src/modules/registry.ts`,
   where a module may also give a part of Settings, shown after Backups, its
   kinds of notification, which the part Notifications shows, and what it

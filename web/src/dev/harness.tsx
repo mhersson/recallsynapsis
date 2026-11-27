@@ -9,8 +9,9 @@ import { api } from '../api/client.ts'
 import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
+import type { Wording } from '../pages/Projects/Brief.tsx'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version } from './fixtures.ts'
+import { AREAS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, full, history, listNotes, listed, note, onToday, refs, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -18,10 +19,13 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
 // What the page changes is kept until it reloads. empty=1 starts with the personal area alone, no token, no note and no
-// task, many=1 adds older notes and done tasks, so a list holds more than it shows, today=none leaves out the tasks Today
-// would show, modules=a,b switches those modules on, and backup=old or backup=none ages or drops the last backup.
+// task, brief=none starts every area with no brief, many=1 adds older notes and done tasks, so a list holds more than it
+// shows, today=none leaves out the tasks Today would show, modules=a,b switches those modules on, and backup=old or
+// backup=none ages or drops the last backup.
 const empty = query.get('empty') === '1'
-const areas = empty ? AREAS.filter((a) => a.kind === 'personal') : AREAS
+const areas = (empty ? AREAS.filter((a) => a.kind === 'personal') : AREAS).map((a) =>
+  query.get('brief') === 'none' ? { ...a, brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '' } : a,
+)
 const tokens = empty ? [] : TOKENS
 const many = query.get('many') === '1'
 const notes = empty ? [] : many ? [...NOTES, ...OLDER] : NOTES
@@ -126,6 +130,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
       archived: false,
     }
     areas.push(a)
+    tell({ module: 'core', kind: 'area', id: a.id, area: a.id })
     return json(a, 201)
   }
   if (method === 'POST' && path === '/api/tokens') {
@@ -138,10 +143,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
     tokens.splice(token, 1)
     return new Response(null, { status: 204 })
   }
-  const area = areas.find((a) => path === `/api/areas/${a.id}`)
-  // A change of the brief is the next revision, by the web app.
-  if (method === 'PATCH' && area)
-    return json(Object.assign(area, body, 'brief' in body && { brief_revision: area.brief_revision + 1, brief_changed_at: new Date().toISOString(), brief_changed_by: 'web' }))
+  if (path.startsWith('/api/areas/')) return answerArea(method, path, body)
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
   if (path.startsWith('/api/push')) return answerPush(method, url)
   if (path === '/api/tasks/notify') return answerNotify(method, body)
@@ -166,6 +168,44 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
     return json({ groups: groups.filter((g) => session.modules.includes(g.module) && g.hits.length) })
   }
   if (path === '/api/areas') return json({ areas: areas.filter((a) => url.searchParams.get('archived') === 'true' || !a.archived) })
+  return json({ error: 'not found' }, 404)
+}
+
+// Each area's wordings of its brief, oldest first, from when the page first asks of the area.
+const briefs = new Map<number, Wording[]>()
+const wordingsOf = (a: Area) => briefs.get(a.id) ?? briefs.set(a.id, wordings(a)).get(a.id)!
+
+// An area's routes, as the server answers them, telling the stream of every change. A brief, changed or restored to
+// another text, is the next revision, by the web app.
+function answerArea(method: string, path: string, body: Record<string, unknown>): Response {
+  const [, id, revisions, sub, restore] = /^\/api\/areas\/(\d+)(\/revisions(?:\/(\d+)(\/restore)?)?)?$/.exec(path) ?? []
+  const a = areas.find((x) => x.id === Number(id))
+  if (!a) return json({ error: 'not found' }, 404)
+  const kept = wordingsOf(a)
+  const told = (brief?: string, restored_from: number | null = null) => {
+    if (brief !== undefined && brief !== a.brief) {
+      Object.assign(a, { brief, brief_revision: a.brief_revision + 1, brief_changed_at: new Date().toISOString(), brief_changed_by: 'web' })
+      kept.push({ revision: a.brief_revision, at: a.brief_changed_at!, by: 'web', said: '', restored_from, brief })
+    }
+    tell({ module: 'core', kind: 'area', id: a.id, area: a.id })
+    return json(a)
+  }
+  if (method === 'PATCH' && !revisions) {
+    const { brief, brief_revision: _, ...change } = body
+    if (typeof brief !== 'string') {
+      Object.assign(a, change)
+      return told()
+    }
+    if ([...brief.trim()].length > 4000) return json({ error: 'a brief is at most 4000 characters, with no control characters but newlines and tabs: invalid' }, 400)
+    if (body.brief_revision !== a.brief_revision) return json({ error: `the brief is at revision ${a.brief_revision}, and the change was made from ${body.brief_revision}: conflict` }, 409)
+    Object.assign(a, change)
+    return told(brief.trim())
+  }
+  const w = kept.find((x) => x.revision === Number(sub))
+  if (method === 'GET' && revisions && !sub) return json({ revisions: kept.map(({ brief: _, ...e }) => e).reverse() })
+  if (!w) return json({ error: 'not found' }, 404)
+  if (method === 'GET' && !restore) return json(w)
+  if (method === 'POST' && restore) return told(w.brief, w.revision)
   return json({ error: 'not found' }, 404)
 }
 

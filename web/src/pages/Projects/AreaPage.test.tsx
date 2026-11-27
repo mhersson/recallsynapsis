@@ -41,6 +41,7 @@ function server(areas: Area[], modules: string[] = [], answer: (c: Call) => Resp
 
 const main = () => within(screen.getByRole('main'))
 const buttons = () => main().queryAllByRole('button')
+const head = () => within(screen.getByRole('main').querySelector<HTMLElement>('.page-head')!).queryAllByRole('button')
 const patches = (calls: Call[]) => calls.filter((c) => c.method === 'PATCH').map((c) => [c.path, c.body])
 
 test('a project is archived with a plain button and restored the same way', async () => {
@@ -50,18 +51,18 @@ test('a project is archived with a plain button and restored the same way', asyn
   const [, archive] = buttons()
   await userEvent.click(archive)
   expect(patches(calls)).toEqual([['/api/areas/2', { archived: true }]])
-  expect(buttons()).toHaveLength(1)
+  expect(head()).toHaveLength(1)
 
   await userEvent.click(buttons()[0])
   expect(patches(calls)[1]).toEqual(['/api/areas/2', { archived: false }])
-  expect(buttons()).toHaveLength(2)
+  expect(head()).toHaveLength(2)
 })
 
 test('the personal area keeps its name: it cannot be archived, and editing sends only its brief, from the revision it opened with', async () => {
   narrow(false)
   const calls = server([area(1, 'personal', 'Personal')])
   await open('/areas/1')
-  expect(buttons()).toHaveLength(1)
+  expect(head()).toHaveLength(1)
   await userEvent.click(buttons()[0])
   const fields = main().getAllByRole('textbox')
   expect(fields).toHaveLength(1)

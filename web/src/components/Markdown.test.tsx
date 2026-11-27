@@ -57,3 +57,18 @@ test('a long code line and a wide table scroll sideways in their own boxes', () 
   expect([look.overflowX, look.whiteSpace]).toEqual(['auto', 'pre'])
   expect(getComputedStyle(container.querySelector('table')!.parentElement!).overflowX).toBe('auto')
 })
+
+test('what ends the text sits in its last paragraph, or after any other last block in a paragraph of its own', () => {
+  const end = <button />
+  const into = render(<Markdown text={'a\n\nb *c*'} end={end} />).container
+  expect([...into.querySelectorAll('.md > *')].map((b) => [b.tagName, !!b.querySelector('button')])).toEqual([
+    ['P', false],
+    ['P', true],
+  ])
+  expect(into.querySelector('p:last-child em')).toHaveTextContent('c')
+  const after = render(<Markdown text={'- a\n- b'} end={end} />).container
+  expect([...after.querySelectorAll('.md > *')].map((b) => [b.tagName, !!b.querySelector('button')])).toEqual([
+    ['UL', false],
+    ['P', true],
+  ])
+})

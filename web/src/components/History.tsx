@@ -30,6 +30,7 @@ export function Revisions({ list, current, fresh, onRead }: RowsProps) {
 type FrameProps = {
   revision: number
   of: number
+  head?: boolean
   got?: Entry
   says: string
   failed: string
@@ -39,15 +40,17 @@ type FrameProps = {
 }
 
 // An earlier revision, once got, read in a frame that is clearly not the current text, under a notice that says what
-// restoring it does; of is the current revision. onRestore gives the refusal's line, or '', and is absent where nothing
-// is restored.
-export function RevisionFrame({ revision, of, got, says, failed, onRestore, onBack, children }: FrameProps) {
+// restoring it does; of is the current revision, and head says it is read at the head of its page. onRestore gives the
+// refusal's line, or '', and is absent where nothing is restored.
+export function RevisionFrame({ revision, of, head, got, says, failed, onRestore, onBack, children }: FrameProps) {
   const narrow = useNarrow()
   const [sending, setSending] = useState(false)
   const [refused, setRefused] = useState('')
-  // Read from the foot of a page, the revision opens where it begins.
+  // Read from the foot of a page, the revision opens where it begins; read at its head, the page stays where it is.
   const top = useRef<HTMLDivElement>(null)
-  useEffect(() => top.current?.scrollIntoView?.({ block: 'start' }), [])
+  useEffect(() => {
+    if (!head) top.current?.scrollIntoView?.({ block: 'start' })
+  }, [head])
   const restore = async (send: () => Promise<string>) => {
     setSending(true)
     setRefused(await send())
