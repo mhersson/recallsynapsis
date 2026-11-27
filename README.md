@@ -82,7 +82,9 @@ only a signed-in session renames a project or archives one.
   open, that hold them in their title or notes; part of a word is enough. The
   MCP tool `list_areas` lists the areas, each with the first paragraph of its
   brief, and gives one area it is given, an archived project too, with its
-  brief whole, and `update_area` replaces an area's brief.
+  brief whole, and `update_area` replaces an area's brief. As a client
+  connects, the server tells it to read a project's brief when a discussion
+  of the project begins.
 - It backs itself up every night, into a directory you name.
 
 ## What it needs

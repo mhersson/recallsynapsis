@@ -140,7 +140,11 @@ func TestMCPListsTheCoreToolsAndThoseOfTheModulesOn(t *testing.T) {
 		"Claude Code's marker, as the JSON boolean true, on update_area alone")
 
 	f.load(t, map[string]any{"enabled": false})
-	assert.ElementsMatch(t, []string{"list_areas", "search", "update_area"}, tools(t, f.client(t, read)), "a module switched off has no tool")
+	off := f.client(t, read)
+	assert.ElementsMatch(t, []string{"list_areas", "search", "update_area"}, tools(t, off), "a module switched off has no tool")
+
+	assert.NotEmpty(t, init.Instructions)
+	assert.Equal(t, init.Instructions, off.InitializeResult().Instructions, "the instructions are the same with a module off")
 }
 
 func TestMCPAdmitsAnAPITokenAlone(t *testing.T) {

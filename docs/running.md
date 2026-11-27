@@ -128,7 +128,8 @@ a tap waits for the owner to allow it.
 `tools/list`. Claude Code then asks its user before every call of it, in auto
 mode and under `bypassPermissions` too, with no "don't ask again", and a run
 with nobody to answer is refused the call. A gateway such as Portal does not
-pass the marker on, so through one the tool's mark there is what holds.
+pass the marker on, so through one the mark set there for the tool is what
+holds.
 `update_area` refuses a `said` of more than 4,000 characters, and a brief of
 more than 4,000 is refused wherever it comes from.
 
@@ -141,9 +142,15 @@ nothing is saved. A call of `create_tasks` or `update_task` that sets a date
 gives `today`, the date the client takes for today; unless it is the date in
 the configured `timezone`, the call is refused with that date, its weekday, the
 time zone and the first day of the week, and nothing is saved. A write through
-a tool records the token's name as its source. Each tool's description tells a
-client what it does and when to use it, since Portal relays neither annotations
-nor instructions to the client.
+a tool records the token's name as its source.
+
+As a client connects, the server's instructions tell it in one line, the same
+with any module on or off, to read a project's brief first when a discussion of
+the project begins, with `list_areas` and the project's slug or name; Claude
+Code reads them as a session starts. Portal relays neither annotations nor
+instructions to the client, so each tool's description tells a client what it
+does and when to use it, and that of `list_areas` says too to read a project's
+brief as a discussion of it begins.
 
 ## From the image
 

@@ -154,11 +154,14 @@ Every package states its one responsibility in its package comment, and
   user whose change it is, and keeps none. A stream ends when it falls
   behind, rather than hold up a writer, when the server stops, and after an
   hour, so its access is checked again when it is opened again. At `/mcp` it
-  serves MCP over streamable HTTP, stateless, with JSON responses and tools
-  only: the core's `list_areas`, which lists the areas that are not archived,
-  each with the text of its brief before the first blank line, or gives one
-  area it is given, by its slug or its name, with its brief whole, its
-  revision and its change; `search`, which calls what its REST route calls;
+  serves MCP over streamable HTTP, stateless, with JSON responses,
+  instructions of one line, the same with any module on or off, that tell a
+  client to read a project's brief with `list_areas` when a discussion of it
+  begins, and tools only: the core's `list_areas`, which lists the areas that
+  are not archived, each with the text of its brief before the first blank
+  line, or gives one area it is given, by its slug or its name, with its
+  brief whole, its revision and its change; `search`, which calls what its
+  REST route calls;
   `update_area`, which calls what `PATCH /api/areas/{id}` calls to replace
   the brief of an area it is given, keeps the owner's words a call gives, at
   most 4,000 characters, on the revision it writes, and is marked with

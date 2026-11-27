@@ -23,6 +23,10 @@ const (
 	callerKey = "caller"
 	// maxSaid caps, in characters, the owner's words update_area keeps.
 	maxSaid = 4000
+	// instructions are the same with any module on or off. A gateway such as
+	// Portal drops them, so the description of list_areas says the same.
+	instructions = "When a discussion of one of the owner's projects begins, read its brief first: " +
+		"call list_areas with area set to the project's slug or name."
 )
 
 // toolArea is an area as a tool gives it: a client names an area by its slug
@@ -73,7 +77,7 @@ func (s *server) mcp() http.Handler {
 	// The SDK's defaults advertise listChanged and logging, which makes a current
 	// client open a stream that lasts its whole connection. The list never changes.
 	srv := mcp.NewServer(&mcp.Implementation{Name: "recallsynapsis", Version: s.Version},
-		&mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}}})
+		&mcp.ServerOptions{Instructions: instructions, Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}}})
 
 	tools := []module.Tool{
 		module.NewTool("list_areas", "List the owner's areas, the personal area and the projects, "+
