@@ -161,8 +161,9 @@ Every package states its one responsibility in its package comment, and
   hour, so its access is checked again when it is opened again. At `/mcp` it
   serves MCP over streamable HTTP, stateless, with JSON responses,
   instructions of one line, the same with any module on or off, that tell a
-  client to read a project's brief with `list_areas` when a discussion of it
-  begins, and tools only: the core's `list_areas`, which lists the areas that
+  client to read what is kept of a project when a discussion of it begins,
+  with `get_knowledge`, or with `list_areas` when `get_knowledge` is not
+  listed, and tools only: the core's `list_areas`, which lists the areas that
   are not archived, each with the text of its brief before the first blank
   line, or gives one area it is given, by its slug or its name, with its
   brief whole, its revision and its change; `search`, which calls what its
@@ -238,8 +239,24 @@ Every package states its one responsibility in its package comment, and
   every route that reads asks for `read`. A decision keeps no links of its
   own: a link to one shows its line, the kind `decision` and its state, a
   link to a deleted one leads nowhere, and a decision in full gives the
-  items that link to it, each as the core resolves it. It owns the tables
-  `decisions` and `decision_revisions`.
+  items that link to it, each as the core resolves it. It searches the
+  decisions, standing and replaced, for every word of a query, in the line,
+  the why and the source and in any case, as notes does, through an FTS5
+  index with the trigram tokenizer, which every write keeps level, which
+  keeps no copy of the text, and which deleting a decision rewrites; a hit's
+  title is its line and its snippet is from its why, and an area's brief
+  gives no hit. Its MCP tools, `get_knowledge` and `update_knowledge`, each
+  call what a REST route calls. `get_knowledge` takes an area by its slug or
+  its name, or a decision's ref, and refuses both and neither: of an area it
+  gives the brief, with its revision and its change as `list_areas` gives an
+  area it is given, each decision that stands as a line, its ref, its line
+  and its day, the newest first, and how many are replaced; `full` gives each
+  as a list gives it, and `replaced` lists the replaced too. Of a ref it
+  gives the decision in full. Its answers differ in shape, so it has no
+  output schema. `update_knowledge` takes the package `POST /api/knowledge`
+  takes and the owner's words, at most 4,000 characters, kept on every
+  revision the call writes, and is marked with `module.Tool.Asked`. It owns
+  the tables `decisions`, `decision_revisions` and `decisions_fts`.
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
   settings and their check, migrations, routes, MCP tools, jobs, and

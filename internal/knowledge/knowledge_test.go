@@ -73,6 +73,16 @@ type fixture struct {
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 
+	f := newDatabase(t)
+	f.load(t, object{"enabled": true})
+
+	return f
+}
+
+// newDatabase is the fixture before it serves, with no migration of knowledge applied.
+func newDatabase(t *testing.T) *fixture {
+	t.Helper()
+
 	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "recallsynapsis.db"), slices.Concat(auth.Migrations, core.Migrations))
 	require.NoError(t, err)
 
@@ -124,7 +134,6 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, err)
 
 	f.areas["personal"] = personal.ID
-	f.load(t, object{"enabled": true})
 
 	return f
 }
@@ -249,14 +258,21 @@ func (f *fixture) read(t *testing.T, decision object, auth string) object {
 	return got
 }
 
-// linkedFrom gives the items that link to decision, as it reads in full with ada's phone.
-func (f *fixture) linkedFrom(t *testing.T, decision object) any {
+// full is decision as it reads in full with ada's phone.
+func (f *fixture) full(t *testing.T, decision object) object {
 	t.Helper()
 
 	code, got := f.do(t, http.MethodGet, path(decision), "", f.phone)
 	require.Equal(t, http.StatusOK, code, got)
 
-	return got["linked_from"]
+	return got
+}
+
+// linkedFrom gives the items that link to decision, as it reads in full with ada's phone.
+func (f *fixture) linkedFrom(t *testing.T, decision object) any {
+	t.Helper()
+
+	return f.full(t, decision)["linked_from"]
 }
 
 // note makes a note of the body JSON with ada's laptop, links it to refs, and returns it.
@@ -736,7 +752,7 @@ func TestDecisionsAreAProjectsAnArchivedOneToo(t *testing.T) {
 	refused(t, http.StatusNotFound, code, got)
 }
 
-func TestATokenReadsEveryDecisionAndChangesNone(t *testing.T) {
+func TestATokenReadsEveryDecisionAndChangesNoneOverREST(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
@@ -780,6 +796,7 @@ func TestAModuleSwitchedOffKeepsItsDecisions(t *testing.T) {
 		f.load(t, table)
 
 		assert.Equal(t, []any{unavailable(clay["ref"])}, f.links(t, beds, f.phone), "a link to a decision leads nowhere")
+		assert.NotContains(t, f.hits(t, "clay", "", f.phone), "knowledge", "and search finds none")
 
 		for _, r := range []struct{ method, target, body string }{
 			{http.MethodGet, "/api/knowledge?area=garden", ""},
@@ -800,6 +817,7 @@ func TestAModuleSwitchedOffKeepsItsDecisions(t *testing.T) {
 	f.load(t, object{"enabled": true})
 	assert.Equal(t, want, f.list(t, "garden"), "switched on again, every decision reads as before")
 	assert.Equal(t, []any{linkTo(clay, "replaced")}, f.links(t, beds, f.phone))
+	assert.Equal(t, []string{"Beds are raised"}, f.found(t, "clay"))
 }
 
 func TestADecisionOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
@@ -836,6 +854,10 @@ func TestADecisionOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
 	require.Equal(t, http.StatusOK, code, note)
 	assert.Equal(t, []any{unavailable(clay["ref"])}, note["links"], "another user's decision is never resolved")
 	assert.Equal(t, []any{}, f.linkedFrom(t, clay), "nor lists another user's note")
+
+	for _, text := range []string{"clay", "cl"} {
+		assert.NotContains(t, f.hits(t, text, "", f.grace), "knowledge", "nor found by another user's search: %s", text)
+	}
 
 	assert.Equal(t, 1, f.count(t, "decisions"))
 	assert.Equal(t, clay, f.read(t, clay, f.phone))
@@ -922,4 +944,7 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	code, got = f.do(t, http.MethodDelete, path(made[0]), "", web)
 	refused(t, http.StatusNotFound, code, got)
 	expect(f.add(t, "garden", `{"decision":"Mulch","why":"Soil."}`, web), "garden") // and not the delete of none
+
+	sown := use(t, f.client(t, f.laptop), "update_knowledge", object{"area": "orchard", "add": []object{{"decision": "Sow in April", "why": "Frost."}}})
+	expect(objects(sown["decisions"])[0], "orchard") // a decision added by a tool
 }

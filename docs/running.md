@@ -95,18 +95,19 @@ is kept. A client sends it as `Authorization: Bearer TOKEN`, to `/mcp` or to
 `/api/`. Settings lists each token with its access, when it was made and when it
 was last used. Revoking one refuses it from its next request. No token can list,
 make or revoke tokens, change an area's brief over REST, restore one, rename or
-archive a project, add, mend or delete a decision, delete a note or a task for
-good, or attach, read or remove a note's file: only a signed-in session can. A
-`write` token can make a project, and replace a brief through the MCP tool
-`update_area` alone.
+archive a project, add or mend a decision over REST, delete one, delete a note
+or a task for good, or attach, read or remove a note's file: only a signed-in
+session can. A `write` token can make a project, replace a brief through the
+MCP tool `update_area` alone, and add and mend decisions through
+`update_knowledge` alone.
 
 ### The MCP tools
 
 At `/mcp` a client with a token calls the core's three tools and those of each
-module switched on. These are the core's, the tools of notes and those of tasks,
-with the mark suggested for each in an MCP gateway such as Portal, which keeps
-the marks in its own configuration: a free tool runs at once, and one that needs
-a tap waits for the owner to allow it.
+module switched on. These are the core's, the tools of notes, those of tasks and
+those of knowledge, with the mark suggested for each in an MCP gateway such as
+Portal, which keeps the marks in its own configuration: a free tool runs at
+once, and one that needs a tap waits for the owner to allow it.
 
 | Tool | Access | What it does | Mark |
 | --- | --- | --- | --- |
@@ -123,35 +124,52 @@ a tap waits for the owner to allow it.
 | `get_task` | `read` | reads one task in full, with its notes, links, what links to it, and its log | free |
 | `update_task` | `write` | changes a task's title, notes, area, plan, deadline, list or links, or marks it done or opens it again | free |
 | `trash_task` | `write` | moves a task to the trash | needs a tap |
+| `get_knowledge` | `read` | gives a project's brief whole, with its revision, and each decision that stands as its line, its day and its ref, and how many are replaced, with `full` each in full and with `replaced` the replaced too; or one decision in full, with what it replaced or what replaced it and what links to it | free |
+| `update_knowledge` | `write` | adds and mends 1 to 20 decisions of one project in one package, all or none, with the owner's words kept on every revision it writes | needs a tap |
 
-`update_area` carries Claude Code's marker:
-`"_meta": {"anthropic/requiresUserInteraction": true}` on its entry in
-`tools/list`. Claude Code then asks its user before every call of it, in auto
-mode and under `bypassPermissions` too, with no "don't ask again", and a run
-with nobody to answer is refused the call. A gateway such as Portal does not
-pass the marker on, so through one the mark set there for the tool is what
-holds.
-`update_area` refuses a `said` of more than 4,000 characters, and a brief of
-more than 4,000 is refused wherever it comes from.
+`update_area` and `update_knowledge` carry Claude Code's marker:
+`"_meta": {"anthropic/requiresUserInteraction": true}` on their entries in
+`tools/list`. Claude Code then asks its user before every call of either, in
+auto mode and under `bypassPermissions` too, with no "don't ask again", and a
+run with nobody to answer is refused the call. Its prompt shows the call's
+arguments whole, so a person judges the words on the prompt itself. A gateway
+such as Portal does not pass the marker on, so through one the mark set there
+for the tool is what holds.
+`update_area` and `update_knowledge` each refuse a `said` of more than 4,000
+characters, and a brief of more than 4,000, or a decision over one of its caps
+([configuration.md](configuration.md#recallsynapsistoml)), is refused wherever
+it comes from. A package `update_knowledge` sends is saved whole or not at all:
+a refused one leaves every decision as it was, and its line names the entry
+that was refused, or the field when the call does not fit the tool's schema.
 
 No tool finds a note or a task in the trash, restores one or deletes one for
-good, and no tool reads, attaches or removes a note's file. A text through
-`create_note`, `update_note`, `create_tasks` or `update_task` longer than its
-module's `capture_max_chars`
+good, no tool deletes a decision, and no tool reads, attaches or removes a
+note's file. A text through `create_note`, `update_note`, `create_tasks` or
+`update_task` longer than its module's `capture_max_chars`
 ([configuration.md](configuration.md#recallsynapsistoml)) is refused, and
 nothing is saved. A call of `create_tasks` or `update_task` that sets a date
 gives `today`, the date the client takes for today; unless it is the date in
 the configured `timezone`, the call is refused with that date, its weekday, the
 time zone and the first day of the week, and nothing is saved. A write through
-a tool records the token's name as its source.
+a tool records the token's name as what made the change: as the `source` of a
+note's or a task's change, and as `by` on the revision of a brief or a decision.
 
 As a client connects, the server's instructions tell it in one line, the same
-with any module on or off, to read a project's brief first when a discussion of
-the project begins, with `list_areas` and the project's slug or name; Claude
-Code reads them as a session starts. Portal relays neither annotations nor
-instructions to the client, so each tool's description tells a client what it
-does and when to use it, and that of `list_areas` says too to read a project's
-brief as a discussion of it begins.
+with any module on or off, to read what is kept of a project first when a
+discussion of the project begins, with `get_knowledge` and the project's slug or
+name, or with `list_areas` when `get_knowledge` is not listed, as with knowledge
+off; Claude Code reads them as a session starts. Portal relays neither
+annotations nor instructions to the client, so each tool's description tells a
+client what it does and when to use it, and those of `get_knowledge` and
+`list_areas` say too to read a project as a discussion of it begins.
+
+A repository's `AGENTS.md` may name the area that keeps its project's
+knowledge, with this line, the area's slug in place of `SLUG`:
+
+> Recall Synapsis keeps this project's knowledge in the area `SLUG`: its
+> brief, and the decisions that shape it. When a discussion of the project
+> begins, read it with `get_knowledge`. Record a decision only on the
+> owner's word, with `update_knowledge`.
 
 ## From the image
 

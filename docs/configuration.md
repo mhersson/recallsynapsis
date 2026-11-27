@@ -96,7 +96,8 @@ decision it replaces, and every wording of it. It has no key but `enabled`.
 Its caps are fixed and are no keys: a decision is one line of at most 200
 characters, its why at most 2,000 and its source one line of at most 500, and
 one change adds and mends at most 20 decisions. A text over its cap is refused
-wherever it comes from, the web app included.
+wherever it comes from, the web app included. The owner's words that the MCP
+tool `update_knowledge` keeps, its `said`, are at most 4,000 characters.
 
 | Key | Default | Meaning |
 | --- | --- | --- |

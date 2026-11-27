@@ -24,9 +24,10 @@ const (
 	// maxSaid caps, in characters, the owner's words update_area keeps.
 	maxSaid = 4000
 	// instructions are the same with any module on or off. A gateway such as
-	// Portal drops them, so the description of list_areas says the same.
-	instructions = "When a discussion of one of the owner's projects begins, read its brief first: " +
-		"call list_areas with area set to the project's slug or name."
+	// Portal drops them, so the descriptions of get_knowledge and list_areas say the same.
+	instructions = "When a discussion of one of the owner's projects begins, read what is kept of it first: " +
+		"call get_knowledge with area set to the project's slug or name, " +
+		"or list_areas with the same area when get_knowledge is not listed."
 )
 
 // toolArea is an area as a tool gives it: a client names an area by its slug

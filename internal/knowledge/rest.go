@@ -9,9 +9,22 @@ import (
 	"github.com/mhersson/recallsynapsis/internal/store"
 )
 
-// serveList answers every decision of the project ?area= names, and which day it is.
+// serveList answers every decision of the area ?area= names, by its slug or
+// its name, and which day it is.
 func (k knowledge) serveList(w http.ResponseWriter, r *http.Request) error {
-	out, err := k.list(r.Context(), r.URL.Query().Get("area"))
+	c, _ := module.CallerFrom(r.Context())
+
+	area := r.URL.Query().Get("area")
+	if area == "" {
+		return fmt.Errorf("area names the project to list, by its slug or its name: %w", store.ErrInvalid)
+	}
+
+	a, err := k.FindArea(r.Context(), c.UserID, area)
+	if err != nil {
+		return err
+	}
+
+	out, err := k.list(r.Context(), a)
 	if err != nil {
 		return err
 	}
@@ -33,7 +46,7 @@ func (k knowledge) serveChange(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	module.Reply(w, http.StatusOK, map[string][]row{"decisions": out})
+	module.Reply(w, http.StatusOK, saved{out})
 
 	return nil
 }

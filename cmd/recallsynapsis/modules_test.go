@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -147,37 +148,68 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 func TestEveryToolOfTheBinaryAsClaudeCodeReadsIt(t *testing.T) {
 	t.Parallel()
 
-	config := writeConfig(t, t.TempDir(), validConfig+fakeOn+"[modules.notes]\nenabled = true\n[modules.tasks]\nenabled = true\n"+
-		"[modules.knowledge]\nenabled = true\n[modules.push]\nenabled = true\n")
-
-	d, err := openData(t.Context(), filepath.Join(t.TempDir(), "data"), config, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = d.store.Close() })
-	require.Len(t, d.modules.On(), len(modules), "every module of the binary is on")
-
-	signin := auth.New(d.store, time.Now)
-	user, err := signin.EnsureUser(t.Context(), "ada")
-	require.NoError(t, err)
-
-	_, token, err := signin.CreateToken(t.Context(), user, "laptop", "read")
-	require.NoError(t, err)
-
-	srv := httptest.NewServer(api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Hub: api.NewHub(t.Context().Done())}))
-	t.Cleanup(srv.Close)
-
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).Connect(t.Context(),
-		&mcp.StreamableClientTransport{Endpoint: srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearer(token)}, MaxRetries: -1}, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = cs.Close() })
-
-	res, err := cs.ListTools(t.Context(), nil)
-	require.NoError(t, err)
-	require.NotEmpty(t, res.Tools)
-
-	for _, tl := range res.Tools {
-		assert.LessOrEqual(t, utf8.RuneCountInString(tl.Description), 4096, tl.Name)
-		assert.Equal(t, tl.Name == "update_area", tl.Meta != nil, "the marker on update_area alone: %s", tl.Name)
+	others := []string{
+		"list_areas", "search", "update_area", "create_note", "list_notes", "get_note", "update_note", "trash_note",
+		"create_tasks", "list_tasks", "get_task", "update_task", "trash_task", "add_item",
 	}
+	marker, instructions := mcp.Meta{"anthropic/requiresUserInteraction": true}, map[bool]string{}
+
+	for _, on := range []bool{true, false} {
+		config := writeConfig(t, t.TempDir(), validConfig+fakeOn+"[modules.notes]\nenabled = true\n[modules.tasks]\nenabled = true\n"+
+			"[modules.push]\nenabled = true\n[modules.knowledge]\nenabled = "+strconv.FormatBool(on)+"\n")
+
+		d, err := openData(t.Context(), filepath.Join(t.TempDir(), "data"), config, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = d.store.Close() })
+
+		if on {
+			require.Len(t, d.modules.On(), len(modules), "every module of the binary is on")
+		}
+
+		signin := auth.New(d.store, time.Now)
+		user, err := signin.EnsureUser(t.Context(), "ada")
+		require.NoError(t, err)
+
+		_, token, err := signin.CreateToken(t.Context(), user, "laptop", "read")
+		require.NoError(t, err)
+
+		srv := httptest.NewServer(api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Hub: api.NewHub(t.Context().Done())}))
+		t.Cleanup(srv.Close)
+
+		cs, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).Connect(t.Context(),
+			&mcp.StreamableClientTransport{Endpoint: srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearer(token)}, MaxRetries: -1}, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = cs.Close() })
+
+		instructions[on] = cs.InitializeResult().Instructions
+
+		res, err := cs.ListTools(t.Context(), nil)
+		require.NoError(t, err)
+
+		names := []string{}
+		marked := map[string]mcp.Meta{}
+
+		for _, tl := range res.Tools {
+			names = append(names, tl.Name)
+			assert.LessOrEqual(t, utf8.RuneCountInString(tl.Description), 4096, tl.Name)
+
+			if tl.Meta != nil {
+				marked[tl.Name] = tl.Meta
+			}
+		}
+
+		want, asked := others, map[string]mcp.Meta{"update_area": marker}
+		if on {
+			want = append(slices.Clone(others), "get_knowledge", "update_knowledge")
+			asked["update_knowledge"] = marker
+		}
+
+		assert.ElementsMatch(t, want, names, "knowledge on: %t", on)
+		assert.Equal(t, asked, marked, "Claude Code's marker, as the JSON boolean true, on update_area and update_knowledge alone")
+	}
+
+	assert.NotEmpty(t, instructions[true])
+	assert.Equal(t, instructions[true], instructions[false], "the instructions are the same with knowledge off")
 }
 
 func TestPushSignsWithThePublicURL(t *testing.T) {
