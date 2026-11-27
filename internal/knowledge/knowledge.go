@@ -93,6 +93,7 @@ func New(d module.Deps) module.Module {
 		Migrations: migrations,
 		Resolve:    k.resolve,
 		Search:     k.search,
+		Tools:      k.tools(),
 		Routes: []module.Route{
 			{Pattern: "GET /api/knowledge", Access: module.Read, Serve: k.serveList},
 			{Pattern: "POST /api/knowledge", Access: module.Owner, Serve: k.serveChange},
@@ -139,6 +140,11 @@ type decision struct {
 type list struct {
 	Decisions []row  `json:"decisions"`
 	Today     string `json:"today"`
+}
+
+// saved is what a package saved: what it mended, then what it added.
+type saved struct {
+	Decisions []row `json:"decisions"`
 }
 
 // entry is a revision as the history lists it.
@@ -324,20 +330,10 @@ func (k knowledge) slugs(ctx context.Context, userID int64) (map[int64]string, e
 	return out, nil
 }
 
-// list gives every decision of the caller's project area, a slug or a name,
-// the newest day first and among those of a day the newest made first.
-func (k knowledge) list(ctx context.Context, area string) (list, error) {
+// list gives every decision of the caller's area a, the newest day first and
+// among those of a day the newest made first.
+func (k knowledge) list(ctx context.Context, a module.Area) (list, error) {
 	c, _ := module.CallerFrom(ctx)
-
-	if area == "" {
-		return list{}, fmt.Errorf("area names the project to list, by its slug or its name: %w", store.ErrInvalid)
-	}
-
-	a, err := k.FindArea(ctx, c.UserID, area)
-	if err != nil {
-		return list{}, err
-	}
-
 	slugs := map[int64]string{a.ID: a.Slug}
 
 	rs, err := k.Store.QueryContext(ctx, `SELECT `+columns+` FROM `+joined+` WHERE d.user_id = ? AND d.area_id = ?

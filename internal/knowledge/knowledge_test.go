@@ -258,14 +258,21 @@ func (f *fixture) read(t *testing.T, decision object, auth string) object {
 	return got
 }
 
-// linkedFrom gives the items that link to decision, as it reads in full with ada's phone.
-func (f *fixture) linkedFrom(t *testing.T, decision object) any {
+// full is decision as it reads in full with ada's phone.
+func (f *fixture) full(t *testing.T, decision object) object {
 	t.Helper()
 
 	code, got := f.do(t, http.MethodGet, path(decision), "", f.phone)
 	require.Equal(t, http.StatusOK, code, got)
 
-	return got["linked_from"]
+	return got
+}
+
+// linkedFrom gives the items that link to decision, as it reads in full with ada's phone.
+func (f *fixture) linkedFrom(t *testing.T, decision object) any {
+	t.Helper()
+
+	return f.full(t, decision)["linked_from"]
 }
 
 // note makes a note of the body JSON with ada's laptop, links it to refs, and returns it.
@@ -745,7 +752,7 @@ func TestDecisionsAreAProjectsAnArchivedOneToo(t *testing.T) {
 	refused(t, http.StatusNotFound, code, got)
 }
 
-func TestATokenReadsEveryDecisionAndChangesNone(t *testing.T) {
+func TestATokenReadsEveryDecisionAndChangesNoneOverREST(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
@@ -937,4 +944,7 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	code, got = f.do(t, http.MethodDelete, path(made[0]), "", web)
 	refused(t, http.StatusNotFound, code, got)
 	expect(f.add(t, "garden", `{"decision":"Mulch","why":"Soil."}`, web), "garden") // and not the delete of none
+
+	sown := use(t, f.client(t, f.laptop), "update_knowledge", object{"area": "orchard", "add": []object{{"decision": "Sow in April", "why": "Frost."}}})
+	expect(objects(sown["decisions"])[0], "orchard") // a decision added by a tool
 }
