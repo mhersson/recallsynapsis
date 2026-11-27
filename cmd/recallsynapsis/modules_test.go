@@ -20,10 +20,14 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode/utf8"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mhersson/recallsynapsis/internal/api"
+	"github.com/mhersson/recallsynapsis/internal/auth"
 	"github.com/mhersson/recallsynapsis/internal/module"
 	"github.com/mhersson/recallsynapsis/internal/store"
 	"github.com/mhersson/recallsynapsis/internal/testkit"
@@ -123,6 +127,54 @@ func TestAModuleTellsTheDayInTheConfiguredZone(t *testing.T) {
 	var got struct{ Now struct{ Timezone string } }
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got), rec.Body.String())
 	assert.Equal(t, "Pacific/Kiritimati", got.Now.Timezone)
+}
+
+// bearer sends every request with the API token it holds.
+type bearer string
+
+func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Bearer "+string(b))
+
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+// Claude Code cuts a tool's description at 4,096 characters, and asks its user
+// before every call of a tool that carries the marker.
+func TestEveryToolOfTheBinaryAsClaudeCodeReadsIt(t *testing.T) {
+	t.Parallel()
+
+	config := writeConfig(t, t.TempDir(), validConfig+fakeOn+"[modules.notes]\nenabled = true\n[modules.tasks]\nenabled = true\n"+
+		"[modules.push]\nenabled = true\n")
+
+	d, err := openData(t.Context(), filepath.Join(t.TempDir(), "data"), config, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.store.Close() })
+	require.Len(t, d.modules.On(), len(modules), "every module of the binary is on")
+
+	signin := auth.New(d.store, time.Now)
+	user, err := signin.EnsureUser(t.Context(), "ada")
+	require.NoError(t, err)
+
+	_, token, err := signin.CreateToken(t.Context(), user, "laptop", "read")
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(api.New(api.Deps{Auth: signin, Core: d.areas, Modules: d.modules, Hub: api.NewHub(t.Context().Done())}))
+	t.Cleanup(srv.Close)
+
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).Connect(t.Context(),
+		&mcp.StreamableClientTransport{Endpoint: srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearer(token)}, MaxRetries: -1}, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	res, err := cs.ListTools(t.Context(), nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Tools)
+
+	for _, tl := range res.Tools {
+		assert.LessOrEqual(t, utf8.RuneCountInString(tl.Description), 4096, tl.Name)
+		assert.Equal(t, tl.Name == "update_area", tl.Meta != nil, "the marker on update_area alone: %s", tl.Name)
+	}
 }
 
 func TestPushSignsWithThePublicURL(t *testing.T) {

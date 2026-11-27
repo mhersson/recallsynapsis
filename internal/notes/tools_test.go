@@ -86,10 +86,10 @@ func TestTheToolsOfNotesAreThereWhileItIsOn(t *testing.T) {
 		return out
 	}
 
-	assert.ElementsMatch(t, []string{"list_areas", "search", "create_note", "list_notes", "get_note", "update_note", "trash_note"}, names())
+	assert.ElementsMatch(t, []string{"list_areas", "search", "update_area", "create_note", "list_notes", "get_note", "update_note", "trash_note"}, names())
 
 	f.load(t, object{"enabled": false})
-	assert.ElementsMatch(t, []string{"list_areas", "search"}, names())
+	assert.ElementsMatch(t, []string{"list_areas", "search", "update_area"}, names())
 }
 
 func TestACaptureIsFiledWhereTheOwnerSaid(t *testing.T) {

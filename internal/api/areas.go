@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/mhersson/recallsynapsis/internal/core"
@@ -43,7 +44,7 @@ func (s *server) createArea(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	s.areaChanged(r, a)
+	s.areaChanged(r.Context(), a)
 	module.Reply(w, http.StatusCreated, a)
 
 	return nil
@@ -65,7 +66,7 @@ func (s *server) changeArea(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	s.areaChanged(r, a)
+	s.areaChanged(r.Context(), a)
 	module.Reply(w, http.StatusOK, a)
 
 	return nil
@@ -114,7 +115,7 @@ func (s *server) restoreArea(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	s.areaChanged(r, a)
+	s.areaChanged(r.Context(), a)
 	module.Reply(w, http.StatusOK, a)
 
 	return nil
@@ -132,8 +133,8 @@ func revisionPath(r *http.Request) (int64, int64, error) {
 	return id, rev, err
 }
 
-// areaChanged tells the caller's open pages that the area a changed: it is
-// both the item and its area.
-func (s *server) areaChanged(r *http.Request, a module.Area) {
-	s.Hub.Changed(r.Context(), module.Change{Module: "core", Kind: "area", ID: a.ID, Area: a.ID})
+// areaChanged tells the open pages of the caller ctx carries that the area a
+// changed: it is both the item and its area.
+func (s *server) areaChanged(ctx context.Context, a module.Area) {
+	s.Hub.Changed(ctx, module.Change{Module: "core", Kind: "area", ID: a.ID, Area: a.ID})
 }

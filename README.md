@@ -8,8 +8,10 @@ MCP gateway such as Portal. It is one Go binary with the web app embedded.
 Each area has a brief: Markdown of up to 4,000 characters that says what the
 area is, why it exists, what it should do and what shapes it. Every wording of
 it is kept, any can be read and restored through the API, and a change made
-from a wording that has since been replaced is refused. Only a signed-in
-session changes a brief, renames a project or archives one.
+from a wording that has since been replaced is refused. A signed-in session
+changes a brief, and so does an AI client through the MCP tool `update_area`,
+which Claude Code, connected directly, asks the owner about before every call;
+only a signed-in session renames a project or archives one.
 
 - The owner signs in with a name and a password. AI clients and scripts use API
   tokens made in Settings, each with read or write access.
@@ -78,7 +80,11 @@ session changes a brief, renames a project or archives one.
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and Tasks the tasks, done or
   open, that hold them in their title or notes; part of a word is enough. The
-  MCP tool `list_areas` lists the areas, each with its brief.
+  MCP tool `list_areas` lists the areas, each with the first paragraph of its
+  brief, and gives one area it is given, an archived project too, with its
+  brief whole, and `update_area` replaces an area's brief. As a client
+  connects, the server tells it to read a project's brief when a discussion
+  of the project begins.
 - It backs itself up every night, into a directory you name.
 
 ## What it needs

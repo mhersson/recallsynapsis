@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
+	"time"
 
 	sdkauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -16,20 +18,47 @@ import (
 // The SDK writes a verifier's error into its 401 answer, so the text names no token.
 var errUnknownToken = fmt.Errorf("the API token is unknown or revoked: %w", sdkauth.ErrInvalidToken)
 
-// callerKey keys the caller in the info verify gives a token.
-const callerKey = "caller"
+const (
+	// callerKey keys the caller in the info verify gives a token.
+	callerKey = "caller"
+	// maxSaid caps, in characters, the owner's words update_area keeps.
+	maxSaid = 4000
+	// instructions are the same with any module on or off. A gateway such as
+	// Portal drops them, so the description of list_areas says the same.
+	instructions = "When a discussion of one of the owner's projects begins, read its brief first: " +
+		"call list_areas with area set to the project's slug or name."
+)
 
 // toolArea is an area as a tool gives it: a client names an area by its slug
-// or its name, so it is given no id.
+// or its name, so it is given no id. Only an area named alone gives the
+// brief's revision and its change, so a list's schema cannot require them.
 type toolArea struct {
-	Slug  string `json:"slug"`
-	Name  string `json:"name"`
-	Kind  string `json:"kind"`
-	Brief string `json:"brief"`
+	Slug           string     `json:"slug"`
+	Name           string     `json:"name"`
+	Kind           string     `json:"kind"`
+	Brief          string     `json:"brief"`
+	BriefRevision  *int64     `json:"brief_revision,omitempty"`
+	BriefChangedAt *time.Time `json:"brief_changed_at,omitempty"`
+	BriefChangedBy string     `json:"brief_changed_by,omitempty"`
 }
 
 type areaList struct {
 	Areas []toolArea `json:"areas"`
+}
+
+type listAreasIn struct {
+	Area string `json:"area,omitempty" jsonschema:"the slug or the name of one area, to read it whole"`
+}
+
+// blankLine ends a brief's first paragraph: as Markdown has it, a line of
+// nothing but spaces and tabs is blank.
+var blankLine = regexp.MustCompile(`\n[ \t]*\n`)
+
+type updateAreaIn struct {
+	Area          string `json:"area" jsonschema:"the slug or the name of the area, as list_areas gives them"`
+	Brief         string `json:"brief" jsonschema:"the whole new brief, in Markdown"`
+	BriefRevision int64  `json:"brief_revision" jsonschema:"the revision of the brief the new text was written from, as list_areas gives it"`
+	Said          string `json:"said,omitempty" jsonschema:"the owner's own words agreeing to the change"`
 }
 
 type searchIn struct {
@@ -48,12 +77,14 @@ func (s *server) mcp() http.Handler {
 	// The SDK's defaults advertise listChanged and logging, which makes a current
 	// client open a stream that lasts its whole connection. The list never changes.
 	srv := mcp.NewServer(&mcp.Implementation{Name: "recallsynapsis", Version: s.Version},
-		&mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}}})
+		&mcp.ServerOptions{Instructions: instructions, Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}}})
 
 	tools := []module.Tool{
-		module.NewTool("list_areas", "List the areas things are kept in: the personal area and every project that is not archived, "+
-			"each with its slug, its name, its kind (personal or project) and its brief, in Markdown. "+
-			"To search one area alone, give its slug or its name as the area of search.",
+		module.NewTool("list_areas", "List the owner's areas, the personal area and the projects, "+
+			"each with its slug, its name, its kind and the first paragraph of its brief, which says what it is. "+
+			"With area, a slug or a name, it gives that one area with its whole brief, in Markdown, and brief_revision, which update_area needs. "+
+			"Read a project's whole brief when a discussion of the project begins. "+
+			"To search one area alone, give its slug or name as the area of search.",
 			module.Read, s.listAreas),
 		module.NewTool("search", "Search what is kept, in every area or in one. "+
 			"query is the text to find; part of a word is enough, so a stem or one part of a compound word finds the whole word. "+
@@ -62,6 +93,16 @@ func (s *server) mcp() http.Handler {
 			"Each hit has its ref (module:id, such as notes:42), its kind, its title, a snippet, the slug of its area, "+
 			"its state and when it last changed.",
 			module.Read, s.searchTool),
+		module.NewTool("update_area", "Replace the brief of one of the owner's areas, and only on the owner's word: "+
+			"show them the whole new text in the conversation first, and call this once they have agreed to it. "+
+			"A brief is Markdown that says what the project is, why it exists, what it should do and what shapes it; "+
+			"single decisions, plans and tasks do not belong in it. "+
+			"Its first paragraph says what the project is in a few lines, since lists show that paragraph alone. "+
+			"brief replaces the whole text. "+
+			"brief_revision is the revision you read with list_areas and the area; "+
+			"if the call is refused because the brief has changed since, read it again and draft again. "+
+			"said is the owner's own words agreeing to the change, and may be left out.",
+			module.Write, s.updateArea).Asked(),
 	}
 
 	for _, m := range s.Modules.On() {
@@ -135,8 +176,14 @@ func (s *server) guard(ctx context.Context, req *mcp.CallToolRequest, access mod
 	return errors.New(line)
 }
 
-func (s *server) listAreas(ctx context.Context, _ struct{}) (areaList, error) {
+func (s *server) listAreas(ctx context.Context, in listAreasIn) (areaList, error) {
 	c, _ := module.CallerFrom(ctx)
+
+	if in.Area != "" {
+		a, err := s.Core.Find(ctx, c.UserID, in.Area)
+
+		return areaList{[]toolArea{named(a)}}, err
+	}
 
 	list, err := s.Core.Areas(ctx, c.UserID, false)
 	if err != nil {
@@ -145,10 +192,40 @@ func (s *server) listAreas(ctx context.Context, _ struct{}) (areaList, error) {
 
 	out := areaList{Areas: make([]toolArea, len(list))}
 	for i, a := range list {
-		out.Areas[i] = toolArea{a.Slug, a.Name, a.Kind, a.Brief}
+		out.Areas[i] = toolArea{Slug: a.Slug, Name: a.Name, Kind: a.Kind, Brief: blankLine.Split(a.Brief, 2)[0]}
 	}
 
 	return out, nil
+}
+
+// named is a as a tool gives an area it is given: with the brief whole, its
+// revision, when it changed and what changed it.
+func named(a module.Area) toolArea {
+	return toolArea{a.Slug, a.Name, a.Kind, a.Brief, &a.BriefRevision, a.BriefChangedAt, a.BriefChangedBy}
+}
+
+// updateArea changes the brief as PATCH /api/areas/{id} does, and keeps said
+// on the revision it writes.
+func (s *server) updateArea(ctx context.Context, in updateAreaIn) (toolArea, error) {
+	if err := module.Capped("said", &in.Said, maxSaid); err != nil {
+		return toolArea{}, err
+	}
+
+	c, _ := module.CallerFrom(ctx)
+
+	a, err := s.Core.Find(ctx, c.UserID, in.Area)
+	if err != nil {
+		return toolArea{}, err
+	}
+
+	a, err = s.Core.ChangeArea(ctx, c, a.ID, core.Change{Brief: &in.Brief, BriefRevision: &in.BriefRevision, Said: in.Said})
+	if err != nil {
+		return toolArea{}, err
+	}
+
+	s.areaChanged(ctx, a)
+
+	return named(a), nil
 }
 
 func (s *server) searchTool(ctx context.Context, in searchIn) (searchOut, error) {

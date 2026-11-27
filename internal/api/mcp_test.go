@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -122,10 +123,28 @@ func TestMCPListsTheCoreToolsAndThoseOfTheModulesOn(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"tools":{}}`, string(advertised), "tools only, and neither listChanged, which opens a stream, nor logging")
 
-	assert.ElementsMatch(t, []string{"list_areas", "search", "add_item"}, tools(t, cs))
+	assert.ElementsMatch(t, []string{"list_areas", "search", "update_area", "add_item"}, tools(t, cs))
+
+	res, err := cs.ListTools(t.Context(), nil)
+	require.NoError(t, err)
+
+	marked := map[string]mcp.Meta{}
+
+	for _, tl := range res.Tools {
+		if tl.Meta != nil {
+			marked[tl.Name] = tl.Meta
+		}
+	}
+
+	assert.Equal(t, map[string]mcp.Meta{"update_area": {"anthropic/requiresUserInteraction": true}}, marked,
+		"Claude Code's marker, as the JSON boolean true, on update_area alone")
 
 	f.load(t, map[string]any{"enabled": false})
-	assert.ElementsMatch(t, []string{"list_areas", "search"}, tools(t, f.client(t, read)), "a module switched off has no tool")
+	off := f.client(t, read)
+	assert.ElementsMatch(t, []string{"list_areas", "search", "update_area"}, tools(t, off), "a module switched off has no tool")
+
+	assert.NotEmpty(t, init.Instructions)
+	assert.Equal(t, init.Instructions, off.InitializeResult().Instructions, "the instructions are the same with a module off")
 }
 
 func TestMCPAdmitsAnAPITokenAlone(t *testing.T) {
@@ -194,8 +213,8 @@ func TestMCPToolsActForTheTokensUser(t *testing.T) {
 
 	assert.Equal(t, map[string]any{"areas": []any{
 		map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": ""},
-		map[string]any{"slug": "garden", "name": "Garden", "kind": "project", "brief": "Beds and seeds.\n\nAnd the greenhouse."},
-	}}, call(t, cs, "list_areas", nil), "the areas not archived, each brief whole, with no id and no archived mark")
+		map[string]any{"slug": "garden", "name": "Garden", "kind": "project", "brief": "Beds and seeds."},
+	}}, call(t, cs, "list_areas", nil), "the areas not archived, each with its brief's first paragraph, with no id and no archived mark")
 
 	beds := call(t, cs, "add_item", map[string]any{"title": "Raised beds", "area": "GARDEN"})
 	assert.Equal(t, []any{map[string]any{"module": "fake", "hits": []any{map[string]any{
@@ -219,6 +238,121 @@ func TestMCPToolsActForTheTokensUser(t *testing.T) {
 	refused(t, cs, "add_item", map[string]any{"title": "Lost", "area": "nowhere"})
 }
 
+func TestListAreasGivesAnAreaItIsGivenWhole(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, "https://recall.example.org")
+	cookie := f.signIn(t)
+	brief := "Raised beds,\nand the paths.\n \t\nThe greenhouse.\n\nThe seeds."
+
+	code, garden := f.json(t, http.MethodPost, "/api/areas", `{"name":"Garden","brief":`+strconv.Quote(brief)+`}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	code, shed := f.json(t, http.MethodPost, "/api/areas", `{"name":"Tool Shed","brief":"Tools."}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	code, _ = f.json(t, http.MethodPost, "/api/areas", `{"name":"Orchard","brief":"Apples and pears."}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	code, shed = f.json(t, http.MethodPatch, areaPath(t, shed), `{"archived":true}`, cookie, csrf)
+	require.Equal(t, http.StatusOK, code)
+
+	cs := f.client(t, f.token(t, "phone", "read"))
+
+	assert.Equal(t, []any{
+		map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": ""},
+		map[string]any{"slug": "garden", "name": "Garden", "kind": "project", "brief": "Raised beds,\nand the paths."},
+		map[string]any{"slug": "orchard", "name": "Orchard", "kind": "project", "brief": "Apples and pears."},
+	}, call(t, cs, "list_areas", nil)["areas"], "the text before the first blank line, a line of spaces and tabs too, and a brief of one paragraph whole")
+
+	whole := func(a map[string]any) []any {
+		return []any{map[string]any{
+			"slug": a["slug"], "name": a["name"], "kind": a["kind"], "brief": a["brief"],
+			"brief_revision": a["brief_revision"], "brief_changed_at": a["brief_changed_at"], "brief_changed_by": a["brief_changed_by"],
+		}}
+	}
+
+	assert.Equal(t, whole(garden), call(t, cs, "list_areas", map[string]any{"area": "GARDEN"})["areas"], "by its slug in any case")
+	assert.Equal(t, whole(shed), call(t, cs, "list_areas", map[string]any{"area": "tool shed"})["areas"], "an archived project, by its name")
+	assert.Equal(t, []any{map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": "", "brief_revision": float64(0)}},
+		call(t, cs, "list_areas", map[string]any{"area": "personal"})["areas"], "the revision of a brief never written")
+
+	code, got := f.json(t, http.MethodGet, "/api/search?q=beds&area=nowhere", "", cookie)
+	require.Equal(t, http.StatusNotFound, code)
+	assert.Equal(t, got["error"], refused(t, cs, "list_areas", map[string]any{"area": "nowhere"}), "the line REST answers")
+}
+
+func TestUpdateAreaReplacesTheBriefAsRESTDoes(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, "https://recall.example.org")
+	srv := httptest.NewServer(f.h)
+	t.Cleanup(srv.Close)
+
+	cookie := f.signIn(t)
+	laptop := f.client(t, f.token(t, "laptop", "write"))
+
+	code, garden := f.json(t, http.MethodPost, "/api/areas", `{"name":"Garden","brief":"The beds."}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	code, shed := f.json(t, http.MethodPost, "/api/areas", `{"name":"Tool Shed"}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	code, _ = f.json(t, http.MethodPatch, areaPath(t, shed), `{"archived":true}`, cookie, csrf)
+	require.Equal(t, http.StatusOK, code)
+
+	refused(t, laptop, "update_area", map[string]any{"area": "personal", "brief": "Blind."})
+
+	for _, area := range []string{"personal", "TOOL SHED"} {
+		got := call(t, laptop, "update_area", map[string]any{"area": area, "brief": "Mine.", "brief_revision": 0})
+		assert.InDelta(t, 1, got["brief_revision"], 0, "the personal area, which a call with no revision left at 0, "+
+			"and an archived project, by slug or by name, %s", area)
+	}
+
+	s := openStream(t, srv.URL, cookie)
+	brief := "The beds.\n\nAnd the greenhouse."
+
+	got := call(t, laptop, "update_area", map[string]any{"area": "Garden", "brief": brief, "brief_revision": 1, "said": "Yes, keep that."})
+	s.expect(t, areaEvent(t, garden))
+	assert.Equal(t, []any{brief, float64(2), "laptop"}, []any{got["brief"], got["brief_revision"], got["brief_changed_by"]},
+		"the brief whole, one revision on, changed by the token's name")
+	assert.Equal(t, []any{got}, call(t, laptop, "list_areas", map[string]any{"area": "garden"})["areas"],
+		"the area as list_areas gives one it is given")
+
+	path := areaPath(t, garden)
+	code, rev := f.json(t, http.MethodGet, path+"/revisions/2", "", cookie)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, []any{"laptop", "Yes, keep that.", brief}, []any{rev["by"], rev["said"], rev["brief"]}, "said on the revision")
+
+	stale := refused(t, laptop, "update_area", map[string]any{"area": "garden", "brief": "Stale.", "brief_revision": 1})
+	assert.Contains(t, stale, "2", "the line names the revision the brief is at")
+
+	code, rest := f.json(t, http.MethodPatch, path, `{"brief":"Stale.","brief_revision":1}`, cookie, csrf)
+	require.Equal(t, http.StatusConflict, code)
+	assert.Equal(t, rest["error"], stale, "the line REST answers")
+
+	refused(t, laptop, "update_area", map[string]any{"area": "nowhere", "brief": "Lost.", "brief_revision": 0})
+
+	for _, args := range []map[string]any{
+		{"area": "garden", "brief": strings.Repeat("a", 4001), "brief_revision": 2},
+		{"area": "garden", "brief": "Wordy.", "brief_revision": 2, "said": strings.Repeat("é", 4001)},
+	} {
+		assert.Contains(t, refused(t, laptop, "update_area", args), "4000", "the line names the cap")
+	}
+
+	code, history := f.json(t, http.MethodGet, path+"/revisions", "", cookie)
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, history["revisions"], 2, "a refused call saves nothing")
+
+	desk := f.client(t, f.token(t, "desk", "write"))
+	assert.Equal(t, got, call(t, desk, "update_area", map[string]any{"area": "garden", "brief": brief + "\n", "brief_revision": 2, "said": "Again."}),
+		"a save that leaves the brief as it is answers the area as it is")
+
+	code, history = f.json(t, http.MethodGet, path+"/revisions", "", cookie)
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, history["revisions"], 2, "and writes no revision")
+}
+
 func TestMCPAReadTokenCannotCallAWriteTool(t *testing.T) {
 	t.Parallel()
 
@@ -227,10 +361,13 @@ func TestMCPAReadTokenCannotCallAWriteTool(t *testing.T) {
 	cs := f.client(t, f.token(t, "phone", "read"))
 
 	refused(t, cs, "add_item", map[string]any{"title": "Raised beds", "area": "personal"})
+	refused(t, cs, "update_area", map[string]any{"area": "personal", "brief": "Mine.", "brief_revision": 0})
 
 	var rows int
 	require.NoError(t, f.store.QueryRowContext(t.Context(), `SELECT count(*) FROM fake_items`).Scan(&rows))
 	assert.Zero(t, rows, "nothing changes")
+	assert.Equal(t, []any{map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": "", "brief_revision": float64(0)}},
+		call(t, cs, "list_areas", map[string]any{"area": "personal"})["areas"], "nor the brief")
 
 	assert.Equal(t, []any{}, call(t, cs, "search", map[string]any{"query": "beds"})["groups"], "it may still read")
 }
@@ -266,8 +403,14 @@ func TestMCPASecondUsersAreasAndHitsNeverReachTheFirst(t *testing.T) {
 	require.Len(t, hits, 1)
 	assert.Equal(t, ref, hits[0].(map[string]any)["ref"])
 
+	assert.Equal(t, refused(t, mine, "list_areas", map[string]any{"area": "nowhere"}),
+		strings.Replace(refused(t, mine, "list_areas", map[string]any{"area": "orchard"}), "orchard", "nowhere", 1),
+		"their area is not found, as one that does not exist")
 	refused(t, mine, "search", map[string]any{"query": "beds", "area": "orchard"})
 	refused(t, mine, "add_item", map[string]any{"title": "Into theirs", "area": "orchard"})
+	refused(t, mine, "update_area", map[string]any{"area": "orchard", "brief": "Into theirs.", "brief_revision": 0})
+	assert.Equal(t, []any{map[string]any{"slug": "orchard", "name": "Orchard", "kind": "project", "brief": "", "brief_revision": float64(0)}},
+		call(t, theirs, "list_areas", map[string]any{"area": "orchard"})["areas"], "their brief is as it was")
 }
 
 func TestMCPRefusesTwoToolsOfOneName(t *testing.T) {

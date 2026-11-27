@@ -149,19 +149,28 @@ Every package states its one responsibility in its package comment, and
   request's context. A change of an area and the restore of its brief ask for
   the session cookie alone, so no token renames, archives or changes the
   brief of one over REST; a `write` token makes a project. At
-  `GET /api/events` one hub, which the area routes and the modules'
-  `Deps.Changed` tell, streams each change to the open streams of the user
-  whose change it is, and keeps none. A stream ends when it falls
+  `GET /api/events` one hub, which the area routes, `update_area` and the
+  modules' `Deps.Changed` tell, streams each change to the open streams of the
+  user whose change it is, and keeps none. A stream ends when it falls
   behind, rather than hold up a writer, when the server stops, and after an
   hour, so its access is checked again when it is opened again. At `/mcp` it
-  serves MCP over streamable HTTP, stateless, with JSON responses and tools
-  only: the core's `list_areas`, which gives each area's brief whole, and
-  `search`, each calling what its REST route calls, and the tools of the
-  modules switched on; two tools of one name stop the start. The SDK's
-  bearer check admits an API token alone, so a session cookie is no authority
-  there, and one guard refuses a call the token's access does not cover
-  before the tool runs, puts the token's `module.Caller` in the tool's
-  context, and gives an error as the line REST would answer.
+  serves MCP over streamable HTTP, stateless, with JSON responses,
+  instructions of one line, the same with any module on or off, that tell a
+  client to read a project's brief with `list_areas` when a discussion of it
+  begins, and tools only: the core's `list_areas`, which lists the areas that
+  are not archived, each with the text of its brief before the first blank
+  line, or gives one area it is given, by its slug or its name, with its
+  brief whole, its revision and its change; `search`, which calls what its
+  REST route calls;
+  `update_area`, which calls what `PATCH /api/areas/{id}` calls to replace
+  the brief of an area it is given, keeps the owner's words a call gives, at
+  most 4,000 characters, on the revision it writes, and is marked with
+  `module.Tool.Asked`; and the tools of the modules switched on; two tools of
+  one name stop the start. The SDK's bearer check admits an API token alone,
+  so a session cookie is no authority there, and one guard refuses a call the
+  token's access does not cover before the tool runs, puts the token's
+  `module.Caller` in the tool's context, and gives an error as the line REST
+  would answer.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables
@@ -184,13 +193,15 @@ Every package states its one responsibility in its package comment, and
   back still reads the areas, and every wording of it is kept as a revision.
   A change of the brief names the revision it was made from and is refused
   once the brief has moved on, and it writes the next revision with what
-  changed it; a change of the name or the archived mark writes none. Any
-  revision can be read, and restoring one writes a new one that names it. It
-  finds one of a user's areas by its id, its slug or its name. It builds the
-  feature modules the binary lists: it decodes each one's table and checks its
-  settings, on or off, refuses a table no module has, a module route that is
-  open and a module tool that asks for neither read nor write, and applies
-  every module's migrations, on or off, after auth's and its own.
+  changed it and the owner's words a tool gave, unless it leaves the brief as
+  it is; a change of the name or the archived mark writes none. Any revision
+  can be read, and restoring one writes a new one that names it, unless the
+  brief already has that wording. It finds one of a user's areas by its id,
+  its slug or its name. It builds the feature modules the binary lists: it
+  decodes each one's table and checks its settings, on or off, refuses a table
+  no module has, a module route that is open and a module tool that asks for
+  neither read nor write, and applies every module's migrations, on or off,
+  after auth's and its own.
   Over the modules switched on it searches, grouping the hits by module,
   giving each its area's slug and failing on a hit outside the caller's
   areas, resolves a reference, unavailable rather than an error when no
@@ -209,14 +220,17 @@ Every package states its one responsibility in its package comment, and
   a text, the path a tap opens and a tag, by which a newer message replaces
   an older one.
   `NewTool` makes a tool from a typed function, so no module touches the MCP
-  SDK. Beside it: `Capped`, which refuses a text a tool is given over a module's
-  cap, counted in characters; the `Caller` an authorised request carries in its
-  context, with the user, the source of the request and whether it may write;
-  the access levels a route or a tool declares; the links an item keeps, at most
-  100 references, each well formed and kept once, which `Deps.Items` reads as
-  the core resolves them; and the refusal, the JSON reply and the strict
-  decoding of a JSON body that every route taking one uses, with the 1 MiB cap
-  on a body that `/mcp` keeps too.
+  SDK, and `Asked` marks one with `_meta`
+  `"anthropic/requiresUserInteraction": true` in `tools/list`, so Claude Code
+  asks its user before every call of it. Beside them: `Capped`, which refuses
+  a text a tool is given over a module's cap, counted in characters; the
+  `Caller` an authorised request carries in its context, with the user, the
+  source of the request and whether it may write; the access levels a route or
+  a tool declares; the links an item keeps, at most 100 references, each well
+  formed and kept once, which `Deps.Items` reads as the core resolves them;
+  and the refusal, the JSON reply and the strict decoding of a JSON body that
+  every route taking one uses, with the 1 MiB cap on a body that `/mcp` keeps
+  too.
   Depguard rules in `.golangci.yaml` let a module package's code import
   `module` and `store` and no other package of this binary, let nothing but
   `api` and `cmd` import a module, and let only tests import the fake; tests

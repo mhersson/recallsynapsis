@@ -148,6 +148,7 @@ func TestTheBriefsRevisions(t *testing.T) {
 	}{
 		{`{"brief":"Stale.","brief_revision":1}`, http.StatusConflict},
 		{`{"brief":"Blind."}`, http.StatusBadRequest},
+		{`{"brief":"Said.","brief_revision":2,"said":"Keep it."}`, http.StatusBadRequest},
 		{`{"brief":"` + strings.Repeat("a", 4001) + `","brief_revision":2}`, http.StatusBadRequest},
 	} {
 		code, got := f.json(t, http.MethodPatch, path, tt.body, cookie, csrf)
