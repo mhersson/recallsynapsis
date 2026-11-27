@@ -1,5 +1,6 @@
+import { day } from '../../components/dates.ts'
 import type { Now } from './api.ts'
-import { add, day, period, shortcuts, stamp, week } from './dates.ts'
+import { add, period, shortcuts, stamp, week } from './dates.ts'
 
 const on = (date: string, week_start = 'monday'): Now => ({ date, weekday: '', time: '10:00', timezone: 'Europe/Oslo', week_start })
 

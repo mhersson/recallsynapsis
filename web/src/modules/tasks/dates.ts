@@ -1,10 +1,6 @@
+import { DAYS, MONTHS, at, day } from '../../components/dates.ts'
 import type { Now } from './api.ts'
 
-// Dates are the wire's YYYY-MM-DD and are worked on at midnight UTC, where no time zone moves one onto the day before.
-const at = (date: string) => new Date(date + 'T00:00:00Z')
-
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 // The date days after date, or before it when days is negative.
@@ -12,12 +8,6 @@ export function add(date: string, days: number) {
   const d = at(date)
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
-}
-
-// A day as a row writes it: Sat 28 Nov.
-export function day(date: string) {
-  const d = at(date)
-  return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
 }
 
 // A period: Sat 28 Nov for one day, Sat-Sun 28-29 Nov within a month and Mon-Sun 30 Nov-6 Dec across two.
