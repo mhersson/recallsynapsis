@@ -94,20 +94,24 @@ The token starts with `recall_` and is shown once, as it is made: only its hash
 is kept. A client sends it as `Authorization: Bearer TOKEN`, to `/mcp` or to
 `/api/`. Settings lists each token with its access, when it was made and when it
 was last used. Revoking one refuses it from its next request. No token can list,
-make or revoke tokens, change an area's brief, restore one, rename or archive a
-project, delete a note or a task for good, or attach, read or remove a note's
-file: only a signed-in session can. A `write` token can make a project.
+make or revoke tokens, change an area's brief over REST, restore one, rename or
+archive a project, delete a note or a task for good, or attach, read or remove a
+note's file: only a signed-in session can. A `write` token can make a project,
+and replace a brief through the MCP tool `update_area` alone.
 
 ### The MCP tools
 
-At `/mcp` a client with a token calls the core's tools, `list_areas` and
-`search`, which only read, and those of each module switched on. These are the
-tools of notes and of tasks, with the mark suggested for each in an MCP gateway
-such as Portal, which keeps the marks in its own configuration: a free tool runs
-at once, and one that needs a tap waits for the owner to allow it.
+At `/mcp` a client with a token calls the core's three tools and those of each
+module switched on. These are the core's, the tools of notes and those of tasks,
+with the mark suggested for each in an MCP gateway such as Portal, which keeps
+the marks in its own configuration: a free tool runs at once, and one that needs
+a tap waits for the owner to allow it.
 
 | Tool | Access | What it does | Mark |
 | --- | --- | --- | --- |
+| `list_areas` | `read` | lists the areas that are not archived, each with the first paragraph of its brief, or gives one area, an archived project too, with its brief whole, its revision and when and by what it changed | free |
+| `search` | `read` | searches every area or one, the hits grouped by module | free |
+| `update_area` | `write` | replaces an area's brief whole, from the revision it names, with the owner's words kept on the revision | needs a tap |
 | `create_note` | `write` | saves a note or an idea: in the area it names, an idea that names none in the personal area, and any other in the inbox | free |
 | `list_notes` | `read` | lists notes and ideas by area, kind, inbox flag and tag, the most recently changed first | free |
 | `get_note` | `read` | reads one note in full, with its links, what links to it, and the id, name, type and size of each file | free |
@@ -118,6 +122,15 @@ at once, and one that needs a tap waits for the owner to allow it.
 | `get_task` | `read` | reads one task in full, with its notes, links, what links to it, and its log | free |
 | `update_task` | `write` | changes a task's title, notes, area, plan, deadline, list or links, or marks it done or opens it again | free |
 | `trash_task` | `write` | moves a task to the trash | needs a tap |
+
+`update_area` carries Claude Code's marker:
+`"_meta": {"anthropic/requiresUserInteraction": true}` on its entry in
+`tools/list`. Claude Code then asks its user before every call of it, in auto
+mode and under `bypassPermissions` too, with no "don't ask again", and a run
+with nobody to answer is refused the call. A gateway such as Portal does not
+pass the marker on, so through one the tool's mark there is what holds.
+`update_area` refuses a `said` of more than 4,000 characters, and a brief of
+more than 4,000 is refused wherever it comes from.
 
 No tool finds a note or a task in the trash, restores one or deletes one for
 good, and no tool reads, attaches or removes a note's file. A text through

@@ -110,7 +110,7 @@ func TestTheToolsOfTasksAreThereWhileItIsOn(t *testing.T) {
 
 		return out
 	}
-	others := []string{"list_areas", "search", "create_note", "list_notes", "get_note", "update_note", "trash_note"}
+	others := []string{"list_areas", "search", "update_area", "create_note", "list_notes", "get_note", "update_note", "trash_note"}
 
 	assert.ElementsMatch(t, slices.Concat(others, []string{"create_tasks", "list_tasks", "get_task", "update_task", "trash_task"}), names())
 

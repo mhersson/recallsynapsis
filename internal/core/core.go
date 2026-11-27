@@ -73,11 +73,13 @@ const (
 
 // Change is what a change to an area sets; a nil field stays as it is. A
 // change of the brief names the revision it was made from, and no other does.
+// Said comes through a tool alone, so REST refuses it.
 type Change struct {
 	Name          *string `json:"name"`
 	Brief         *string `json:"brief"`
 	BriefRevision *int64  `json:"brief_revision"`
 	Archived      *bool   `json:"archived"`
+	Said          string  `json:"-"` // the owner's own words, kept on the revision a change of the brief writes
 }
 
 // Entry is a wording of a brief as the history lists it.
@@ -208,7 +210,7 @@ func (c *Service) CreateProject(ctx context.Context, caller module.Caller, name,
 			return fmt.Errorf("core: create project: %w", err)
 		}
 
-		if err := writeBrief(ctx, tx, caller, id, brief, nil); err != nil {
+		if err := writeBrief(ctx, tx, caller, id, brief, "", nil); err != nil {
 			return err
 		}
 
@@ -298,7 +300,7 @@ func (c *Service) ChangeArea(ctx context.Context, caller module.Caller, id int64
 		}
 
 		if ch.Brief != nil {
-			if err := writeBrief(ctx, tx, caller, id, *ch.Brief, nil); err != nil {
+			if err := writeBrief(ctx, tx, caller, id, *ch.Brief, ch.Said, nil); err != nil {
 				return err
 			}
 		}
@@ -387,7 +389,7 @@ func (c *Service) Restore(ctx context.Context, caller module.Caller, id, rev int
 			return fmt.Errorf("core: restore: %w", err)
 		}
 
-		if err := writeBrief(ctx, tx, caller, id, brief, &rev); err != nil {
+		if err := writeBrief(ctx, tx, caller, id, brief, "", &rev); err != nil {
 			return err
 		}
 
@@ -403,9 +405,9 @@ func (c *Service) Restore(ctx context.Context, caller module.Caller, id, rev int
 }
 
 // writeBrief sets the brief of the caller's area with the id, one revision on,
-// and keeps that revision, restored from the revision from unless it is nil.
-// A brief the area has already writes nothing.
-func writeBrief(ctx context.Context, tx *sql.Tx, caller module.Caller, id int64, brief string, from *int64) error {
+// and keeps that revision with said, restored from the revision from unless it
+// is nil. A brief the area has already writes nothing.
+func writeBrief(ctx context.Context, tx *sql.Tx, caller module.Caller, id int64, brief, said string, from *int64) error {
 	res, err := tx.ExecContext(ctx, `UPDATE areas SET description = ?1, brief_revision = brief_revision + 1, brief_changed_at = ?2,
 		brief_changed_by = ?3 WHERE id = ?4 AND user_id = ?5 AND description <> ?1`, brief, time.Now().UnixMilli(), caller.Source, id, caller.UserID)
 	if err != nil {
@@ -416,9 +418,9 @@ func writeBrief(ctx context.Context, tx *sql.Tx, caller module.Caller, id int64,
 		return err
 	}
 
-	_, err = tx.ExecContext(ctx, `INSERT INTO area_revisions (area_id, revision, changed_at, changed_by, restored_from, brief)
-		SELECT id, brief_revision, brief_changed_at, brief_changed_by, ?, description FROM areas WHERE id = ? AND user_id = ?`,
-		from, id, caller.UserID)
+	_, err = tx.ExecContext(ctx, `INSERT INTO area_revisions (area_id, revision, changed_at, changed_by, said, restored_from, brief)
+		SELECT id, brief_revision, brief_changed_at, brief_changed_by, ?, ?, description FROM areas WHERE id = ? AND user_id = ?`,
+		said, from, id, caller.UserID)
 	if err != nil {
 		return fmt.Errorf("core: keep the revision of the brief: %w", err)
 	}
