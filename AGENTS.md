@@ -184,9 +184,10 @@ Every package states its one responsibility in its package comment, and
   back still reads the areas, and every wording of it is kept as a revision.
   A change of the brief names the revision it was made from and is refused
   once the brief has moved on, and it writes the next revision with what
-  changed it; a change of the name or the archived mark writes none. Any
-  revision can be read, and restoring one writes a new one that names it. It
-  finds one of a user's areas by its id, its slug or its name. It builds the
+  changed it, unless it leaves the brief as it is; a change of the name or the
+  archived mark writes none. Any revision can be read, and restoring one
+  writes a new one that names it, unless the brief already has that wording.
+  It finds one of a user's areas by its id, its slug or its name. It builds the
   feature modules the binary lists: it decodes each one's table and checks its
   settings, on or off, refuses a table no module has, a module route that is
   open and a module tool that asks for neither read nor write, and applies

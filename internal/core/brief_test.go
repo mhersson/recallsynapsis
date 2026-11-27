@@ -99,6 +99,38 @@ func TestAChangeOfTheBriefNamesTheRevisionItWasMadeFrom(t *testing.T) {
 	assert.Len(t, f.history(t, ada, garden.ID), 2, "and writes none")
 }
 
+func TestASaveThatLeavesTheBriefAsItIsWritesNoRevision(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	ada := f.user(t, "ada")
+	garden := f.project(t, ada, "Garden")
+	laptop := module.Caller{UserID: ada, Source: "laptop", Write: true}
+
+	first := f.brief(t, web(ada), garden.ID, "The beds.", 0)
+	assert.Equal(t, first, f.brief(t, laptop, garden.ID, "The beds.\n", 1), "the area as it is, changed last by web still")
+
+	renamed, err := f.svc.ChangeArea(t.Context(), web(ada), garden.ID,
+		Change{Name: new("Orchard"), Brief: new("The beds."), BriefRevision: new(int64(1))})
+	require.NoError(t, err)
+	assert.Equal(t, "Orchard", renamed.Name, "a rename beside it is made")
+	assert.Equal(t, first.BriefRevision, renamed.BriefRevision)
+
+	_, err = f.svc.ChangeArea(t.Context(), web(ada), garden.ID, Change{Brief: new("The beds."), BriefRevision: new(int64(0))})
+	require.ErrorIs(t, err, store.ErrConflict, "one made from another revision is still refused")
+
+	second := f.brief(t, web(ada), garden.ID, "The greenhouse.", 1)
+
+	restored, err := f.svc.Restore(t.Context(), laptop, garden.ID, 2)
+	require.NoError(t, err)
+	assert.Equal(t, second, restored, "nor does a restore of the wording the brief has")
+	assert.Len(t, f.history(t, ada, garden.ID), 2)
+
+	shed := f.project(t, ada, "Shed")
+	assert.Equal(t, shed, f.brief(t, web(ada), shed.ID, "", 0), "nor an empty brief saved where none was written")
+	assert.Equal(t, []Entry{}, f.history(t, ada, shed.ID))
+}
+
 func TestTheHistoryListsEveryWordingAndARestoreBringsOneBack(t *testing.T) {
 	t.Parallel()
 

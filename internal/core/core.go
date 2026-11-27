@@ -208,10 +208,8 @@ func (c *Service) CreateProject(ctx context.Context, caller module.Caller, name,
 			return fmt.Errorf("core: create project: %w", err)
 		}
 
-		if brief != "" {
-			if err := writeBrief(ctx, tx, caller, id, brief, nil); err != nil {
-				return err
-			}
+		if err := writeBrief(ctx, tx, caller, id, brief, nil); err != nil {
+			return err
 		}
 
 		a, err = byID(ctx, tx, caller.UserID, id)
@@ -372,7 +370,8 @@ func (c *Service) Revision(ctx context.Context, userID, id, rev int64) (Version,
 }
 
 // Restore gives the caller's area with the id the brief of its revision rev,
-// one revision on, which names rev, and returns the area.
+// one revision on, which names rev, unless the brief has that wording, and
+// returns the area.
 func (c *Service) Restore(ctx context.Context, caller module.Caller, id, rev int64) (module.Area, error) {
 	var a module.Area
 
@@ -405,11 +404,16 @@ func (c *Service) Restore(ctx context.Context, caller module.Caller, id, rev int
 
 // writeBrief sets the brief of the caller's area with the id, one revision on,
 // and keeps that revision, restored from the revision from unless it is nil.
+// A brief the area has already writes nothing.
 func writeBrief(ctx context.Context, tx *sql.Tx, caller module.Caller, id int64, brief string, from *int64) error {
-	_, err := tx.ExecContext(ctx, `UPDATE areas SET description = ?, brief_revision = brief_revision + 1, brief_changed_at = ?,
-		brief_changed_by = ? WHERE id = ? AND user_id = ?`, brief, time.Now().UnixMilli(), caller.Source, id, caller.UserID)
+	res, err := tx.ExecContext(ctx, `UPDATE areas SET description = ?1, brief_revision = brief_revision + 1, brief_changed_at = ?2,
+		brief_changed_by = ?3 WHERE id = ?4 AND user_id = ?5 AND description <> ?1`, brief, time.Now().UnixMilli(), caller.Source, id, caller.UserID)
 	if err != nil {
 		return fmt.Errorf("core: write the brief: %w", err)
+	}
+
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return err
 	}
 
 	_, err = tx.ExecContext(ctx, `INSERT INTO area_revisions (area_id, revision, changed_at, changed_by, restored_from, brief)

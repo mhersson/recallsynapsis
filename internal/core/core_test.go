@@ -156,9 +156,11 @@ func TestThePersonalAreaKeepsItsNameAndIsNeverArchived(t *testing.T) {
 		Brief: "mine", BriefRevision: 1, BriefChangedAt: got.BriefChangedAt, BriefChangedBy: "web",
 	}, got)
 
+	f.brief(t, web(ada), p.ID, "ours", 1)
+
 	restored, err := f.svc.Restore(t.Context(), web(ada), p.ID, 1)
 	require.NoError(t, err, "its brief is restored as a project's is")
-	assert.Equal(t, int64(2), restored.BriefRevision)
+	assert.Equal(t, int64(3), restored.BriefRevision)
 
 	again, err := f.svc.Area(t.Context(), ada, p.ID)
 	require.NoError(t, err)

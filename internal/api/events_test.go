@@ -217,8 +217,10 @@ func TestAChangeReachesTheOpenStreamsOfItsUserAlone(t *testing.T) {
 	require.Equal(t, http.StatusOK, code)
 
 	personal := f.personal(t, cookie)
-	code, _ = f.json(t, http.MethodPatch, areaPath(t, personal), `{"brief":"Mine.","brief_revision":0}`, cookie, csrf)
-	require.Equal(t, http.StatusOK, code)
+	for i, brief := range []string{"Mine.", "Ours."} {
+		code, _ = f.json(t, http.MethodPatch, areaPath(t, personal), fmt.Sprintf(`{"brief":%q,"brief_revision":%d}`, brief, i), cookie, csrf)
+		require.Equal(t, http.StatusOK, code)
+	}
 
 	code, _ = f.json(t, http.MethodPost, areaPath(t, personal)+"/revisions/1/restore", "", cookie, csrf)
 	require.Equal(t, http.StatusOK, code)
@@ -226,6 +228,7 @@ func TestAChangeReachesTheOpenStreamsOfItsUserAlone(t *testing.T) {
 	for _, s := range []*stream{web, phone} {
 		s.expect(t, areaEvent(t, garden))
 		s.expect(t, areaEvent(t, garden))
+		s.expect(t, areaEvent(t, personal))
 		s.expect(t, areaEvent(t, personal))
 		s.expect(t, areaEvent(t, personal))
 	}
