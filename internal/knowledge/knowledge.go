@@ -3,7 +3,9 @@
 // it replaces, with every wording of it. A decision stands until another
 // replaces it, and is replaced by one at most. A change is one package of
 // decisions added and mended in one project, saved all or none, and only a
-// person deletes one. It owns the tables decisions and decision_revisions.
+// person deletes one. A note or a task may link to a decision, which lists
+// what links to it and keeps no links of its own. It owns the tables
+// decisions and decision_revisions.
 package knowledge
 
 import (
@@ -79,6 +81,7 @@ func New(d module.Deps) module.Module {
 	return module.Module{
 		Name:       name,
 		Migrations: migrations,
+		Resolve:    k.resolve,
 		Routes: []module.Route{
 			{Pattern: "GET /api/knowledge", Access: module.Read, Serve: k.serveList},
 			{Pattern: "POST /api/knowledge", Access: module.Owner, Serve: k.serveChange},
@@ -113,6 +116,12 @@ type line struct {
 	Ref      module.Ref `json:"ref"`
 	Decision string     `json:"decision"`
 	Decided  string     `json:"decided"`
+}
+
+// decision is a decision in full, with the items that link to it.
+type decision struct {
+	row
+	LinkedFrom []module.Item `json:"linked_from"`
 }
 
 // list is what a project's list gives: every decision of it, and which day it is.
@@ -338,16 +347,57 @@ func (k knowledge) list(ctx context.Context, area string) (list, error) {
 	return out, nil
 }
 
-// get gives the caller's decision with the id.
-func (k knowledge) get(ctx context.Context, id int64) (row, error) {
+// get gives the caller's decision with the id in full, the items that link
+// to it each as the core resolves it for the caller.
+func (k knowledge) get(ctx context.Context, id int64) (decision, error) {
 	c, _ := module.CallerFrom(ctx)
 
 	slugs, err := k.slugs(ctx, c.UserID)
 	if err != nil {
-		return row{}, err
+		return decision{}, err
 	}
 
-	return k.read(ctx, slugs, c.UserID, id)
+	r, err := k.read(ctx, slugs, c.UserID, id)
+	if err != nil {
+		return decision{}, err
+	}
+
+	from, err := k.LinksTo(ctx, r.Ref)
+	if err != nil {
+		return decision{}, err
+	}
+
+	out := decision{row: r}
+	if out.LinkedFrom, err = k.Items(ctx, from); err != nil {
+		return decision{}, err
+	}
+
+	return out, nil
+}
+
+// resolve gives the caller's decision with the id as a link shows it: its
+// line, the kind decision and its state.
+func (k knowledge) resolve(ctx context.Context, id int64) (module.Item, error) {
+	c, _ := module.CallerFrom(ctx)
+
+	var (
+		it       = module.Item{Kind: "decision"}
+		replaced bool
+	)
+
+	err := k.Store.QueryRowContext(ctx, `SELECT decision, EXISTS (SELECT 1 FROM decisions WHERE replaces = d.id) FROM decisions d
+		WHERE user_id = ? AND id = ?`, c.UserID, id).Scan(&it.Title, &replaced)
+	if errors.Is(err, sql.ErrNoRows) {
+		return module.Item{}, fmt.Errorf("decision %s: %w", module.NewRef(name, id), store.ErrNotFound)
+	}
+
+	if err != nil {
+		return module.Item{}, fmt.Errorf("knowledge: resolve: %w", err)
+	}
+
+	it.State = state(replaced)
+
+	return it, nil
 }
 
 // read gives the user's decision with the id.

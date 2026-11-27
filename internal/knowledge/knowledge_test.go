@@ -236,14 +236,63 @@ func mending(area string, decision object, revision any, body string) string {
 	return string(b)
 }
 
-// read gives decision as it now reads with auth.
+// read gives decision as it now reads with auth, as a list gives it: a
+// decision in full, which linkedFrom gives, without what links to it.
 func (f *fixture) read(t *testing.T, decision object, auth string) object {
 	t.Helper()
 
 	code, got := f.do(t, http.MethodGet, path(decision), "", auth)
 	require.Equal(t, http.StatusOK, code, got)
+	require.Contains(t, got, "linked_from")
+	delete(got, "linked_from")
 
 	return got
+}
+
+// linkedFrom gives the items that link to decision, as it reads in full with ada's phone.
+func (f *fixture) linkedFrom(t *testing.T, decision object) any {
+	t.Helper()
+
+	code, got := f.do(t, http.MethodGet, path(decision), "", f.phone)
+	require.Equal(t, http.StatusOK, code, got)
+
+	return got["linked_from"]
+}
+
+// note makes a note of the body JSON with ada's laptop, links it to refs, and returns it.
+func (f *fixture) note(t *testing.T, body string, refs ...any) object {
+	t.Helper()
+
+	code, made := f.do(t, http.MethodPost, "/api/notes", body, f.laptop)
+	require.Equal(t, http.StatusCreated, code, made)
+
+	links, err := json.Marshal(object{"revision": 1, "links": refs})
+	require.NoError(t, err)
+
+	code, got := f.do(t, http.MethodPatch, fmt.Sprintf("/api/notes/%v", made["id"]), string(links), f.laptop)
+	require.Equal(t, http.StatusOK, code, got)
+
+	return got
+}
+
+// links gives the links of note as it now reads with auth.
+func (f *fixture) links(t *testing.T, note object, auth string) any {
+	t.Helper()
+
+	code, got := f.do(t, http.MethodGet, fmt.Sprintf("/api/notes/%v", note["id"]), "", auth)
+	require.Equal(t, http.StatusOK, code, got)
+
+	return got["links"]
+}
+
+// linkTo is a link to decision as it reads while it is there, in state.
+func linkTo(decision object, state string) object {
+	return object{"ref": decision["ref"], "kind": "decision", "state": state, "title": decision["decision"], "available": true}
+}
+
+// unavailable is a link to ref that leads nowhere.
+func unavailable(ref any) object {
+	return object{"ref": ref, "kind": "", "state": "", "title": "", "available": false}
 }
 
 // list gives the decisions of the area as its list answers them with ada's phone.
@@ -637,6 +686,30 @@ func TestDeletingADecisionLeavesTheOthersStandingOrReplacingNothing(t *testing.T
 		"the newest decision's id, deleted, is never given again")
 }
 
+func TestANoteThatLinksToADecisionShowsIt(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	web := f.signIn(t, "ada")
+
+	clay := f.add(t, "garden", `{"decision":"Beds are raised","why":"The soil is clay."}`, web)
+	sand := f.add(t, "garden", fmt.Sprintf(`{"decision":"Beds are flat","why":"Sand.","replaces":%q}`, clay["ref"]), web)
+	beds := f.note(t, `{"title":"Beds","area":"garden"}`, clay["ref"], sand["ref"], "knowledge:9999")
+
+	assert.Equal(t, []any{linkTo(clay, "replaced"), linkTo(sand, "stands"), unavailable("knowledge:9999")}, beds["links"],
+		"a link shows a decision's line and its state")
+
+	item := object{"ref": beds["ref"], "kind": "note", "state": "filed", "title": "Beds", "available": true}
+	assert.Equal(t, []any{item}, f.linkedFrom(t, clay), "and the decision in full lists the note")
+	assert.Equal(t, []any{item}, f.linkedFrom(t, sand))
+	assert.Equal(t, []any{}, f.linkedFrom(t, f.add(t, "garden", `{"decision":"Water at dawn","why":"Sun."}`, web)))
+
+	code, got := f.do(t, http.MethodDelete, path(sand), "", web)
+	require.Equal(t, http.StatusNoContent, code, got)
+	assert.Equal(t, []any{linkTo(clay, "stands"), unavailable(sand["ref"]), unavailable("knowledge:9999")}, f.links(t, beds, f.phone),
+		"a link to a deleted decision leads nowhere")
+}
+
 func TestDecisionsAreAProjectsAnArchivedOneToo(t *testing.T) {
 	t.Parallel()
 
@@ -701,9 +774,12 @@ func TestAModuleSwitchedOffKeepsItsDecisions(t *testing.T) {
 	clay := f.add(t, "garden", `{"decision":"Beds are raised","why":"The soil is clay."}`, web)
 	sand := f.add(t, "garden", fmt.Sprintf(`{"decision":"Beds are flat","why":"Sand.","replaces":%q}`, clay["ref"]), web)
 	want := []object{f.read(t, sand, f.phone), f.read(t, clay, f.phone)}
+	beds := f.note(t, `{"title":"Beds","area":"garden"}`, clay["ref"])
 
 	for _, table := range []object{{"enabled": false}, nil} {
 		f.load(t, table)
+
+		assert.Equal(t, []any{unavailable(clay["ref"])}, f.links(t, beds, f.phone), "a link to a decision leads nowhere")
 
 		for _, r := range []struct{ method, target, body string }{
 			{http.MethodGet, "/api/knowledge?area=garden", ""},
@@ -723,6 +799,7 @@ func TestAModuleSwitchedOffKeepsItsDecisions(t *testing.T) {
 
 	f.load(t, object{"enabled": true})
 	assert.Equal(t, want, f.list(t, "garden"), "switched on again, every decision reads as before")
+	assert.Equal(t, []any{linkTo(clay, "replaced")}, f.links(t, beds, f.phone))
 }
 
 func TestADecisionOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
@@ -752,6 +829,13 @@ func TestADecisionOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
 
 	code, got = f.do(t, http.MethodDelete, path(clay), "", grace)
 	refused(t, http.StatusNotFound, code, got)
+
+	code, note := f.do(t, http.MethodPost, "/api/notes", `{"title":"Beds"}`, grace)
+	require.Equal(t, http.StatusCreated, code, note)
+	code, note = f.do(t, http.MethodPatch, fmt.Sprintf("/api/notes/%v", note["id"]), fmt.Sprintf(`{"revision":1,"links":[%q]}`, clay["ref"]), grace)
+	require.Equal(t, http.StatusOK, code, note)
+	assert.Equal(t, []any{unavailable(clay["ref"])}, note["links"], "another user's decision is never resolved")
+	assert.Equal(t, []any{}, f.linkedFrom(t, clay), "nor lists another user's note")
 
 	assert.Equal(t, 1, f.count(t, "decisions"))
 	assert.Equal(t, clay, f.read(t, clay, f.phone))

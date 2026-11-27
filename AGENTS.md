@@ -232,8 +232,11 @@ Every package states its one responsibility in its package comment, and
   takes its revisions with it: the one it replaced then stands, and the one
   that replaced it replaces nothing, with no revision written for that. Over
   REST only the session cookie sends a package or deletes a decision, and
-  every route that reads asks for `read`. It owns the tables `decisions` and
-  `decision_revisions`.
+  every route that reads asks for `read`. A decision keeps no links of its
+  own: a link to one shows its line, the kind `decision` and its state, a
+  link to a deleted one leads nowhere, and a decision in full gives the
+  items that link to it, each as the core resolves it. It owns the tables
+  `decisions` and `decision_revisions`.
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
   settings and their check, migrations, routes, MCP tools, jobs, and
