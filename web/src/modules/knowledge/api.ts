@@ -36,6 +36,9 @@ export type List = { decisions: Decision[]; today: string }
 // What a decision's form holds: replaces is a reference, or '' for none.
 export type Fields = Pick<Decision, 'decision' | 'why' | 'source' | 'decided'> & { replaces: string }
 
+// The fields of a decision, as its form opens with them.
+export const fieldsOf = (d: Decision): Fields => ({ decision: d.decision, why: d.why, source: d.source, decided: d.decided, replaces: d.replaces?.ref ?? '' })
+
 // The page of the decision a reference names.
 export const pathOf = (ref: string) => `/decisions/${ref.slice('knowledge:'.length)}`
 
@@ -78,5 +81,7 @@ export function useDecision(id: number) {
       stale = true
     }
   }, [id, tick])
-  return { decision, failed }
+  // A decision as a change answers it, which keeps what links to it.
+  const show = (d: Decision) => setDecision((x) => x && { ...x, ...d })
+  return { decision, failed, show }
 }

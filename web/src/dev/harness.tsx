@@ -10,7 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Wording } from '../pages/Projects/Brief.tsx'
-import type { Decision, Fields, Line } from '../modules/knowledge/api.ts'
+import { fieldsOf, type Decision, type Fields, type Line } from '../modules/knowledge/api.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
 import { AREAS, DECIDED_TODAY, DECISIONS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, decisionOf, full, history, listNotes, listed, note, onToday, refs, searchDecisions, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
 
@@ -182,11 +182,17 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   return json({ error: 'not found' }, 404)
 }
 
-// The knowledge routes, as the server answers them: a project's decisions, one in full, and a package that adds to a
-// project, refused whole on a text the server refuses, telling the stream of each decision written.
+// The knowledge routes, as the server answers them: a project's decisions, one in full, a package, and a delete, telling
+// the stream of each decision written or deleted.
 function answerKnowledge(method: string, url: URL, body: Record<string, unknown>): Response {
   const d = decisions.find((x) => url.pathname === `/api/knowledge/${x.id}`)
   if (method === 'GET' && d) return json(decisionOf(d, notes, tasks))
+  if (method === 'DELETE' && d) {
+    decisions.splice(decisions.indexOf(d), 1)
+    relink()
+    told(d)
+    return new Response(null, { status: 204 })
+  }
   const named = (method === 'GET' ? url.searchParams.get('area') : String(body.area))?.toLowerCase() ?? ''
   const area = areas.find((a) => [a.slug, a.name.toLowerCase()].includes(named))
   if (method === 'GET' && url.pathname === '/api/knowledge') {
@@ -195,20 +201,52 @@ function answerKnowledge(method: string, url: URL, body: Record<string, unknown>
   }
   if (method !== 'POST' || url.pathname !== '/api/knowledge') return json({ error: 'not found' }, 404)
   if (!area) return json({ error: `area ${named}: not found` }, 404)
-  const add = (body.add ?? []) as Fields[]
+  // An entry of add without a day is decided today.
+  const add = ((body.add ?? []) as Fields[]).map((f) => ({ ...f, decided: f.decided || DECIDED_TODAY }))
+  return answerPackage(area, add, (body.mend ?? []) as Mend[])
+}
+
+type Mend = Partial<Fields> & { ref: string; revision: number }
+
+// The decisions save=moved has mended as a client would have.
+const movedDecisions = new Set<number>()
+
+// A package that mends decisions of the project and adds to it, refused whole on a decision that moved on or a text the
+// server refuses. save=moved refuses the first mend of each decision, as if a client had mended it three minutes before.
+function answerPackage(area: Area, add: Fields[], mend: Mend[]): Response {
+  const of = (ref?: string) => decisions.find((x) => x.ref === ref)
+  for (const [i, m] of mend.entries()) {
+    const d = of(m.ref)
+    if (!d) return json({ error: `entry ${i + 1} of mend: decision ${m.ref}: not found` }, 404)
+    if (query.get('save') === 'moved' && !movedDecisions.has(d.id)) {
+      movedDecisions.add(d.id)
+      Object.assign(d, { why: `${d.why} Confirmed in review.`, revision: d.revision + 1, changed_at: new Date(Date.now() - 3 * 60_000).toISOString(), changed_by: 'aim' })
+      told(d)
+    }
+    if (m.revision !== d.revision) return json({ error: `entry ${i + 1} of mend: ${m.ref} is at revision ${d.revision}, and the mend was made from ${m.revision}: conflict` }, 409)
+    if (refusal({ ...fieldsOf(d), ...m })) return json({ error: `entry ${i + 1} of mend: ${refusal({ ...fieldsOf(d), ...m })}: invalid` }, 400)
+  }
   const wrong = add.map(refusal).findIndex(Boolean)
   if (wrong >= 0) return json({ error: `entry ${wrong + 1} of add: ${refusal(add[wrong])}: invalid` }, 400)
   const at = new Date().toISOString()
+  const mended = mend.map((m) => {
+    const d = of(m.ref)!
+    const f = { ...fieldsOf(d), ...m }
+    return Object.assign(d, texts(f), { decided: f.decided, replaces: of(f.replaces) ?? null, revision: d.revision + 1, changed_at: at, changed_by: 'web' })
+  })
   const added = add.map((f): Decision => {
     const id = nextDecision++
-    const replaces = decisions.find((x) => x.ref === f.replaces) ?? null
-    return { id, ref: `knowledge:${id}`, area: area.slug, ...texts(f), decided: f.decided || DECIDED_TODAY, state: 'stands', replaces, replaced_by: null, revision: 1, created_at: at, changed_at: at, changed_by: 'web' }
+    return { id, ref: `knowledge:${id}`, area: area.slug, ...texts(f), decided: f.decided, state: 'stands', replaces: of(f.replaces) ?? null, replaced_by: null, revision: 1, created_at: at, changed_at: at, changed_by: 'web' }
   })
   decisions.push(...added)
   relink()
-  added.forEach((x) => tell({ module: 'knowledge', kind: 'decision', id: x.id, area: area.id }))
-  return json({ decisions: added })
+  const saved = [...mended, ...added]
+  saved.forEach(told)
+  return json({ decisions: saved })
 }
+
+// Tells the stream of a decision written or deleted.
+const told = (d: Decision) => tell({ module: 'knowledge', kind: 'decision', id: d.id, area: areas.find((a) => a.slug === d.area)?.id ?? 0 })
 
 // A decision's id is never used again, so a link to a deleted one leads to no other.
 let nextDecision = Math.max(0, ...DECISIONS.map((d) => d.id)) + 1
@@ -223,7 +261,7 @@ function refusal(f: Fields): string {
   if (!decision || n(decision) > 200 || /\p{Cc}/u.test(decision)) return 'a decision is one line of 1 to 200 characters'
   if (!why || n(why) > 2000 || /[^\P{Cc}\n\t]/u.test(why)) return 'a why is 1 to 2000 characters, with no control characters but newlines and tabs'
   if (n(source) > 500 || /\p{Cc}/u.test(source)) return 'a source is one line of at most 500 characters'
-  if (f.decided && !/^\d{4}-\d{2}-\d{2}$/.test(f.decided)) return `decided "${f.decided}" is not a date, YYYY-MM-DD`
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f.decided)) return `decided "${f.decided}" is not a date, YYYY-MM-DD`
   return ''
 }
 

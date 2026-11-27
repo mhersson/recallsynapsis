@@ -86,7 +86,9 @@ session renames a project or archives one.
   the newest first, with the replaced folded beneath it, and "Add a
   decision" at its head, but on an archived project, which opens the form of
   a new one, on today, that saves nothing before Save. A decision is read on
-  a page of its own, which a link from a note or a task opens too. Search
+  a page of its own, which a link from a note or a task opens too, where
+  Edit mends it in place, Replace opens the form of a new decision that
+  replaces it, and Delete deletes it for good after a question. Search
   finds a decision, standing or replaced, by a word of its line, its why or
   its source, and lists the decisions' hits after the notes', each leading to
   its decision's page. An AI client reads a project's brief and the lines of

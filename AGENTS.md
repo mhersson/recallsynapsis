@@ -105,8 +105,8 @@ After a change to `web/`, look at the screen before you finish.
   alone, no token, no note and no task; `brief=none` starts every area with
   no brief; `many=1` adds older notes and done tasks, so a list holds more
   than it shows; `today=none` leaves out the tasks Today would show;
-  `save=moved` refuses the first save of each note's text and of each brief,
-  as if a client had saved it meanwhile;
+  `save=moved` refuses the first save of each note's text, of each brief
+  and of each decision, as if a client had saved it meanwhile;
   `upload=wait` holds every upload, so it stays under way;
   `modules=tasks,notes` switches the named modules on, so Tasks and Search
   find the fixed tasks, and the Inbox, Notes and Search the fixed notes;
@@ -445,7 +445,17 @@ Every package states its one responsibility in its package comment, and
   last change, its why as Markdown, its source, a link only when the whole
   of it is one http or https address, the decision it replaces or the one
   that replaced it, and what links to it. Its way back opens its project's
-  page on Decisions, and the side bar marks that project as current.
+  page on Decisions, and the side bar marks that project as current. Edit,
+  Replace, which a replaced decision lacks, and Delete sit at its head on
+  desktop and at its foot on a phone. Edit opens the same form in place,
+  with what the decision holds, and Save sends one mend of the fields that
+  differ from the decision as the editing began, from its revision, or
+  nothing when none does; when the decision has moved on, the form says
+  which revision came in and saves what was entered over it at a second
+  Save. Replace opens the form of a new decision with Replaces on it, at
+  `&replaces=ID`. Delete asks first in the shell's dialog, with the
+  decision's line and, for one that replaced another, that the other stands
+  again, and once deleted opens the project's page on Decisions.
   The service worker, `web/public/sw.js`, shows each notification pushed to
   the browser, and a tap on one takes an open window to its path, or opens
   one there.

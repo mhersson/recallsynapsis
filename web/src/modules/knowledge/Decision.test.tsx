@@ -1,32 +1,15 @@
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Group } from '../../api/types.ts'
 import { note } from '../../dev/fixtures.ts'
 import { open } from '../../test-app.tsx'
 import { FakeEventSource, fakeServer, json, narrow, type Call } from '../../test-server.ts'
-import type { Full } from './api.ts'
-import { areas, decision, linked, replace, row, session } from './test-knowledge.ts'
+import { areas, decision, keeper, linked, replace, session } from './test-knowledge.ts'
 
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
-
-// A server that keeps the decisions given, as the knowledge routes answer them; answer, when given, answers first.
-function server(decisions: Full[], answer: (c: Call) => Response | undefined = () => undefined) {
-  return fakeServer((c) => {
-    const a = answer(c)
-    if (a) return a
-    if (c.path === '/api/session') return json(session())
-    if (c.path.startsWith('/api/areas')) return json({ areas })
-    const area = /^\/api\/knowledge\?area=(.+)$/.exec(c.path)?.[1]
-    if (area) return json({ decisions: decisions.filter((d) => d.area === area).map(row), today: '2026-11-27' })
-    const d = decisions.find((x) => c.path === `/api/knowledge/${x.id}`)
-    if (d) return json(d)
-    if (c.path.startsWith('/api/notes')) return json({ notes: [], total: 0 })
-    if (c.path.startsWith('/api/tasks')) return json({ tasks: [], total: 0, now: { date: '2026-11-23', weekday: 'Monday', time: '10:00', timezone: 'UTC', week_start: 'monday' } })
-  })
-}
 
 const main = () => within(screen.getByRole('main'))
 const reads = (calls: Call[]) => calls.filter((c) => c.path.startsWith('/api/knowledge?'))
@@ -35,7 +18,7 @@ const leads = () => [...screen.getByRole('main').querySelectorAll('.kpart .lrow'
 
 test('a decision reads at its own address, and its way back opens its project\'s page on Decisions', async () => {
   narrow(false)
-  server([decision(7, '2026-11-26')])
+  keeper([decision(7, '2026-11-26')])
   const { where } = await open('/decisions/7')
   await waitFor(() => expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('decision 7'))
   const back = main().getAllByRole('link').find((a) => a.getAttribute('href') === '/areas/2?tab=decisions')!
@@ -48,7 +31,7 @@ test('a replaced decision shows what replaced it first, with the mark of its sta
   const [first, second, third] = [decision(5, '2026-11-20'), decision(6, '2026-11-22'), decision(7, '2026-11-26')]
   replace(second, first)
   replace(third, second)
-  const calls = server([first, second, third])
+  const calls = keeper([first, second, third])
   const page = await open('/decisions/5')
   await waitFor(() => expect(leads()).toEqual([['/decisions/6', 'mk m-decision d-replaced']]))
   expect(screen.getByRole('main').querySelector('.kpart')!.querySelector('.lrow')).not.toBeNull()
@@ -64,7 +47,7 @@ test('a replaced decision shows what replaced it first, with the mark of its sta
 test('Linked from lists each note and task that links to the decision, with its mark, and is absent when none does', async () => {
   narrow(false)
   const linking = decision(7, '2026-11-26', { linked_from: [linked('notes:3', 'note', 'filed'), linked('tasks:4', 'task', 'done')] })
-  server([linking, decision(8, '2026-11-26')])
+  keeper([linking, decision(8, '2026-11-26')])
   const page = await open('/decisions/7')
   await waitFor(() => expect(screen.getByRole('main').querySelectorAll('.sect .lrow')).toHaveLength(2))
   expect([...screen.getByRole('main').querySelectorAll('.sect .lrow')].map((r) => [r.querySelector('a')!.getAttribute('href'), r.querySelector('.mk')!.className])).toEqual([
@@ -86,7 +69,7 @@ test.each([
   ['javascript:alert(1)', false],
 ])('the source %s is a link: %s', async (source, link) => {
   narrow(false)
-  server([decision(7, '2026-11-26', { source })])
+  keeper([decision(7, '2026-11-26', { source })])
   await open('/decisions/7')
   await waitFor(() => expect(screen.getByRole('main').querySelector('.ksource')).not.toBeNull())
   const a = screen.getByRole('main').querySelector('.ksource a')
@@ -100,7 +83,7 @@ test('a decision mended or replaced elsewhere shows without a reload, and one de
   narrow(false)
   const d = decision(7, '2026-11-26')
   const decisions = [d]
-  server(decisions)
+  keeper(decisions)
   await open('/decisions/7')
   const es = FakeEventSource.all[0]
   await act(async () => es.open())
@@ -129,7 +112,7 @@ test('a decision mended or replaced elsewhere shows without a reload, and one de
 
 test('the side bar marks the decision\'s project as current, and nothing else', async () => {
   narrow(false)
-  server([decision(7, '2026-11-26')])
+  keeper([decision(7, '2026-11-26')])
   await open('/decisions/7')
   const side = () => screen.getAllByRole('navigation')[0]
   await waitFor(() => expect(within(side()).getAllByRole('link').find((a) => a.getAttribute('href') === '/areas/2')).toHaveClass('on'))
@@ -140,7 +123,7 @@ test('a hit of a decision in Search shows its mark and its state, and opens its 
   narrow(false)
   const hit = (id: number, state: string) => ({ ref: `knowledge:${id}`, kind: 'decision', title: `decision ${id}`, snippet: 'why', area: 'garden', state, changed_at: '2026-11-26T10:00:00Z' })
   const groups: Group[] = [{ module: 'knowledge', hits: [hit(7, 'stands'), hit(5, 'replaced')] }]
-  server([], (c) => (c.path.startsWith('/api/search') ? json({ groups }) : undefined))
+  keeper([], (c) => (c.path.startsWith('/api/search') ? json({ groups }) : undefined))
   const { where } = await open('/search?q=tasks')
   await waitFor(() => expect(main().getAllByRole('link').filter((a) => a.classList.contains('row'))).toHaveLength(2))
   const hits = main().getAllByRole('link').filter((a) => a.classList.contains('row'))
@@ -157,7 +140,7 @@ test('a note\'s link to a decision shows its mark and leads to it, tagged when i
   const links = [linked('knowledge:7', 'decision', 'stands'), linked('knowledge:5', 'decision', 'replaced')]
   const answer = (n: ReturnType<typeof note>) => (c: Call) =>
     c.path === '/api/notes/1' ? json(n) : c.path === '/api/notes/1/revisions' ? json({ revisions: [] }) : undefined
-  server([], answer(note(1, 10, { title: 'saving', links })))
+  keeper([], answer(note(1, 10, { title: 'saving', links })))
   const on = await open('/notes/1')
   const rows = () => [...screen.getByRole('main').querySelectorAll('.sect .lrow')]
   await waitFor(() => expect(rows()).toHaveLength(2))
@@ -178,4 +161,59 @@ test('a note\'s link to a decision shows its mark and leads to it, tagged when i
   await open('/notes/1')
   await waitFor(() => expect(rows()).toHaveLength(2))
   expect(rows().every((r) => !r.querySelector('a') && r.querySelector('.tag'))).toBe(true)
+})
+
+test('Edit, Replace and Delete sit at the head of a decision on desktop and at its foot on a phone', async () => {
+  const acts = (scope: string) => [...screen.getByRole('main').querySelectorAll(`${scope} :is(button, a.btn)`)]
+  narrow(false)
+  keeper([decision(7, '2026-11-26')])
+  const desk = await open('/decisions/7')
+  await waitFor(() => expect(acts('.page-head')).toHaveLength(3))
+  expect(acts('.kfoot')).toHaveLength(0)
+  desk.unmount()
+
+  narrow(true)
+  keeper([decision(7, '2026-11-26')])
+  await open('/decisions/7')
+  await waitFor(() => expect(acts('.kfoot')).toHaveLength(3))
+  expect(acts('.page-head')).toHaveLength(0)
+})
+
+test('Delete asks first, with Keep it holding the focus and Escape keeping the decision; deleting opens the project on Decisions, where the one it replaced stands again', async () => {
+  narrow(false)
+  const [seven, six, five] = [decision(7, '2026-11-26'), decision(6, '2026-11-22'), decision(5, '2026-11-20')]
+  replace(seven, five)
+  const calls = keeper([seven, six, five])
+  const { where } = await open('/decisions/7')
+  const remove = () => userEvent.click(within(screen.getByRole('main').querySelector<HTMLElement>('.page-head')!).getAllByRole('button').at(-1)!)
+  const writes = () => calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path])
+  await waitFor(() => expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('decision 7'))
+  await remove()
+  // The browser gives a modal dialog's first control the focus.
+  const [keep] = within(screen.getByRole('dialog')).getAllByRole('button')
+  await userEvent.click(keep)
+  expect(screen.queryByRole('dialog')).toBeNull()
+
+  await remove()
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }))
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(writes()).toEqual([])
+
+  await remove()
+  await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[1])
+  expect(writes()).toEqual([['DELETE', '/api/knowledge/7']])
+  await waitFor(() => expect(where()).toBe('/areas/2?tab=decisions'))
+  const standing = () => [...screen.getByRole('main').querySelectorAll('.decisions > table .l a')].map((a) => a.getAttribute('href'))
+  await waitFor(() => expect(standing()).toEqual(['/decisions/6', '/decisions/5']))
+})
+
+test('a delete the server refuses keeps the decision, with the server\'s line', async () => {
+  narrow(false)
+  keeper([decision(7, '2026-11-26')], (c) => (c.method === 'DELETE' ? json({ error: 'no' }, 500) : undefined))
+  const { where } = await open('/decisions/7')
+  await waitFor(() => expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('decision 7'))
+  await userEvent.click(within(screen.getByRole('main').querySelector<HTMLElement>('.page-head')!).getAllByRole('button').at(-1)!)
+  await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[1])
+  expect(await main().findByRole('alert')).toBeInTheDocument()
+  expect(where()).toBe('/decisions/7')
 })

@@ -88,8 +88,8 @@ function apply(decisions: Full[], { add = [], mend = [] }: { add?: Entry[]; mend
   return json({ decisions: out.map(row) })
 }
 
-// A server that keeps the decisions given, as the knowledge routes answer and change them; answer, when given, answers
-// first.
+// A server that keeps the decisions given, as the knowledge routes answer and change them, a deleted one leaving the one
+// it replaced standing; answer, when given, answers first.
 export function keeper(decisions: Full[], answer: (c: Call) => Response | undefined = () => undefined) {
   return fakeServer((c) => {
     const a = answer(c)
@@ -100,6 +100,12 @@ export function keeper(decisions: Full[], answer: (c: Call) => Response | undefi
     if (area) return json({ decisions: decisions.filter((d) => d.area === area).map(row), today: TODAY })
     if (c.method === 'POST' && c.path === '/api/knowledge') return apply(decisions, c.body as { add?: Entry[]; mend?: Entry[] })
     const d = decisions.find((x) => c.path === `/api/knowledge/${x.id}`)
+    if (d && c.method === 'DELETE') {
+      relate(decisions, d, '')
+      for (const x of decisions) if (x.replaces?.ref === d.ref) x.replaces = null
+      decisions.splice(decisions.indexOf(d), 1)
+      return new Response(null, { status: 204 })
+    }
     if (d) return json(d)
     if (c.path.startsWith('/api/notes')) return json({ notes: [], total: 0 })
     if (c.path.startsWith('/api/tasks')) return json({ tasks: [], total: 0, now: { date: '2026-11-23', weekday: 'Monday', time: '10:00', timezone: 'UTC', week_start: 'monday' } })

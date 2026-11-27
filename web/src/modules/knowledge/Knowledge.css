@@ -12,7 +12,12 @@
   border-color: var(--decision-replaced);
 }
 
-/* A decision read on its own page: its line as the title, then its parts, each under a quiet label. */
+/* A decision read on its own page: its line as the title, then its parts, each under a quiet label, and on a phone its
+   buttons at its foot. */
+.decision .page-head {
+  align-items: flex-start;
+}
+
 .decision .page-head h1 {
   font-size: 20px;
   line-height: 1.3;
@@ -37,6 +42,10 @@
   font-size: 12.5px;
   color: var(--grey2);
   margin-bottom: 2px;
+}
+
+.kfoot {
+  margin-top: 18px;
 }
 
 .ksource {

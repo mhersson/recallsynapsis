@@ -1,10 +1,13 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { open } from '../../test-app.tsx'
-import { json, narrow, type Call } from '../../test-server.ts'
-import { TODAY, areas, decision, keeper } from './test-knowledge.ts'
+import { FakeEventSource, json, narrow, type Call } from '../../test-server.ts'
+import { TODAY, areas, decision, keeper, replace } from './test-knowledge.ts'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
 
 const main = () => within(screen.getByRole('main'))
 const form = () => screen.getByRole('main').querySelector('form')
@@ -18,6 +21,8 @@ const cancel = () => within(form()!).getByRole('button', { name: (_, b) => b.get
 const writes = (calls: Call[]) => calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path, c.body])
 const add = () => main().queryAllByRole('link').find((a) => a.getAttribute('href')?.startsWith('/decisions/new'))
 const side = () => within(screen.getAllByRole('navigation')[0])
+const edit = () => userEvent.click(within(screen.getByRole('main').querySelector<HTMLElement>('.page-head')!).getAllByRole('button')[0])
+const heading = () => main().getByRole('heading', { level: 1 })
 // The rows that lead to another decision, as [where each leads, its mark].
 const leads = () => [...screen.getByRole('main').querySelectorAll('.kpart .lrow')].map((r) => [r.querySelector('a')!.getAttribute('href'), r.querySelector('.mk')!.className])
 
@@ -124,4 +129,103 @@ test('Cancel sits before Save on desktop, and Save above Cancel on a phone', asy
   await open('/decisions/new?area=garden')
   await waitFor(() => expect(form()).not.toBeNull())
   expect(within(form()!).getAllByRole('button')).toEqual([save(), cancel()])
+})
+
+test('Save on an edit sends one mend of the fields that differ from the decision as the editing began, from its revision, and nothing when none differs; Cancel sends nothing and asks nothing', async () => {
+  narrow(false)
+  const [seven, six, five] = [decision(7, '2026-11-26', { revision: 2 }), decision(6, '2026-11-22'), decision(5, '2026-11-20')]
+  replace(seven, five)
+  const calls = keeper([seven, six, five])
+  await open('/decisions/7')
+  await waitFor(() => expect(heading()).toHaveTextContent('decision 7'))
+  await edit()
+  expect(texts().map((t) => (t as HTMLTextAreaElement).value)).toEqual(['decision 7', 'why 7', ''])
+  // Replaces offers the decisions that stand but this one, and the one it replaces, which it holds.
+  await waitFor(() => expect(within(replaces()).getAllByRole('option').map((o) => o.getAttribute('value'))).toEqual(['', 'knowledge:6', 'knowledge:5']))
+  expect(replaces()).toHaveValue('knowledge:5')
+  await userEvent.type(texts()[1], ' ')
+  await userEvent.click(save())
+  expect(form()).toBeNull()
+
+  await edit()
+  await userEvent.type(texts()[1], ' and more')
+  await userEvent.click(cancel())
+  expect(form()).toBeNull()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(writes(calls)).toEqual([])
+
+  await edit()
+  await userEvent.clear(texts()[0])
+  await userEvent.type(texts()[0], 'mended')
+  fireEvent.change(day(), { target: { value: '2026-11-25' } })
+  await userEvent.selectOptions(replaces(), '')
+  await userEvent.click(save())
+  expect(writes(calls)).toEqual([['POST', '/api/knowledge', { area: 'garden', mend: [{ ref: 'knowledge:7', revision: 2, decision: 'mended', decided: '2026-11-25', replaces: '' }] }]])
+  await waitFor(() => expect(heading()).toHaveTextContent('mended'))
+  expect(form()).toBeNull()
+})
+
+test('a decision mended elsewhere while it is edited refuses the save here: the form keeps what was entered through every read, and a second Save sends it from the revision that came in', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  narrow(false)
+  const decisions = [decision(7, '2026-11-26')]
+  const calls = keeper(decisions)
+  await open('/decisions/7')
+  const es = FakeEventSource.all[0]
+  await act(async () => es.open())
+  await waitFor(() => expect(heading()).toHaveTextContent('decision 7'))
+  await edit()
+  await userEvent.type(texts()[0], ' here')
+  Object.assign(decisions[0], { decision: 'theirs', revision: 2, changed_by: 'aim' })
+  act(() => es.send({ module: 'knowledge', kind: 'decision', id: 7, area: 2 }))
+  await act(() => vi.advanceTimersByTimeAsync(2000))
+  expect(texts()[0]).toHaveValue('decision 7 here')
+
+  await userEvent.click(save())
+  expect(await main().findByRole('alert')).toBeInTheDocument()
+  expect(texts()[0]).toHaveValue('decision 7 here')
+  await userEvent.click(save())
+  expect(writes(calls)).toEqual([
+    ['POST', '/api/knowledge', { area: 'garden', mend: [{ ref: 'knowledge:7', revision: 1, decision: 'decision 7 here' }] }],
+    ['POST', '/api/knowledge', { area: 'garden', mend: [{ ref: 'knowledge:7', revision: 2, decision: 'decision 7 here' }] }],
+  ])
+  await waitFor(() => expect(heading()).toHaveTextContent('decision 7 here'))
+})
+
+test('Replace opens the form of a new decision on the one it came from, which the saved decision replaces; a replaced decision has no Replace', async () => {
+  narrow(false)
+  const [seven, five] = [decision(7, '2026-11-26'), decision(5, '2026-11-20')]
+  replace(seven, five)
+  const calls = keeper([seven, five])
+  const { where } = await open('/decisions/7')
+  await waitFor(() => expect(heading()).toHaveTextContent('decision 7'))
+  await userEvent.click(main().getAllByRole('link').find((a) => a.getAttribute('href')?.startsWith('/decisions/new'))!)
+  expect(where()).toBe('/decisions/new?area=garden&replaces=7')
+  await waitFor(() => expect(replaces()).toHaveValue('knowledge:7'))
+  expect(texts().map((t) => (t as HTMLTextAreaElement).value)).toEqual(['', '', ''])
+
+  await userEvent.type(texts()[0], 'newer')
+  await userEvent.type(texts()[1], 'because')
+  await userEvent.click(save())
+  expect(writes(calls)).toEqual([['POST', '/api/knowledge', { area: 'garden', add: [{ decision: 'newer', why: 'because', source: '', decided: TODAY, replaces: 'knowledge:7' }] }]])
+  await waitFor(() => expect(where()).toBe('/decisions/8'))
+  await waitFor(() => expect(leads()).toEqual([['/decisions/7', 'mk m-decision d-replaced']]))
+
+  await userEvent.click(main().getAllByRole('link').find((a) => a.getAttribute('href') === '/decisions/7')!)
+  await waitFor(() => expect(heading()).toHaveTextContent('decision 7'))
+  expect(main().queryAllByRole('link').filter((a) => a.getAttribute('href')?.startsWith('/decisions/new'))).toEqual([])
+})
+
+test('leaving an edit with a change asks first, and Keep editing keeps what was entered', async () => {
+  narrow(false)
+  keeper([decision(7, '2026-11-26')])
+  const { where } = await open('/decisions/7')
+  await waitFor(() => expect(heading()).toHaveTextContent('decision 7'))
+  await edit()
+  await userEvent.type(texts()[1], ' and more')
+  await waitFor(() => expect(main().getAllByRole('link').length).toBeGreaterThan(0))
+  await userEvent.click(main().getAllByRole('link').find((a) => a.getAttribute('href') === '/areas/2?tab=decisions')!)
+  await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[0])
+  expect(where()).toBe('/decisions/7')
+  expect(texts()[1]).toHaveValue('why 7 and more')
 })
