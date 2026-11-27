@@ -32,6 +32,13 @@ The owner's words, which bind every change:
   explanation is genuinely necessary. Rewrite or delete if you find comments
   that don't follow this rule.
 
+## Knowledge
+
+Recall Synapsis keeps this project's knowledge in the area `recallsynapsis`:
+its brief, and the decisions that shape it. When a discussion of the project
+begins, read it with `get_knowledge`. Record a decision only on the owner's
+word, with `update_knowledge`.
+
 ## Commands
 
 - `make check` runs build-go, fmt-check, vet, lint, test-race, tidy-check, scan
