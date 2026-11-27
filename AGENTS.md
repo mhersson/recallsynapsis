@@ -110,9 +110,12 @@ After a change to `web/`, look at the screen before you finish.
   `upload=wait` holds every upload, so it stays under way;
   `modules=tasks,notes` switches the named modules on, so Tasks and Search
   find the fixed tasks, and the Inbox, Notes and Search the fixed notes;
-  `backup=old` makes the last backup three days old and `backup=none`
-  leaves none; with `push` among `modules=`, `push=off`, `on`, `failed`,
-  `home`, `refused` or `none` makes this browser one whose notifications
+  with `knowledge` among them, `recallsynapsis` has eleven fixed decisions,
+  nine that stand and two replaced, which Search finds and a note and a
+  done task link to, and no other area has any; `backup=old` makes the
+  last backup three days old and `backup=none` leaves none; with `push`
+  among `modules=`, `push=off`, `on`, `failed`, `home`, `refused` or
+  `none` makes this browser one whose notifications
   are off, on, or on with the last one failed, an iPhone's Safari tab, one
   that refuses notifications, or one with no Web Push, with two other
   browsers on but for `off`; with `tasks` and `push` among `modules=`,
