@@ -213,3 +213,7 @@ function parse(s: string, links: boolean): Inline[] {
 export function inlines(text: string, links = true): Inline[] {
   return parse(text, links)
 }
+
+// A line as plain words, where no markup can show, such as in an option of a select.
+export const plain = (text: string): string => words(inlines(text, false))
+const words = (list: Inline[]): string => list.map((i) => ('text' in i ? i.text : 'children' in i ? words(i.children) : ' ')).join('')

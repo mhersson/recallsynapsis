@@ -36,7 +36,7 @@ const tabs = () => within(main()).queryByRole('navigation')
 const knowledge = (calls: Call[]) => calls.filter((c) => c.path.startsWith('/api/knowledge'))
 // Where each decision of a table or a list of blocks leads.
 const rows = (scope: ParentNode) => [...scope.querySelectorAll(':is(.l > div, .kline) > a')].map((a) => a.getAttribute('href'))
-const standing = () => main().querySelector<HTMLElement>('.decisions')!.firstElementChild!
+const standing = () => main().querySelector<HTMLElement>('.decisions > :is(table, .kblocks)')!
 const fold = () => main().querySelector<HTMLDetailsElement>('.kfold')!
 
 test('with knowledge on a project shows Activity, holding the page as it was, and Decisions; the personal area shows none, and with knowledge off no page shows them and none is read', async () => {

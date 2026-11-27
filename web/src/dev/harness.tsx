@@ -10,8 +10,9 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Wording } from '../pages/Projects/Brief.tsx'
+import { fieldsOf, type Decision, type Fields, type Line } from '../modules/knowledge/api.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
-import { AREAS, DECIDED_TODAY, DECISIONS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, decisionOf, full, history, listNotes, listed, note, onToday, refs, searchDecisions, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
+import { AREAS, DECIDED_TODAY, DECISIONS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, decisionOf, decisionWording, decisionWordings, full, history, listNotes, listed, note, onToday, refs, searchDecisions, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
 
 const query = new URLSearchParams(window.location.search)
 
@@ -148,7 +149,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   if (path.startsWith('/api/areas/')) return answerArea(method, path, body)
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
   if (path.startsWith('/api/push')) return answerPush(method, url)
-  if (path.startsWith('/api/knowledge') && session.modules.includes('knowledge')) return answerKnowledge(method, url)
+  if (path.startsWith('/api/knowledge') && session.modules.includes('knowledge')) return answerKnowledge(method, url, body)
   if (path === '/api/tasks/notify') return answerNotify(method, body)
   if (path.startsWith('/api/tasks')) {
     const [status, answered] = answerTasks(
@@ -181,16 +182,111 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   return json({ error: 'not found' }, 404)
 }
 
-// The knowledge routes that read, as the server answers them: a project's decisions, and one in full.
-function answerKnowledge(method: string, url: URL): Response {
-  const d = decisions.find((x) => url.pathname === `/api/knowledge/${x.id}`)
+// The knowledge routes, as the server answers them: a project's decisions, one in full, a package, and a delete, telling
+// the stream of each decision written or deleted.
+function answerKnowledge(method: string, url: URL, body: Record<string, unknown>): Response {
+  const [, id, revisions, n] = /^\/api\/knowledge\/(\d+)(\/revisions(?:\/(\d+))?)?$/.exec(url.pathname) ?? []
+  const d = decisions.find((x) => x.id === Number(id))
+  if (method === 'GET' && d && revisions) {
+    const w = n ? kept.get(d.id)!.find((x) => x.revision === Number(n)) : { revisions: kept.get(d.id)!.map(({ revision, at, by, said }) => ({ revision, at, by, said })).reverse() }
+    return w ? json(w) : json({ error: 'not found' }, 404)
+  }
   if (method === 'GET' && d) return json(decisionOf(d, notes, tasks))
+  if (method === 'DELETE' && d && !revisions) {
+    decisions.splice(decisions.indexOf(d), 1)
+    relink()
+    told(d)
+    return new Response(null, { status: 204 })
+  }
+  const named = (method === 'GET' ? url.searchParams.get('area') : String(body.area))?.toLowerCase() ?? ''
+  const area = areas.find((a) => [a.slug, a.name.toLowerCase()].includes(named))
   if (method === 'GET' && url.pathname === '/api/knowledge') {
-    const area = areas.find((a) => [a.slug, a.name.toLowerCase()].includes(url.searchParams.get('area')?.toLowerCase() ?? ''))
     if (!area) return json({ error: 'not found' }, 404)
     return json({ decisions: decisions.filter((x) => x.area === area.slug), today: DECIDED_TODAY })
   }
-  return json({ error: 'not found' }, 404)
+  if (method !== 'POST' || url.pathname !== '/api/knowledge') return json({ error: 'not found' }, 404)
+  if (!area) return json({ error: `area ${named}: not found` }, 404)
+  // An entry of add without a day is decided today.
+  const add = ((body.add ?? []) as Fields[]).map((f) => ({ ...f, decided: f.decided || DECIDED_TODAY }))
+  return answerPackage(area, add, (body.mend ?? []) as Mend[])
+}
+
+type Mend = Partial<Fields> & { ref: string; revision: number }
+
+// The decisions save=moved has mended as a client would have.
+const movedDecisions = new Set<number>()
+
+// Each decision's wordings, oldest first.
+const kept = new Map(decisions.map((d) => [d.id, decisionWordings(d)]))
+
+// A package that mends decisions of the project and adds to it, refused whole on a decision that moved on or a text the
+// server refuses. save=moved refuses the first mend of each decision, as if a client had mended it three minutes before.
+function answerPackage(area: Area, add: Fields[], mend: Mend[]): Response {
+  const of = (ref?: string) => decisions.find((x) => x.ref === ref)
+  for (const [i, m] of mend.entries()) {
+    const d = of(m.ref)
+    if (!d) return json({ error: `entry ${i + 1} of mend: decision ${m.ref}: not found` }, 404)
+    if (query.get('save') === 'moved' && !movedDecisions.has(d.id)) {
+      movedDecisions.add(d.id)
+      Object.assign(d, { why: `${d.why} Confirmed in review.`, revision: d.revision + 1, changed_at: new Date(Date.now() - 3 * 60_000).toISOString(), changed_by: 'aim' })
+      kept.get(d.id)!.push(decisionWording(d, 'Add that the review confirmed it.'))
+      told(d)
+    }
+    if (m.revision !== d.revision) return json({ error: `entry ${i + 1} of mend: ${m.ref} is at revision ${d.revision}, and the mend was made from ${m.revision}: conflict` }, 409)
+    if (refusal({ ...fieldsOf(d), ...m })) return json({ error: `entry ${i + 1} of mend: ${refusal({ ...fieldsOf(d), ...m })}: invalid` }, 400)
+  }
+  const wrong = add.map(refusal).findIndex(Boolean)
+  if (wrong >= 0) return json({ error: `entry ${wrong + 1} of add: ${refusal(add[wrong])}: invalid` }, 400)
+  const at = new Date().toISOString()
+  const mended = mend.map((m) => {
+    const d = of(m.ref)!
+    const f = { ...fieldsOf(d), ...m }
+    return Object.assign(d, texts(f), { decided: f.decided, replaces: of(f.replaces) ?? null, revision: d.revision + 1, changed_at: at, changed_by: 'web' })
+  })
+  const added = add.map((f): Decision => {
+    const id = nextDecision++
+    return { id, ref: `knowledge:${id}`, area: area.slug, ...texts(f), decided: f.decided, state: 'stands', replaces: of(f.replaces) ?? null, replaced_by: null, revision: 1, created_at: at, changed_at: at, changed_by: 'web' }
+  })
+  decisions.push(...added)
+  relink()
+  mended.forEach((x) => kept.get(x.id)!.push(decisionWording(x)))
+  added.forEach((x) => kept.set(x.id, [decisionWording(x)]))
+  const saved = [...mended, ...added]
+  saved.forEach(told)
+  return json({ decisions: saved })
+}
+
+// Tells the stream of a decision written or deleted.
+const told = (d: Decision) => tell({ module: 'knowledge', kind: 'decision', id: d.id, area: areas.find((a) => a.slug === d.area)?.id ?? 0 })
+
+// A decision's id is never used again, so a link to a deleted one leads to no other.
+let nextDecision = Math.max(0, ...DECISIONS.map((d) => d.id)) + 1
+
+// A decision's texts as the server keeps them, without the space around them.
+const texts = (f: Fields) => ({ decision: f.decision.trim(), why: f.why.trim(), source: (f.source ?? '').trim() })
+
+// What the server refuses of a decision's texts, as its line says it, or ''.
+function refusal(f: Fields): string {
+  const { decision, why, source } = texts(f)
+  const n = (s: string) => [...s].length
+  if (!decision || n(decision) > 200 || /\p{Cc}/u.test(decision)) return 'a decision is one line of 1 to 200 characters'
+  if (!why || n(why) > 2000 || /[^\P{Cc}\n\t]/u.test(why)) return 'a why is 1 to 2000 characters, with no control characters but newlines and tabs'
+  if (n(source) > 500 || /\p{Cc}/u.test(source)) return 'a source is one line of at most 500 characters'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f.decided)) return `decided "${f.decided}" is not a date, YYYY-MM-DD`
+  return ''
+}
+
+// Gives each decision the line of the one it replaces and of the one that replaced it, which it then stands or is
+// replaced by, and lists them as the server does: the newest day first, then the most recently made.
+function relink() {
+  const line = (x: Decision): Line => ({ ref: x.ref, decision: x.decision, decided: x.decided })
+  for (const x of decisions) Object.assign(x, { state: 'stands', replaced_by: null })
+  for (const x of decisions) {
+    const older = x.replaces && decisions.find((y) => y.ref === x.replaces!.ref)
+    x.replaces = older ? line(older) : null
+    if (older) Object.assign(older, { state: 'replaced', replaced_by: line(x) })
+  }
+  decisions.sort((a, b) => b.decided.localeCompare(a.decided) || Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)
 }
 
 // Each area's wordings of its brief, oldest first, from when the page first asks of the area, and the areas whose brief

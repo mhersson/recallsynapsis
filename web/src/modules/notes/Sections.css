@@ -285,13 +285,3 @@
 .note-read .notice.made {
   margin: 0 0 16px;
 }
-
-/* A note's title in the frame an earlier revision is read in. */
-.rev .rt {
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  margin: 6px 0 0;
-  overflow-wrap: anywhere;
-}

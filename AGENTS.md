@@ -105,14 +105,16 @@ After a change to `web/`, look at the screen before you finish.
   alone, no token, no note and no task; `brief=none` starts every area with
   no brief; `many=1` adds older notes and done tasks, so a list holds more
   than it shows; `today=none` leaves out the tasks Today would show;
-  `save=moved` refuses the first save of each note's text and of each brief,
-  as if a client had saved it meanwhile;
+  `save=moved` refuses the first save of each note's text, of each brief
+  and of each decision, as if a client had saved it meanwhile;
   `upload=wait` holds every upload, so it stays under way;
   `modules=tasks,notes` switches the named modules on, so Tasks and Search
   find the fixed tasks, and the Inbox, Notes and Search the fixed notes;
   with `knowledge` among them, `recallsynapsis` has eleven fixed decisions,
-  nine that stand and two replaced, which Search finds and a note and a
-  done task link to, and no other area has any; `backup=old` makes the
+  nine that stand, one of them mended in the web app since and at its
+  second revision, and two replaced, which Search finds and a note and a
+  done task link to, and no other area has any, and a decision's texts are
+  refused as the server refuses them; `backup=old` makes the
   last backup three days old and `backup=none` leaves none; with `push`
   among `modules=`, `push=off`, `on`, `failed`, `home`, `refused` or
   `none` makes this browser one whose notifications
@@ -121,8 +123,9 @@ After a change to `web/`, look at the screen before you finish.
   browsers on but for `off`; with `tasks` and `push` among `modules=`,
   Settings shows the kinds of notification at their first values, and
   `notify=refused` refuses every change of them. What the page changes holds
-  until it reloads, and a change of an area, a note, a task, a browser or a
-  kind of notification reaches the event stream, as the server's does.
+  until it reloads, and a change of an area, a note, a task, a decision, a
+  browser or a kind of notification reaches the event stream, as the
+  server's does.
 - Read the PNG and say what you see. Fix what looks wrong and shoot again.
 - Stop Vite by the pid you recorded, never by port or name.
 
@@ -429,13 +432,35 @@ Every package states its one responsibility in its package comment, and
   the newest first, as a table of When, The decision, Why, Source and
   Replaces, each why whole, and the replaced folded beneath it under their
   count, as a table of When, The decision and Replaced, or on a phone each
-  as a block. A project with none says so. A click on a decision anywhere
+  as a block. A project with none says so. "Add a decision", at the head of
+  the tab unless the project is archived, opens the form of a new one at
+  `/decisions/new?area=SLUG`: Decision and Why, each with the "Markdown"
+  hint, Source, Decided, the browser's own date field, on the day the
+  server gives as today, and Replaces, the browser's own select of the
+  decisions that stand, with Nothing first. It sends nothing before Save,
+  keeps what was entered when the server refuses it, with the server's line
+  above Save, asks before a change not saved is left, and once saved opens
+  the decision in its place. A click on a decision anywhere
   but on a link in it opens its own page, read, at `/decisions/ID`: its line
   as the title, with code, bold and italic shown, its state, its day and its
   last change, its why as Markdown, its source, a link only when the whole
   of it is one http or https address, the decision it replaces or the one
   that replaced it, and what links to it. Its way back opens its project's
-  page on Decisions, and the side bar marks that project as current.
+  page on Decisions, and the side bar marks that project as current. Edit,
+  Replace, which a replaced decision lacks, and Delete sit at its head on
+  desktop and at its foot on a phone. Edit opens the same form in place,
+  with what the decision holds, and Save sends one mend of the fields that
+  differ from the decision as the editing began, from its revision, or
+  nothing when none does; when the decision has moved on, the form says
+  which revision came in and saves what was entered over it at a second
+  Save. Replace opens the form of a new decision with Replaces on it, at
+  `&replaces=ID`. Delete asks first in the shell's dialog, with the
+  decision's line and, for one that replaced another, that the other stands
+  again, and once deleted opens the project's page on Decisions. Its
+  History, folded, lists its revisions, the newest first, with when, by
+  what and what the owner said, and Read shows an earlier wording in the
+  frame a note's revision is read in, with the way back alone, since no
+  revision of a decision is restored.
   The service worker, `web/public/sw.js`, shows each notification pushed to
   the browser, and a tap on one takes an open window to its path, or opens
   one there.
