@@ -127,6 +127,10 @@ After a change to `web/`, look at the screen before you finish.
   browser or a kind of notification reaches the event stream, as the
   server's does.
 - Read the PNG and say what you see. Fix what looks wrong and shoot again.
+- The README's image, `docs/screenshot.png`, is the page of the project
+  `recallsynapsis` on Decisions, in copper and dark at 1280 by 900. Take it
+  again from `web/` whenever that page's look changes:
+  `node shoot.mjs 1280 900 "http://127.0.0.1:5197/harness.html?palette=copper&theme=dark&modules=tasks,notes,knowledge&path=%2Fareas%2F2%3Ftab%3Ddecisions" ../docs/screenshot.png`.
 - Stop Vite by the pid you recorded, never by port or name.
 
 ## Layout

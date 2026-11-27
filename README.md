@@ -5,6 +5,8 @@ area: a personal area and one per project. A person reaches it through a web app
 on desktop and phone, and AI clients reach it over MCP, directly or through an
 MCP gateway such as Portal. It is one Go binary with the web app embedded.
 
+![A project's page in the web app: its brief, and under Decisions the decisions that shape it, each with its why, its source and what it replaced.](docs/screenshot.png)
+
 Each area has a brief: Markdown of up to 4,000 characters that says what the
 area is, why it exists, what it should do and what shapes it. Every wording of
 it is kept, any can be read and restored through the API, and a change made
