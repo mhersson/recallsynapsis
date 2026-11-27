@@ -117,14 +117,17 @@ type Message struct {
 	Tag   string // a newer message replaces one of the same tag; letters, digits, - and _, at most 32
 }
 
-// Area is a user's personal area or one of their projects.
+// Area is a user's personal area or one of their projects, with its brief.
 type Area struct {
-	ID          int64  `json:"id"`
-	Kind        string `json:"kind"` // "personal" or "project"
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Description string `json:"description"`
-	Archived    bool   `json:"archived"`
+	ID             int64      `json:"id"`
+	Kind           string     `json:"kind"` // "personal" or "project"
+	Name           string     `json:"name"`
+	Slug           string     `json:"slug"`
+	Brief          string     `json:"brief"`            // Markdown: what the area is, why and what shapes it
+	BriefRevision  int64      `json:"brief_revision"`   // 0 while no brief was written
+	BriefChangedAt *time.Time `json:"brief_changed_at"` // in UTC; null while BriefRevision is 0
+	BriefChangedBy string     `json:"brief_changed_by"` // "web" or a token's name; "" while BriefRevision is 0
+	Archived       bool       `json:"archived"`
 }
 
 // Deps is what a module is built with. Resolve and LinksTo reach only the

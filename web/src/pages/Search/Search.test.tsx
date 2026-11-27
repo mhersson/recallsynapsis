@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 const session = (modules: string[]): Session => ({ user: { name: 'ada' }, modules, version: '1.2.3', timezone: 'UTC', last_backup: null })
-const area = (id: number, slug: string, archived = false): Area => ({ id, kind: 'project', name: slug.toUpperCase(), slug, description: '', archived })
+const area = (id: number, slug: string, archived = false): Area => ({ id, kind: 'project', name: slug.toUpperCase(), slug, brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '', archived })
 const areas = [area(1, 'personal'), area(3, 'cavu'), area(6, 'homelander', true)]
 const hit = (ref: string, state: string, kind = 'note') => ({ ref, kind, title: ref, snippet: '', area: 'cavu', state, changed_at: '2026-11-22T06:00:00Z' })
 

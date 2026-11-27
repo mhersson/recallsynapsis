@@ -4,8 +4,8 @@ import { fakeServer, json, type Call } from '../../test-server.ts'
 import type { Note } from './api.ts'
 
 export const areas: Area[] = [
-  { id: 1, kind: 'personal', name: 'Personal', slug: 'personal', description: '', archived: false },
-  { id: 2, kind: 'project', name: 'garden', slug: 'garden', description: '', archived: false },
+  { id: 1, kind: 'personal', name: 'Personal', slug: 'personal', brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '', archived: false },
+  { id: 2, kind: 'project', name: 'garden', slug: 'garden', brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '', archived: false },
 ]
 
 // A capture that waits in the inbox, made minutes ago.

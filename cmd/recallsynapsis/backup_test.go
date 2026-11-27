@@ -44,7 +44,7 @@ func ownedData(t *testing.T, config string) string {
 	owner, err := auth.New(st, time.Now).EnsureUser(t.Context(), "ada")
 	require.NoError(t, err)
 
-	_, err = core.New(st).CreateProject(t.Context(), owner, "Garden", "")
+	_, err = core.New(st).CreateProject(t.Context(), module.Caller{UserID: owner}, "Garden", "")
 	require.NoError(t, err)
 
 	return dir

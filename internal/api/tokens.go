@@ -57,7 +57,7 @@ func (s *server) createToken(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *server) deleteToken(w http.ResponseWriter, r *http.Request) error {
-	id, err := pathID(r)
+	id, err := pathID(r, "id")
 	if err != nil {
 		return err
 	}

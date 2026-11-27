@@ -104,7 +104,7 @@ func newDatabase(t *testing.T) *fixture {
 	f.laptop, f.desk, f.phone, f.grace = token(f.ada, "laptop", "write"), token(f.ada, "desk", "write"), token(f.ada, "phone", "read"),
 		token(grace, "tablet", "write")
 
-	garden, err := f.core.CreateProject(t.Context(), f.ada, "Garden", "")
+	garden, err := f.core.CreateProject(t.Context(), module.Caller{UserID: f.ada}, "Garden", "")
 	require.NoError(t, err)
 
 	personal, err := f.core.Find(t.Context(), f.ada, "personal")

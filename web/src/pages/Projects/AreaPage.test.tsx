@@ -14,7 +14,17 @@ vi.mock('../../modules/registry.ts', async () => {
 afterEach(() => vi.unstubAllGlobals())
 
 const session = (modules: string[]): Session => ({ user: { name: 'ada' }, modules, version: '1.2.3', timezone: 'UTC', last_backup: null })
-const area = (id: number, kind: Area['kind'], name: string, archived = false): Area => ({ id, kind, name, slug: name, description: 'what it is', archived })
+const area = (id: number, kind: Area['kind'], name: string, archived = false): Area => ({
+  id,
+  kind,
+  name,
+  slug: name,
+  brief: 'what it is',
+  brief_revision: 3,
+  brief_changed_at: '2026-11-20T10:00:00Z',
+  brief_changed_by: 'web',
+  archived,
+})
 
 // A server that keeps the areas and applies each PATCH to them; answer, when given, answers first.
 function server(areas: Area[], modules: string[] = [], answer: (c: Call) => Response | undefined = () => undefined) {
@@ -47,7 +57,7 @@ test('a project is archived with a plain button and restored the same way', asyn
   expect(buttons()).toHaveLength(2)
 })
 
-test('the personal area keeps its name: it cannot be archived, and editing sends only its description', async () => {
+test('the personal area keeps its name: it cannot be archived, and editing sends only its brief, from the revision it opened with', async () => {
   narrow(false)
   const calls = server([area(1, 'personal', 'Personal')])
   await open('/areas/1')
@@ -58,7 +68,7 @@ test('the personal area keeps its name: it cannot be archived, and editing sends
   await userEvent.clear(fields[0])
   await userEvent.type(fields[0], 'mine')
   await userEvent.click(buttons()[0])
-  expect(patches(calls)).toEqual([['/api/areas/1', { description: 'mine' }]])
+  expect(patches(calls)).toEqual([['/api/areas/1', { brief: 'mine', brief_revision: 3 }]])
   expect(main().queryByRole('textbox')).toBeNull()
 })
 
@@ -67,6 +77,7 @@ test('a project is renamed in place, and saving what did not change sends nothin
   const calls = server([area(1, 'personal', 'Personal'), area(2, 'project', 'garden')])
   await open('/areas/2')
   await userEvent.click(buttons()[0])
+  await userEvent.type(main().getAllByRole('textbox')[1], ' {enter}')
   await userEvent.click(main().getAllByRole('button')[0])
   expect(patches(calls)).toEqual([])
   expect(main().queryByRole('textbox')).toBeNull()
@@ -87,8 +98,20 @@ test('a name that is taken keeps the edit open and says so', async () => {
   await userEvent.click(buttons()[0])
   await userEvent.type(main().getAllByRole('textbox')[0], 'x')
   await userEvent.click(buttons()[0])
-  expect(main().getByRole('alert')).toBeInTheDocument()
+  expect(main().getByRole('alert')).not.toHaveTextContent('taken')
   expect(main().getAllByRole('textbox')).toHaveLength(2)
+})
+
+test('a brief that moved on keeps the edit open and gives the server its say', async () => {
+  narrow(false)
+  const line = 'the brief is at revision 4, and the change was made from 3'
+  server([area(1, 'personal', 'Personal'), area(2, 'project', 'garden')], [], (c) => (c.method === 'PATCH' ? json({ error: line }, 409) : undefined))
+  await open('/areas/2')
+  await userEvent.click(buttons()[0])
+  await userEvent.type(main().getAllByRole('textbox')[1], ' still')
+  await userEvent.click(buttons()[0])
+  expect(main().getByRole('alert')).toHaveTextContent(line)
+  expect(main().getAllByRole('textbox')[1]).toHaveValue('what it is still')
 })
 
 test('each enabled module shows its section for the area, and none shows while it is off', async () => {
@@ -154,7 +177,7 @@ test('an edit sends only what was changed in it, so a rename made elsewhere mean
     await act(() => vi.advanceTimersByTimeAsync(2000))
     fireEvent.change(main().getAllByRole('textbox')[1], { target: { value: 'beds' } })
     await act(async () => fireEvent.click(buttons()[0]))
-    expect(patches(calls)).toEqual([['/api/areas/2', { description: 'beds' }]])
+    expect(patches(calls)).toEqual([['/api/areas/2', { brief: 'beds', brief_revision: 3 }]])
     expect(main().getByRole('heading', { level: 1 })).toHaveTextContent('allotment')
   } finally {
     vi.useRealTimers()

@@ -133,7 +133,7 @@ func TestPathID(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /things/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id, err := pathID(r)
+		id, err := pathID(r, "id")
 		if err != nil {
 			fail(w, r, err)
 

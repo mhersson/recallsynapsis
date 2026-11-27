@@ -11,20 +11,24 @@ export const HEALTH = { status: 'ok', version: '0.1.0' }
 
 export const SESSION: Session = { user: { name: 'ada' }, modules: [], version: '0.1.0', timezone: 'Europe/Oslo', last_backup: before(6 * 60) }
 
+// The brief of each fixed area is its first wording, written three days before.
+const briefed = { brief_revision: 1, brief_changed_at: before(3 * 24 * 60), brief_changed_by: 'web' }
+
 // GET /api/areas?archived=true: the personal area first, then the projects by name.
 export const AREAS: Area[] = [
-  { id: 1, kind: 'personal', name: 'Personal', slug: 'personal', description: 'Everything that belongs to no project.', archived: false },
-  { id: 5, kind: 'project', name: 'aim', slug: 'aim', description: 'The terminal multiplexer the coding agents work in.', archived: false },
-  { id: 3, kind: 'project', name: 'cavu', slug: 'cavu', description: 'Runs coding tasks in containers and asks when it needs me.', archived: false },
-  { id: 6, kind: 'project', name: 'homelander', slug: 'homelander', description: 'The first home cluster, retired in October.', archived: true },
-  { id: 7, kind: 'project', name: 'Hytta', slug: 'hytta', description: 'Hytta i Valdres: vedlikehold, annekset og veden.', archived: false },
-  { id: 4, kind: 'project', name: 'portal', slug: 'portal', description: 'Relays AI clients to the services at home.', archived: false },
+  { id: 1, kind: 'personal', name: 'Personal', slug: 'personal', brief: 'Everything that belongs to no project.', ...briefed, archived: false },
+  { id: 5, kind: 'project', name: 'aim', slug: 'aim', brief: 'The terminal multiplexer the coding agents work in.', ...briefed, archived: false },
+  { id: 3, kind: 'project', name: 'cavu', slug: 'cavu', brief: 'Runs coding tasks in containers and asks when it needs me.', ...briefed, archived: false },
+  { id: 6, kind: 'project', name: 'homelander', slug: 'homelander', brief: 'The first home cluster, retired in October.', ...briefed, archived: true },
+  { id: 7, kind: 'project', name: 'Hytta', slug: 'hytta', brief: 'Hytta i Valdres: vedlikehold, annekset og veden.', ...briefed, archived: false },
+  { id: 4, kind: 'project', name: 'portal', slug: 'portal', brief: 'Relays AI clients to the services at home.', ...briefed, archived: false },
   {
     id: 2,
     kind: 'project',
     name: 'recallsynapsis',
     slug: 'recallsynapsis',
-    description: 'Notes, ideas, tasks and project knowledge, reachable from a web app and from AI clients.',
+    brief: 'Notes, ideas, tasks and project knowledge, reachable from a web app and from AI clients.',
+    ...briefed,
     archived: false,
   },
 ]

@@ -156,11 +156,11 @@ func TestLoadModules(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "personal", personal.Slug)
 
-	shed, err := f.svc.CreateProject(t.Context(), ada, "Shed", "")
+	shed, err := f.svc.CreateProject(t.Context(), web(ada), "Shed", "")
 	require.NoError(t, err)
 
 	archived := true
-	shed, err = f.svc.ChangeArea(t.Context(), ada, shed.ID, Change{Archived: &archived})
+	shed, err = f.svc.ChangeArea(t.Context(), web(ada), shed.ID, Change{Archived: &archived})
 	require.NoError(t, err)
 
 	areas, err := got.Areas(t.Context(), ada)

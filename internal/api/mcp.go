@@ -22,10 +22,10 @@ const callerKey = "caller"
 // toolArea is an area as a tool gives it: a client names an area by its slug
 // or its name, so it is given no id.
 type toolArea struct {
-	Slug        string `json:"slug"`
-	Name        string `json:"name"`
-	Kind        string `json:"kind"`
-	Description string `json:"description"`
+	Slug  string `json:"slug"`
+	Name  string `json:"name"`
+	Kind  string `json:"kind"`
+	Brief string `json:"brief"`
 }
 
 type areaList struct {
@@ -52,7 +52,7 @@ func (s *server) mcp() http.Handler {
 
 	tools := []module.Tool{
 		module.NewTool("list_areas", "List the areas things are kept in: the personal area and every project that is not archived, "+
-			"each with its slug, its name, its kind (personal or project) and its description. "+
+			"each with its slug, its name, its kind (personal or project) and its brief, in Markdown. "+
 			"To search one area alone, give its slug or its name as the area of search.",
 			module.Read, s.listAreas),
 		module.NewTool("search", "Search what is kept, in every area or in one. "+
@@ -145,7 +145,7 @@ func (s *server) listAreas(ctx context.Context, _ struct{}) (areaList, error) {
 
 	out := areaList{Areas: make([]toolArea, len(list))}
 	for i, a := range list {
-		out.Areas[i] = toolArea{a.Slug, a.Name, a.Kind, a.Description}
+		out.Areas[i] = toolArea{a.Slug, a.Name, a.Kind, a.Brief}
 	}
 
 	return out, nil

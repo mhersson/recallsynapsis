@@ -10,22 +10,26 @@ export default function AreaForm({ area: given, dialog, onSaved, onCancel }: Pro
   // The page may read the area again while the form is open; the form keeps the one it opened with.
   const [area] = useState(given)
   const [name, setName] = useState(area?.name ?? '')
-  const [description, setDescription] = useState(area?.description ?? '')
+  const [brief, setBrief] = useState(area?.brief ?? '')
   const [refused, setRefused] = useState('')
   const [sending, setSending] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     const n = name.trim()
-    // Only what was changed here is sent, so a change made elsewhere meanwhile stands and the personal area sends no name.
-    const body = area ? { ...(n !== area.name && { name: n }), ...(description !== area.description && { description }) } : { name: n, description }
+    // Only what was changed here is sent, so a change made elsewhere meanwhile stands and the personal area sends no name. The
+    // brief names the revision the form opened with, so the server refuses it once the brief has moved on.
+    const body = area
+      ? { ...(n !== area.name && { name: n }), ...(brief.trim() !== area.brief && { brief, brief_revision: area.brief_revision }) }
+      : { name: n, brief }
     if (Object.keys(body).length === 0) return onCancel()
     setRefused('')
     setSending(true)
     try {
       onSaved(await api<Area>(area ? 'PATCH' : 'POST', area ? `/areas/${area.id}` : '/areas', body))
     } catch (err) {
-      setRefused(err instanceof ApiError && err.status === 409 ? `A project named ${n} exists already.` : message(err))
+      // A 409 is the name taken unless the brief was sent too, which may have moved on.
+      setRefused(err instanceof ApiError && err.status === 409 && !('brief_revision' in body) ? `A project named ${n} exists already.` : message(err))
       setSending(false)
     }
   }
@@ -53,10 +57,10 @@ export default function AreaForm({ area: given, dialog, onSaved, onCancel }: Pro
           {refused}
         </p>
       )}
-      <Field label="Description">
-        <textarea placeholder="A line or two on what it is" value={description} onChange={(e) => setDescription(e.target.value)} />
+      <Field label="Brief">
+        <textarea placeholder="A line or two on what it is" value={brief} onChange={(e) => setBrief(e.target.value)} />
       </Field>
-      {!area && <p className="note">AI clients see the name and the description when they choose where to file.</p>}
+      {!area && <p className="note">AI clients see the name and the brief when they choose where to file.</p>}
       <div className={dialog ? 'acts' : 'acts stack'}>
         {dialog && cancel}
         <button className="btn primary" disabled={sending || !name.trim()}>

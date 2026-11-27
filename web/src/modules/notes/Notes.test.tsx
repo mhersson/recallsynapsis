@@ -578,7 +578,7 @@ test('on a phone Capture here opens the page of Capture with the project chosen'
 test('an archived project has no Capture here', async () => {
   narrow(false)
   notesServer([], (c) =>
-    c.path.startsWith('/api/areas?') ? json({ areas: [{ id: 2, kind: 'project', name: 'garden', slug: 'garden', description: '', archived: true }] }) : undefined,
+    c.path.startsWith('/api/areas?') ? json({ areas: [{ id: 2, kind: 'project', name: 'garden', slug: 'garden', brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '', archived: true }] }) : undefined,
   )
   await open('/areas/2')
   expect(screen.getByRole('main').querySelectorAll('.page-head .btn')).toHaveLength(1)
