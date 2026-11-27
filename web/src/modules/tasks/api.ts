@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, api, message } from '../../api/client.ts'
+import { ApiError, api, message, useLimit } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 import type { Linked } from '../../api/types.ts'
 import type { Named } from '../registry.ts'
@@ -131,13 +131,10 @@ export function useOpen(on = true) {
   return { list, failed, took }
 }
 
-const step = 50
-
-// A list starts at 50 and can grow to 500. A change while nothing is asked forgets it, so asked again it shows only once
-// read afresh.
+// The tasks a list asks for with the query asked, as many as useLimit gives. A change while nothing is asked forgets them,
+// so asked again they show only once read afresh.
 export function useMore(asked: string) {
-  const [shown, setShown] = useState({ asked, limit: step })
-  const limit = shown.asked === asked ? shown.limit : step
+  const { limit, more } = useLimit(asked)
   const [got, setGot] = useState<{ asked: string; list: List }>()
   const [failed, setFailed] = useState('')
   const [tick, setTick] = useState(0)
@@ -167,7 +164,6 @@ export function useMore(asked: string) {
       return { ...g, list: { ...g.list, tasks, total: g.list.total + tasks.length - g.list.tasks.length } }
     })
   }
-  const more = limit < 500 ? () => setShown({ asked, limit: limit + step }) : undefined
   return { list: got?.asked === asked ? got.list : undefined, failed: asked && failed, more, took, again }
 }
 

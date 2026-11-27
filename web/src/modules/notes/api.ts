@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useGet } from '../../api/client.ts'
+import { step, useGet, useLimit } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 import type { Linked } from '../../api/types.ts'
 
@@ -61,16 +61,10 @@ export function useRead<T>(path: string): { got?: T; failed: string; again: () =
   return { ...useGet<T>(tick ? path : '', tick), again }
 }
 
-const step = 50
-const most = 500
-
-// The notes a list asks for with the query asked: 50, and 50 more each time more is called, up to the 500 a list gives.
-// A new question starts again at 50.
+// The notes a list asks for with the query asked, as many as useLimit gives.
 export function useList(asked: string) {
-  const [shown, setShown] = useState({ asked, limit: step })
-  const limit = shown.asked === asked ? shown.limit : step
+  const { limit, more } = useLimit(asked)
   const { got: list, failed, again: reread } = useRead<List>(asked && `/notes?${asked}${limit > step ? `&limit=${limit}` : ''}`)
-  const more = limit < most ? () => setShown({ asked, limit: limit + step }) : undefined
   return { list, failed, more, reread }
 }
 
