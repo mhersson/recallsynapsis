@@ -1,0 +1,63 @@
+.hrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  align-items: baseline;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.hrow.fresh {
+  background: var(--bg-visual);
+}
+
+.hrow .n {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  min-width: 76px;
+}
+
+.hrow .src {
+  color: var(--grey1);
+}
+
+.hrow .btn.link {
+  margin-left: auto;
+  padding: 0 2px;
+  font-size: 13px;
+}
+
+.hrow .said {
+  flex-basis: 100%;
+  margin: 2px 0 2px 86px;
+}
+
+/* An earlier revision, in a frame that is clearly not the current text. */
+.rev {
+  margin-top: 16px;
+  padding: 14px 18px 12px;
+  border: 1px dashed var(--bg5);
+  border-radius: 8px;
+  background: var(--bg-dim);
+}
+
+.rev .md {
+  margin: 12px 0 10px;
+}
+
+.revision .err {
+  margin: 12px 0 0;
+}
+
+.revision > .acts {
+  margin-top: 18px;
+}
+
+@media (max-width: 720px) {
+  .hrow .said {
+    margin-left: 0;
+  }
+}

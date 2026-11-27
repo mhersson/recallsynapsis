@@ -48,6 +48,7 @@ test('a note shows the tasks it links to and those that link to it with their ri
     if (c.path === '/api/session') return json(session)
     if (c.path.startsWith('/api/areas')) return json({ areas })
     if (c.path === '/api/notes/1') return json(n)
+    if (c.path === '/api/notes/1/revisions') return json({ revisions: [] })
     if (c.path.startsWith('/api/notes')) return json({ notes: [], total: 0 })
     if (c.path.startsWith('/api/tasks')) return json({ tasks: [], total: 0, now: { date: '2026-11-23', weekday: 'Monday', time: '10:00', timezone: 'UTC', week_start: 'monday' } })
   })

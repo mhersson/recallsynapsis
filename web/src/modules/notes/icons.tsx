@@ -18,10 +18,3 @@ export const DownloadIcon = () => (
     <path d="M8 2.5v8M4.8 7.5 8 10.7l3.2-3.2M3 13.5h10" />
   </Icon>
 )
-
-export const HistoryIcon = () => (
-  <Icon>
-    <circle cx="8" cy="8" r="5.5" />
-    <path d="M8 5v3.2l2 1.3" />
-  </Icon>
-)

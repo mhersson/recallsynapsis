@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { api, message } from '../../api/client.ts'
+import { useState } from 'react'
+import { useGet } from '../../api/client.ts'
 import { useStream } from '../../api/stream.ts'
 import type { Linked } from '../../api/types.ts'
 
@@ -55,27 +55,10 @@ export function useNotes(read: () => void) {
 // What GET path gives, read as useNotes reads and when path changes; '' reads nothing. An answer to a question asked
 // since is dropped, and a refusal is kept until a read succeeds.
 export function useRead<T>(path: string): { got?: T; failed: string; again: () => void } {
-  const [got, setGot] = useState<T>()
-  const [failed, setFailed] = useState('')
   const [tick, setTick] = useState(0)
   const again = () => setTick((n) => n + 1)
   useNotes(again)
-  useEffect(() => {
-    if (!tick || !path) return
-    let stale = false
-    api<T>('GET', path).then(
-      (v) => {
-        if (stale) return
-        setGot(v)
-        setFailed('')
-      },
-      (e: unknown) => !stale && setFailed(message(e)),
-    )
-    return () => {
-      stale = true
-    }
-  }, [path, tick])
-  return { got, failed, again }
+  return { ...useGet<T>(tick ? path : '', tick), again }
 }
 
 const step = 50
@@ -93,9 +76,6 @@ export function useList(asked: string) {
 
 // A count of things, as a sentence says it.
 export const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
-
-// Where a change came from, as a list shows it.
-export const from = (source: string) => (source === 'web' ? 'web' : `via ${source}`)
 
 // The class of a note's mark: blue for a note, purple for an idea, and the yellow of what waits for a capture not yet filed.
 export const mark = (kind: string, inbox: boolean) => (inbox ? 'wait' : kind === 'idea' ? 'm-idea' : 'm-note')

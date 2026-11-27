@@ -129,6 +129,16 @@
   margin-top: 0;
 }
 
+/* What the owner said to a client that made a change. */
+.said {
+  border-left: 2px solid var(--bg4);
+  padding: 1px 0 1px 12px;
+  color: var(--grey2);
+  font-size: 13px;
+  margin: 12px 0 16px;
+  overflow-wrap: anywhere;
+}
+
 /* The end of a list that holds more than it shows. */
 .list-end {
   display: flex;
