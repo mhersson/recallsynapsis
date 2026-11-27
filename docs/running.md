@@ -160,8 +160,9 @@ discussion of the project begins, with `get_knowledge` and the project's slug or
 name, or with `list_areas` when `get_knowledge` is not listed, as with knowledge
 off; Claude Code reads them as a session starts. Portal relays neither
 annotations nor instructions to the client, so each tool's description tells a
-client what it does and when to use it, and those of `get_knowledge` and
-`list_areas` say too to read a project as a discussion of it begins.
+client what it does and when to use it, that of `get_knowledge` says too to read
+a project as a discussion of it begins, and that of `list_areas` says to read it
+there when `get_knowledge` is not listed.
 
 A repository's `AGENTS.md` may name the area that keeps its project's
 knowledge, with this line, the area's slug in place of `SLUG`:
