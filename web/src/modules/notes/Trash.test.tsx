@@ -63,6 +63,17 @@ test('Trash asks for the trash, lists it the most recently trashed first, and on
   expect(tools()).toHaveLength(2)
 })
 
+test('a trash with more says so and shows 50 more on asking', async () => {
+  narrow(true)
+  const calls = server(Array.from({ length: 60 }, (_, i) => trashed(i + 1, i + 1)))
+  await open('/trash')
+  await waitFor(() => expect(rows()).toHaveLength(50))
+  await userEvent.click(within(main().querySelector<HTMLElement>('.list-end')!).getByRole('button'))
+  await waitFor(() => expect(rows()).toHaveLength(60))
+  expect(calls.filter((c) => c.path.includes('trashed')).map((c) => c.path)).toEqual(['/api/notes?trashed=true', '/api/notes?trashed=true&limit=100'])
+  expect(main().querySelector('.list-end')).toBeNull()
+})
+
 test('Restore puts the note back: it leaves the trash, the page leads to it, and no other note opens unasked', async () => {
   narrow(false)
   const calls = server([trashed(1, 30), trashed(2, 5)])

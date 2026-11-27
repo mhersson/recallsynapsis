@@ -47,7 +47,7 @@ test('Done lists what was done, the newest first, under the day it was done, and
   expect(writes(calls)).toEqual([])
 })
 
-test('a list with more says so and shows 50 more, and with nothing done Done says so', async () => {
+test('a list with more says so and shows 50 more, a new question starts again at 50, and with nothing done Done says so', async () => {
   narrow(true)
   const many = Array.from({ length: 60 }, (_, i) => task(i + 1, 60, { title: `done ${i + 1}`, done_at: `2026-11-${String(1 + (i % 22)).padStart(2, '0')}T10:00:00Z` }))
   const calls = tasksServer(many)
@@ -57,6 +57,8 @@ test('a list with more says so and shows 50 more, and with nothing done Done say
   await waitFor(() => expect(page().querySelectorAll('.task-row')).toHaveLength(60))
   expect(asked(calls)).toEqual(['/api/tasks?done=true&limit=50', '/api/tasks?done=true&limit=100'])
   expect(page().querySelector('.list-end')).toBeNull()
+  await userEvent.selectOptions(within(page()).getByRole('combobox'), 'garden')
+  await waitFor(() => expect(asked(calls).at(-1)).toBe('/api/tasks?done=true&area=garden&limit=50'))
   view.unmount()
 
   tasksServer([task(1, 10, { title: 'open', list: 'soon' })])
