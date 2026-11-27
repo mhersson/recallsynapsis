@@ -84,7 +84,10 @@ session renames a project or archives one.
   Activity, with what the other modules keep in the project, and Decisions,
   with the number of the decisions that stand, which lists them as a table,
   the newest first, with the replaced folded beneath it. A decision is read
-  on a page of its own, which a link from a note or a task opens too.
+  on a page of its own, which a link from a note or a task opens too. Search
+  finds a decision, standing or replaced, by a word of its line, its why or
+  its source, and lists the decisions' hits after the notes', each leading to
+  its decision's page.
 - Push sends a module's notifications as Web Push to every browser of the
   owner's in which they are turned on, encrypted for each browser, and a
   browser is turned on or off in Settings, under Notifications, with the
@@ -97,13 +100,14 @@ session renames a project or archives one.
   for Save.
 - Its search, in the web app, at `GET /api/search` and as the MCP tool
   `search`, asks every module switched on. Notes finds the notes that hold
-  every word given, in their title, body or tags, and Tasks the tasks, done or
-  open, that hold them in their title or notes; part of a word is enough. The
-  MCP tool `list_areas` lists the areas, each with the first paragraph of its
-  brief, and gives one area it is given, an archived project too, with its
-  brief whole, and `update_area` replaces an area's brief. As a client
-  connects, the server tells it to read a project's brief when a discussion
-  of the project begins.
+  every word given, in their title, body or tags, Tasks the tasks, done or
+  open, that hold them in their title or notes, and Knowledge the decisions,
+  standing or replaced, that hold them in their line, why or source; part of
+  a word is enough. The MCP tool `list_areas` lists the areas, each with the
+  first paragraph of its brief, and gives one area it is given, an archived
+  project too, with its brief whole, and `update_area` replaces an area's
+  brief. As a client connects, the server tells it to read a project's brief
+  when a discussion of the project begins.
 - It backs itself up every night, into a directory you name.
 
 ## What it needs

@@ -73,6 +73,16 @@ type fixture struct {
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 
+	f := newDatabase(t)
+	f.load(t, object{"enabled": true})
+
+	return f
+}
+
+// newDatabase is the fixture before it serves, with no migration of knowledge applied.
+func newDatabase(t *testing.T) *fixture {
+	t.Helper()
+
 	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "recallsynapsis.db"), slices.Concat(auth.Migrations, core.Migrations))
 	require.NoError(t, err)
 
@@ -124,7 +134,6 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, err)
 
 	f.areas["personal"] = personal.ID
-	f.load(t, object{"enabled": true})
 
 	return f
 }
@@ -780,6 +789,7 @@ func TestAModuleSwitchedOffKeepsItsDecisions(t *testing.T) {
 		f.load(t, table)
 
 		assert.Equal(t, []any{unavailable(clay["ref"])}, f.links(t, beds, f.phone), "a link to a decision leads nowhere")
+		assert.NotContains(t, f.hits(t, "clay", "", f.phone), "knowledge", "and search finds none")
 
 		for _, r := range []struct{ method, target, body string }{
 			{http.MethodGet, "/api/knowledge?area=garden", ""},
@@ -800,6 +810,7 @@ func TestAModuleSwitchedOffKeepsItsDecisions(t *testing.T) {
 	f.load(t, object{"enabled": true})
 	assert.Equal(t, want, f.list(t, "garden"), "switched on again, every decision reads as before")
 	assert.Equal(t, []any{linkTo(clay, "replaced")}, f.links(t, beds, f.phone))
+	assert.Equal(t, []string{"Beds are raised"}, f.found(t, "clay"))
 }
 
 func TestADecisionOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
@@ -836,6 +847,10 @@ func TestADecisionOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
 	require.Equal(t, http.StatusOK, code, note)
 	assert.Equal(t, []any{unavailable(clay["ref"])}, note["links"], "another user's decision is never resolved")
 	assert.Equal(t, []any{}, f.linkedFrom(t, clay), "nor lists another user's note")
+
+	for _, text := range []string{"clay", "cl"} {
+		assert.NotContains(t, f.hits(t, text, "", f.grace), "knowledge", "nor found by another user's search: %s", text)
+	}
 
 	assert.Equal(t, 1, f.count(t, "decisions"))
 	assert.Equal(t, clay, f.read(t, clay, f.phone))

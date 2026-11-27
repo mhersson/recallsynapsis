@@ -238,8 +238,14 @@ Every package states its one responsibility in its package comment, and
   every route that reads asks for `read`. A decision keeps no links of its
   own: a link to one shows its line, the kind `decision` and its state, a
   link to a deleted one leads nowhere, and a decision in full gives the
-  items that link to it, each as the core resolves it. It owns the tables
-  `decisions` and `decision_revisions`.
+  items that link to it, each as the core resolves it. It searches the
+  decisions, standing and replaced, for every word of a query, in the line,
+  the why and the source and in any case, as notes does, through an FTS5
+  index with the trigram tokenizer, which every write keeps level, which
+  keeps no copy of the text, and which deleting a decision rewrites; a hit's
+  title is its line and its snippet is from its why, and an area's brief
+  gives no hit. It owns the tables `decisions`, `decision_revisions` and
+  `decisions_fts`.
 - `internal/module`: what the core and its feature modules share. The
   contract: the `Module` a feature module's constructor returns, with its
   settings and their check, migrations, routes, MCP tools, jobs, and

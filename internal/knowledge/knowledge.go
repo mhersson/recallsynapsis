@@ -4,8 +4,9 @@
 // replaces it, and is replaced by one at most. A change is one package of
 // decisions added and mended in one project, saved all or none, and only a
 // person deletes one. A note or a task may link to a decision, which lists
-// what links to it and keeps no links of its own. It owns the tables
-// decisions and decision_revisions.
+// what links to it and keeps no links of its own. It searches the decisions
+// through an index of their line, why and source. It owns the tables
+// decisions, decision_revisions and decisions_fts.
 package knowledge
 
 import (
@@ -27,7 +28,8 @@ import (
 // one that is deleted never gives its id to another, and a link to it never
 // leads to another decision. replaces is UNIQUE, so a decision is replaced by
 // one at most, and it is set to null as the decision it names is deleted. A
-// day is text, YYYY-MM-DD, so days compare as text.
+// day is text, YYYY-MM-DD, so days compare as text. The index keeps no copy
+// of the text, which a hit reads from the decision.
 var migrations = []store.Migration{{Version: 1, SQL: `
 CREATE TABLE decisions (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +61,14 @@ CREATE TABLE decision_revisions (
 	replaces    INTEGER,
 	PRIMARY KEY (decision_id, revision)
 );
+`}, {Version: 2, SQL: `
+CREATE VIRTUAL TABLE decisions_fts USING fts5 (decision, why, source, tokenize = 'trigram', content = '', contentless_delete = 1);
+
+INSERT INTO decisions_fts (rowid, decision, why, source) SELECT id, decision, why, source FROM decisions;
+
+CREATE TRIGGER decisions_fts_delete AFTER DELETE ON decisions BEGIN
+	DELETE FROM decisions_fts WHERE rowid = old.id;
+END;
 `}}
 
 const (
@@ -82,6 +92,7 @@ func New(d module.Deps) module.Module {
 		Name:       name,
 		Migrations: migrations,
 		Resolve:    k.resolve,
+		Search:     k.search,
 		Routes: []module.Route{
 			{Pattern: "GET /api/knowledge", Access: module.Read, Serve: k.serveList},
 			{Pattern: "POST /api/knowledge", Access: module.Owner, Serve: k.serveChange},
@@ -227,9 +238,16 @@ const (
 	joined = `decisions d LEFT JOIN decisions o ON o.id = d.replaces LEFT JOIN decisions n ON n.replaces = d.id`
 )
 
-// snapshot keeps the revision of the decision ?1 as it now stands, with ?2 as its said.
-const snapshot = `INSERT INTO decision_revisions (decision_id, revision, changed_at, changed_by, said, decision, why, source, decided, replaces)
-	SELECT id, revision, changed_at, changed_by, ?2, decision, why, source, decided, replaces FROM decisions WHERE id = ?1`
+const (
+	// snapshot keeps the revision of the decision ?1 as it now stands, with ?2 as its said.
+	snapshot = `INSERT INTO decision_revisions (decision_id, revision, changed_at, changed_by, said, decision, why, source, decided, replaces)
+		SELECT id, revision, changed_at, changed_by, ?2, decision, why, source, decided, replaces FROM decisions WHERE id = ?1`
+	// index writes the decision ?1 into the search index as it now stands.
+	index = `REPLACE INTO decisions_fts (rowid, decision, why, source) SELECT id, decision, why, source FROM decisions WHERE id = ?1`
+	// purge rewrites the search index whole. A delete only marks a decision's
+	// rows in it, whose text a backup would copy until a merge drops them.
+	purge = `INSERT INTO decisions_fts (decisions_fts) VALUES ('optimize')`
+)
 
 const (
 	// entryColumns are an entry's, in the order scanEntry reads them.
@@ -653,8 +671,8 @@ func (w writer) mend(ctx context.Context, label string, m mend) (int64, bool, er
 		return 0, false, fmt.Errorf("knowledge: mend: %w", err)
 	}
 
-	if _, err := w.tx.ExecContext(ctx, snapshot, id, w.said); err != nil {
-		return 0, false, fmt.Errorf("knowledge: revision: %w", err)
+	if err := w.keep(ctx, id); err != nil {
+		return 0, false, err
 	}
 
 	return id, true, nil
@@ -692,11 +710,25 @@ func (w writer) add(ctx context.Context, label string, d draft) (int64, error) {
 		return 0, fmt.Errorf("knowledge: add: %w", err)
 	}
 
-	if _, err := w.tx.ExecContext(ctx, snapshot, id, w.said); err != nil {
-		return 0, fmt.Errorf("knowledge: revision: %w", err)
+	if err := w.keep(ctx, id); err != nil {
+		return 0, err
 	}
 
 	return id, nil
+}
+
+// keep writes the revision of the decision with the id as it now stands, and
+// its text into the search index.
+func (w writer) keep(ctx context.Context, id int64) error {
+	if _, err := w.tx.ExecContext(ctx, snapshot, id, w.said); err != nil {
+		return fmt.Errorf("knowledge: revision: %w", err)
+	}
+
+	if _, err := w.tx.ExecContext(ctx, index, id); err != nil {
+		return fmt.Errorf("knowledge: index: %w", err)
+	}
+
+	return nil
 }
 
 // claim refuses the entry label making self, 0 when new, replace target unless
@@ -749,21 +781,32 @@ func (w writer) claim(ctx context.Context, label string, self, target, was int64
 	return nil
 }
 
-// remove deletes the caller's decision with the id, with its revisions. The
-// one it replaced then stands, and the one that replaced it replaces nothing,
-// with no revision written for that.
+// remove deletes the caller's decision with the id, with its revisions and
+// its text in the search index. The one it replaced then stands, and the one
+// that replaced it replaces nothing, with no revision written for that.
 func (k knowledge) remove(ctx context.Context, id int64) error {
 	c, _ := module.CallerFrom(ctx)
 
 	var area int64
 
-	err := k.Store.QueryRowContext(ctx, `DELETE FROM decisions WHERE user_id = ? AND id = ? RETURNING area_id`, c.UserID, id).Scan(&area)
-	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("decision %s: %w", module.NewRef(name, id), store.ErrNotFound)
-	}
+	err := k.Store.Tx(ctx, func(tx *sql.Tx) error {
+		err := tx.QueryRowContext(ctx, `DELETE FROM decisions WHERE user_id = ? AND id = ? RETURNING area_id`, c.UserID, id).Scan(&area)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("decision %s: %w", module.NewRef(name, id), store.ErrNotFound)
+		}
 
+		if err != nil {
+			return fmt.Errorf("knowledge: delete: %w", err)
+		}
+
+		if _, err := tx.ExecContext(ctx, purge); err != nil {
+			return fmt.Errorf("knowledge: delete: %w", err)
+		}
+
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("knowledge: delete: %w", err)
+		return err
 	}
 
 	k.Changed(ctx, module.Change{Module: name, Kind: "decision", ID: id, Area: area})
