@@ -23,7 +23,9 @@ async function sortOpen(pick: (view: HTMLElement) => HTMLElement) {
 }
 const ringOf = (title: string) => within(rowOf(title)).getAllByRole('button')[0]
 const viewLinks = () => [...page().querySelectorAll<HTMLAnchorElement>('.views > a')]
-const counts = () => viewLinks().map((a) => a.querySelector('.view-count')?.textContent?.trim() ?? '')
+const counts = () => viewLinks().map((a) => a.querySelector('.count')?.textContent ?? '')
+// The number each view's spoken name carries, or '' when it is called by its name alone.
+const spoken = () => viewLinks().map((a) => a.getAttribute('aria-label')?.match(/\d+/)?.[0] ?? '')
 const reads = (calls: Call[]) => calls.filter((c) => c.method === 'GET' && c.path.startsWith('/api/tasks?limit=')).length
 const writes = (calls: Call[]) => calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path, c.body])
 const sunday: Now = { ...monday, date: '2026-11-29', weekday: 'Sunday' }
@@ -57,6 +59,7 @@ test('each view shows the open tasks its question gives by the server’s today,
   expect(rowOf('last weekend').querySelector('.t2')).toHaveTextContent('Sat-Sun 21-22 Nov')
   expect(rowOf('overdue').querySelector('.late')).not.toBeNull()
   expect(counts()).toEqual(['7', '4', '1', '1', '1', ''])
+  expect(spoken()).toEqual(counts())
 
   await userEvent.click(viewLinks()[2])
   await waitFor(() => expect(where()).toBe('/tasks?view=week'))
@@ -66,6 +69,7 @@ test('each view shows the open tasks its question gives by the server’s today,
   await userEvent.click(viewLinks()[4])
   await waitFor(() => expect(shown()).toEqual({ someday: ['someday'] }))
   expect(reads(calls)).toBe(1)
+  expect(calls.filter((c) => c.path.includes('done=true'))).toEqual([])
 })
 
 test('on that Sunday the weekend is on Today, with its span on the row', async () => {
@@ -181,26 +185,28 @@ test.each([
   expect(shown()[to]).toContain('to sort')
 })
 
-test('Agenda counts overlapping dates and lists once, and a completion moves the row and its count to Done', async () => {
+test('Agenda counts overlapping dates and lists once, a completion moves the row to Done, and Done carries no count', async () => {
   narrow(true)
   const tasks = week()
   tasks[4].list = 'soon'
   tasks.push(task(8, 0, { title: 'finished', done_at: '2026-11-22T10:00:00Z' }))
   const calls = tasksServer(tasks)
   await open('/tasks')
-  expect(counts()).toEqual(['7', '4', '1', '2', '1', '1'])
+  expect(counts()).toEqual(['7', '4', '1', '2', '1', ''])
   expect(shown().scheduled).toEqual(['overdue', 'last weekend', 'today', 'the weekend'])
   expect(shown().unscheduled).toEqual(['to sort', 'soon', 'someday'])
   await userEvent.click(ringOf('the weekend'))
   await waitFor(() => expect(rowOf('the weekend')).toBeUndefined())
-  expect(counts()).toEqual(['6', '4', '', '1', '1', '2'])
+  expect(counts()).toEqual(['6', '4', '', '1', '1', ''])
+  expect(spoken()).toEqual(counts())
+  expect(viewLinks()[2]).not.toHaveTextContent(/\d/)
   await userEvent.click(viewLinks()[5])
   await waitFor(() => expect(rowOf('the weekend')).toHaveClass('done'))
   await userEvent.click(ringOf('the weekend'))
   await waitFor(() => expect(rowOf('the weekend')).toBeUndefined())
   await userEvent.click(viewLinks()[0])
   await waitFor(() => expect(rowOf('the weekend')).toBeDefined())
-  expect(counts()).toEqual(['7', '4', '1', '2', '1', '1'])
+  expect(counts()).toEqual(['7', '4', '1', '2', '1', ''])
   expect(writes(calls)).toEqual([['PATCH', '/api/tasks/5', { done: true }], ['PATCH', '/api/tasks/5', { done: false }]])
 })
 
@@ -228,7 +234,7 @@ test('two tasks marked done before either answer lands both leave the open list'
   await userEvent.click(ringOf('today'))
   await act(async () => held.splice(0).forEach((answer) => answer()))
   await waitFor(() => expect(shown().scheduled).toEqual(['last weekend', 'the weekend']))
-  expect(counts()[5]).toBe('2')
+  expect(counts()[0]).toBe('5')
 })
 
 test('a change made elsewhere shows without a reload, and a refusal shows the server’s line', async () => {

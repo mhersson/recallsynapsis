@@ -133,15 +133,20 @@ export function useOpen(on = true) {
 
 const step = 50
 
-// One row carries the total for a badge. A list starts at 50 and can grow to 500.
-export function useMore(asked: string, holds: (t: Row) => boolean, countOnly = false) {
+// A list starts at 50 and can grow to 500. A change while nothing is asked forgets it, so asked again it shows only once
+// read afresh.
+export function useMore(asked: string, holds: (t: Row) => boolean) {
   const [shown, setShown] = useState({ asked, limit: step })
-  const limit = countOnly ? 1 : shown.asked === asked ? shown.limit : step
+  const limit = shown.asked === asked ? shown.limit : step
   const [got, setGot] = useState<{ asked: string; list: List }>()
   const [failed, setFailed] = useState('')
   const [tick, setTick] = useState(0)
   const n = useRef(0)
-  useTasks(() => setTick((x) => x + 1))
+  const again = () => {
+    setTick((x) => x + 1)
+    if (!asked) setGot(undefined)
+  }
+  useTasks(again)
   useEffect(() => {
     if (!tick || !asked) return
     const at = ++n.current
@@ -164,7 +169,7 @@ export function useMore(asked: string, holds: (t: Row) => boolean, countOnly = f
     })
   }
   const more = limit < 500 ? () => setShown({ asked, limit: limit + step }) : undefined
-  return { list: got?.asked === asked ? got.list : undefined, failed, more, took, again: () => setTick((x) => x + 1) }
+  return { list: got?.asked === asked ? got.list : undefined, failed: asked && failed, more, took, again }
 }
 
 // The task id names, in full, read when the page mounts, on every change the stream tells of, since what it links to may
