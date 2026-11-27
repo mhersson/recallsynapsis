@@ -33,9 +33,14 @@ export type Maker = {
   atOnce: (text: string, area: string, said: string) => Promise<Named>
 }
 
-// Where an item leads, the class of the small mark that shows what it is, and its state in words when it has one
-// to show.
-export type Item = { to: string; mark: string; state?: string }
+// Where an item leads, the class of the small mark that shows what it is, its state in words when it has one to show,
+// and the tag a Links row shows after it, if any.
+export type Item = { to: string; mark: string; state?: string; tag?: string }
+
+// A tab of a project's page, after Activity, which holds the modules' sections: its name in the address, its label, the
+// quiet number after the label, which renders nothing when there is none, what it shows, and the path the module's own
+// pages are under, which keep Projects current on a phone, or More when Projects has no tab.
+export type Tab = { name: string; label: string; count?: ComponentType<{ area: Area }>; body: ComponentType<{ area: Area }>; at: string }
 
 // A part of the Settings page: its anchor, its title and what it holds.
 export type Part = { id: string; title: string; body: ReactNode }
@@ -59,6 +64,8 @@ export type Module = {
   // What it holds in an area, shown on that area's page beside the other modules' on desktop; first when it comes first
   // there, so on a phone it opens.
   section?: ComponentType<{ area: Area; first: boolean }>
+  // A tab of a project's page, after Activity.
+  tab?: Tab
   // What it makes from another module's item, offered where that item is shown.
   make?: Maker
   // An item of the module, given its reference, kind and state, as a hit or a link names it.

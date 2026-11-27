@@ -12,11 +12,13 @@ type Props = { modules: Module[]; action?: Action; area?: number }
 
 export default function PhoneTabs({ modules, action, area }: Props) {
   const { pathname, search, state } = useLocation()
-  // A project keeps Projects current, and a page reached through More keeps More current, Projects too when it has no tab.
+  // A project, and a page of a module's tab of a project, keep Projects current, and a page reached through More keeps More
+  // current, Projects too when it has no tab.
   const tabbed = projectsTabbed(modules)
+  const project = ['/areas', ...modules.flatMap((m) => (m.tab ? [m.tab.at] : []))]
   const also: Record<string, string[]> = {
-    '/projects': ['/areas'],
-    '/more': ['/search', '/settings', ...(tabbed ? [] : ['/projects', '/areas']), ...modules.flatMap((m) => m.more.map((r) => r.to))],
+    '/projects': project,
+    '/more': ['/search', '/settings', ...(tabbed ? [] : ['/projects', ...project]), ...modules.flatMap((m) => m.more.map((r) => r.to))],
   }
   const current = (to: string) => [to, ...(also[to] ?? [])].some((p) => pathname === p || pathname.startsWith(p + '/'))
   // The action's tab is green whether its page is open or not.

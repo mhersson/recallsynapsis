@@ -391,13 +391,20 @@ Every package states its one responsibility in its package comment, and
   typed when that brief has moved on and saves it over the revision that
   came in, and asks before a change not saved is left. Each module of the
   web app is one folder under `web/src/modules/`, listed in
-  `web/src/modules/registry.ts`, where a module may also give a part of
+  `web/src/modules/registry.ts`, where a module may also give a tab of a
+  project's page, after Activity, which holds the modules' sections: its
+  label with a quiet number after it, its name in the address as `?tab=`,
+  and the path of the module's own pages, which keep Projects current on a
+  phone, or More when Projects has no tab. The personal area's page has no
+  tabs, and a name the page does not know opens Activity. A module may also
+  give the tag a Links row shows after one of its items, a part of
   Settings, shown after Backups, its kinds of notification, which the part
   Notifications shows, and what it does before a person signs out, which
-  never keeps the session open. The push module gives no page, only the part
-  Notifications, and turns this browser's notifications off as a person
-  signs out. The tasks module gives its four kinds of notification, each a
-  switch applied as it is flipped, three with an hour that waits for Save.
+  never keeps the session open. The push
+  module gives no page, only the part Notifications, and turns this
+  browser's notifications off as a person signs out. The tasks module gives
+  its four kinds of notification, each a switch applied as it is flipped,
+  three with an hour that waits for Save.
   The service worker, `web/public/sw.js`, shows each notification pushed to
   the browser, and a tap on one takes an open window to its path, or opens
   one there.

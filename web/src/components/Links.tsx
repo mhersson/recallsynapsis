@@ -59,8 +59,8 @@ export default function Links({ of, areas, trashed, sending, open, onLinks }: Pr
   )
 }
 
-// An item as a link shows it: its mark and its title, which leads to it while its module is switched on, or its reference
-// once it is gone; what follows it, such as a button that removes it, comes after.
+// An item as a link shows it: its mark and its title, which leads to it while its module is switched on, with the tag its
+// module gives it, or its reference once it is gone; what follows it, such as a button that removes it, comes after.
 export function LinkRow({ l, children }: { l: Linked; children?: ReactNode }) {
   const item = useItem()
   const it = l.available ? item(l.ref, l.kind, l.state) : undefined
@@ -79,6 +79,7 @@ export function LinkRow({ l, children }: { l: Linked; children?: ReactNode }) {
       ) : (
         <span>{l.title}</span>
       )}
+      {it?.tag && <span className="tag">{it.tag}</span>}
       {children}
     </div>
   )

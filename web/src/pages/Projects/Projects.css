@@ -129,3 +129,54 @@
     display: block;
   }
 }
+
+/* The tabs of a project's page under its brief, in the shape of the views of Tasks. A number after a label is as quiet as
+   a section's count, and nothing on a tab reads as an alert. */
+.ptabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg2);
+}
+
+.ptabs a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  color: var(--grey2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ptabs a:hover {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.ptabs a[aria-current] {
+  background: var(--bg2);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.ptabs .dim {
+  color: var(--grey1);
+  font-weight: 400;
+}
+
+.ptabs .dim:empty {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .ptabs a {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 4px 6px;
+  }
+}

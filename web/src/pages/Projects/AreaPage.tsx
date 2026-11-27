@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router'
 import { areaOf } from '../../api/areas.ts'
 import { api, message } from '../../api/client.ts'
 import { touchesAreas, useStream } from '../../api/stream.ts'
@@ -21,6 +21,7 @@ function View({ id }: { id: number }) {
   const { modules: names } = useSession()
   const modules = useModules()
   const action = useAction()
+  const [params] = useSearchParams()
   // undefined until read, null when there is no such area.
   const [area, setArea] = useState<Area | null>()
   const [editing, setEditing] = useState(false)
@@ -66,6 +67,9 @@ function View({ id }: { id: number }) {
     </>
   )
   const parts = modules.filter((m) => m.section)
+  // A project shows the tabs of the modules switched on that give one, after Activity, which holds the modules' sections.
+  const tabs = area.kind === 'project' ? modules.flatMap((m) => (m.tab ? [m.tab] : [])) : []
+  const tab = tabs.find((t) => t.name === params.get('tab'))
   const holds =
     names.length === 0 ? (
       <div className="empty">No module is switched on, so {area.kind === 'personal' ? 'the personal area' : 'this project'} holds nothing yet.</div>
@@ -75,9 +79,33 @@ function View({ id }: { id: number }) {
       </div>
     )
 
-  // The sections of more than one module take the page's whole width.
+  const body =
+    tabs.length === 0 ? (
+      holds
+    ) : (
+      <>
+        <nav className="ptabs" aria-label="The parts of the project">
+          <Link to={`/areas/${id}`} aria-current={tab ? undefined : 'page'}>
+            Activity
+          </Link>
+          {tabs.map((t) => (
+            <Link key={t.name} to={`/areas/${id}?tab=${t.name}`} aria-current={t === tab ? 'page' : undefined}>
+              {t.label}
+              {t.count && (
+                <span className="dim">
+                  <t.count area={area} />
+                </span>
+              )}
+            </Link>
+          ))}
+        </nav>
+        {tab ? <tab.body area={area} /> : holds}
+      </>
+    )
+
+  // The sections of more than one module, and the tabs, take the page's whole width.
   return (
-    <div className={parts.length > 1 ? 'page' : 'page narrow'}>
+    <div className={parts.length > 1 || tabs.length > 0 ? 'page' : 'page narrow'}>
       {narrow && (
         <div className="crumb">
           <Link to="/projects">Projects</Link> /
@@ -119,7 +147,7 @@ function View({ id }: { id: number }) {
           )}
         </>
       )}
-      {!(narrow && editing) && holds}
+      {!(narrow && editing) && body}
       {narrow && !editing && (
         <div className="acts stack area-foot">
           {here}
