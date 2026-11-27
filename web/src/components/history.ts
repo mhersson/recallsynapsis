@@ -1,6 +1,11 @@
+import { ago, since } from './time.ts'
+
 // A revision as a history lists it: by is where the change came from, web or the name of a token, and restored_from
 // the revision a restore brought back.
 export type Entry = { revision: number; at: string; by: string; said: string; restored_from: number | null }
 
 // Where a change came from, as a list shows it.
 export const from = (by: string) => (by === 'web' ? 'web' : `via ${by}`)
+
+// When and by what a change came in, as a sentence tells it: just now, by the web app, or 3 min ago, via aim.
+export const cameIn = (at: string, by: string) => `${since(at) < 60_000 ? 'just now' : ago(at)}, ${by === 'web' ? 'by the web app' : from(by)}`
