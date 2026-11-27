@@ -1,4 +1,5 @@
 import type { Area, Hit, Linked, Session, Token } from '../api/types.ts'
+import type { Wording } from '../pages/Projects/Brief.tsx'
 import type { Kind, List, Note, Row, Version } from '../modules/notes/api.ts'
 import type { Entry, Kinds, Now, List as TaskList, Row as TaskRow, Task } from '../modules/tasks/api.ts'
 import { add } from '../modules/tasks/dates.ts'
@@ -11,8 +12,14 @@ export const HEALTH = { status: 'ok', version: '0.1.0' }
 
 export const SESSION: Session = { user: { name: 'ada' }, modules: [], version: '0.1.0', timezone: 'Europe/Oslo', last_backup: before(6 * 60) }
 
-// The brief of each fixed area is its first wording, written three days before.
+// The brief of each fixed area but recallsynapsis is its first wording, written three days before.
 const briefed = { brief_revision: 1, brief_changed_at: before(3 * 24 * 60), brief_changed_by: 'web' }
+const BRIEF = [
+  "Recall Synapsis is a self-hosted place for the owner's notes, ideas, tasks and project knowledge. It is reached from a web app, on desktop and phone, and from AI clients over MCP: Portal relays chat and voice clients to it, and coding sessions in AIM reach it directly on the home network.",
+  'It exists so that what the owner means to do, and what was decided and why, is kept in one place that every client can read, and is not spread over conversations that end.',
+  "It is one Go binary with the web app embedded, on SQLite. Every feature is a module, built on its own and switched on in the configuration. Notes, tasks and push are built and run in the owner's cluster. Knowledge is next. It has one user.",
+  "What shapes it: the code stays tight and simple, and security is not taken lightly. Whether an AI's change needs a person's yes is the client's to ask, not Recall's. The look is CAVU's.",
+]
 
 // GET /api/areas?archived=true: the personal area first, then the projects by name.
 export const AREAS: Area[] = [
@@ -27,11 +34,39 @@ export const AREAS: Area[] = [
     kind: 'project',
     name: 'recallsynapsis',
     slug: 'recallsynapsis',
-    brief: 'Notes, ideas, tasks and project knowledge, reachable from a web app and from AI clients.',
-    ...briefed,
+    brief: BRIEF.join('\n\n'),
+    brief_revision: 3,
+    brief_changed_at: before(3 * 60),
+    brief_changed_by: 'web',
     archived: false,
   },
 ]
+
+// What an area's earlier wordings held where it was not what the area holds now, oldest first: recallsynapsis had one line,
+// then a client drafted its brief, whose third paragraph the owner mended.
+const EARLIER_BRIEFS: Record<number, Partial<Wording>[]> = {
+  2: [
+    { at: before(5 * 24 * 60), brief: 'Notes, ideas, tasks and project knowledge, reachable from a web app and from AI clients.' },
+    {
+      at: before(15 * 60),
+      by: 'aim',
+      said: 'Draft a brief for Recall Synapsis from the spec and the hand-off note, for me to approve.',
+      brief: BRIEF.map((p) => p.replace(" and run in the owner's cluster. Knowledge is next.", '.')).join('\n\n'),
+    },
+  ],
+}
+
+// The wordings an area's brief has, oldest first: each holds the brief now, but where EARLIER_BRIEFS says otherwise.
+export const wordings = (a: Area): Wording[] =>
+  Array.from({ length: a.brief_revision }, (_, i) => ({
+    revision: i + 1,
+    at: a.brief_changed_at!,
+    by: a.brief_changed_by,
+    said: '',
+    restored_from: null,
+    brief: a.brief,
+    ...EARLIER_BRIEFS[a.id]?.[i],
+  }))
 
 // GET /api/tokens, oldest first.
 export const TOKENS: Token[] = [

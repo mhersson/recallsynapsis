@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 export class ApiError extends Error {
   status: number
   // The seconds a Retry-After header asks the client to wait, else 0.
@@ -59,4 +61,27 @@ export async function api<T>(method: string, path: string, body?: unknown, signa
     throw new ApiError(res.status, message, Number(res.headers.get('Retry-After')) || 0)
   }
   return (await res.json()) as T
+}
+
+// What GET path gives, read again when path or again changes; '' reads nothing. An answer to a question asked since is
+// dropped, and a refusal is kept until a read succeeds.
+export function useGet<T>(path: string, again?: unknown): { got?: T; failed: string } {
+  const [got, setGot] = useState<T>()
+  const [failed, setFailed] = useState('')
+  useEffect(() => {
+    if (!path) return
+    let stale = false
+    api<T>('GET', path).then(
+      (v) => {
+        if (stale) return
+        setGot(v)
+        setFailed('')
+      },
+      (e: unknown) => !stale && setFailed(message(e)),
+    )
+    return () => {
+      stale = true
+    }
+  }, [path, again])
+  return { got, failed }
 }

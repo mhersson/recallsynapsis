@@ -69,3 +69,10 @@ export const RestoreIcon = () => (
     <path d="M3.5 2.5v2.8h2.8" />
   </Icon>
 )
+
+export const HistoryIcon = () => (
+  <Icon>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M8 5v3.2l2 1.3" />
+  </Icon>
+)

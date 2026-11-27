@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { first } from '../../api/areas.ts'
 import { api, message } from '../../api/client.ts'
 import { touchesAreas, useStream } from '../../api/stream.ts'
 import type { Area } from '../../api/types.ts'
@@ -64,7 +65,7 @@ export default function Projects({ making = false }: { making?: boolean }) {
       <ProjectsIcon />
       <Link to={`/areas/${a.id}`}>
         <span className={a.kind === 'project' ? 't1 mono' : 't1'}>{a.name}</span>
-        {a.brief && <span className="t3">{a.brief}</span>}
+        {a.brief && <span className="t3">{first(a.brief)}</span>}
       </Link>
       {a.archived && (
         <button className="btn sm" onClick={() => void restore(a)}>

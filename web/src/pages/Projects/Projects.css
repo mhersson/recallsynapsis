@@ -1,11 +1,28 @@
 .page-form {
-  max-width: 560px;
+  max-width: 760px;
   margin: 16px 0 22px;
 }
 
-.area-form textarea {
+/* The brief is Markdown, written in the type of a note's editor. */
+.area-form .ta {
+  display: block;
   min-height: 62px;
   resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+.page-form .ta {
+  min-height: 240px;
+  field-sizing: content;
+}
+
+@media (max-width: 720px) {
+  .page-form .ta {
+    min-height: 300px;
+  }
 }
 
 .area-form > .err,
@@ -21,6 +38,36 @@
 
 .area-form .fixed + .note {
   margin: 0;
+}
+
+/* The brief at the head of an area's page, no wider than reads well, with its quiet line and its History under it. */
+.brief {
+  max-width: 760px;
+  margin: 6px 0 18px;
+}
+
+.brief > .sub {
+  margin: 2px 0 0;
+}
+
+.brief > .t2 {
+  margin-top: 8px;
+}
+
+.brief :is(.md, .t2) .btn.link {
+  font: inherit;
+  padding: 0;
+  border: 0;
+}
+
+.brief-history {
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--bg2);
+}
+
+.brief .revision {
+  margin-top: 10px;
 }
 
 .note.projects-none {

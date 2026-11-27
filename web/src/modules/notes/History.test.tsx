@@ -65,6 +65,21 @@ test('Read opens a revision in a frame apart from the current text, and Back ret
   expect(calls.filter((c) => c.method !== 'GET')).toEqual([])
 })
 
+test('a revision read from the foot of the note opens where it begins', async () => {
+  narrow(false)
+  const scrolled = vi.fn()
+  Element.prototype.scrollIntoView = scrolled
+  try {
+    server(three())
+    await open('/notes/1')
+    await userEvent.click(await waitFor(() => within(rows()[1]).getByRole('button')))
+    expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
+    expect(scrolled.mock.contexts[0]).toHaveClass('revision')
+  } finally {
+    Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+  }
+})
+
 test('restoring a revision asks the server for it, the note then reads as it did, and the history shows the restore', async () => {
   narrow(false)
   const { calls } = server(three())

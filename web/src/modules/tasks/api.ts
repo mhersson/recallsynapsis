@@ -205,8 +205,5 @@ export function useTask(id?: number) {
   return { task: task?.id === id ? task : undefined, failed, show }
 }
 
-// Where a change came from, as a list shows it.
-export const from = (source: string) => (source === 'web' ? 'web' : `via ${source}`)
-
 // The class of a task's mark after mk, a ring: open, filled once done, and in the yellow of what waits while it is to sort.
 export const ring = (state: State) => 'm-task' + (state === 'done' ? ' t-done' : state === 'unsorted' ? ' t-sort' : '')

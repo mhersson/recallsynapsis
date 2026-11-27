@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
+import { areaOf } from '../../api/areas.ts'
 import { api, message } from '../../api/client.ts'
 import { touchesAreas, useStream } from '../../api/stream.ts'
 import type { Area } from '../../api/types.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
 import { useAction, useModules, useSession } from '../../session.ts'
 import AreaForm from './AreaForm.tsx'
+import Brief from './Brief.tsx'
 import './Projects.css'
 
 // Keyed by the id, so going to another area ends an edit.
@@ -26,7 +28,7 @@ function View({ id }: { id: number }) {
 
   useStream((changes) => {
     if (!touchesAreas(changes)) return
-    api<{ areas: Area[] }>('GET', '/areas?archived=true').then((r) => setArea(r.areas.find((a) => a.id === id) ?? null), () => {})
+    areaOf(id).then((a) => setArea(a ?? null), () => {})
   })
 
   if (area === undefined) return null
@@ -103,7 +105,7 @@ function View({ id }: { id: number }) {
         />
       ) : (
         <>
-          <p className="sub">{area.brief}</p>
+          <Brief area={area} onRestored={setArea} />
           {refused && (
             <p role="alert" className="err">
               {refused}
