@@ -2,8 +2,8 @@
 // what was decided, why, its source, the day it was decided and the decision
 // it replaces, with every wording of it. A decision stands until another
 // replaces it, and is replaced by one at most. A change is one package of
-// decisions added and mended in one project, saved all or none. It owns the
-// tables decisions and decision_revisions.
+// decisions added and mended in one project, saved all or none, and only a
+// person deletes one. It owns the tables decisions and decision_revisions.
 package knowledge
 
 import (
@@ -83,6 +83,7 @@ func New(d module.Deps) module.Module {
 			{Pattern: "GET /api/knowledge", Access: module.Read, Serve: k.serveList},
 			{Pattern: "POST /api/knowledge", Access: module.Owner, Serve: k.serveChange},
 			{Pattern: "GET /api/knowledge/{id}", Access: module.Read, Serve: k.serveGet},
+			{Pattern: "DELETE /api/knowledge/{id}", Access: module.Owner, Serve: k.serveDelete},
 			{Pattern: "GET /api/knowledge/{id}/revisions", Access: module.Read, Serve: k.serveHistory},
 			{Pattern: "GET /api/knowledge/{id}/revisions/{revision}", Access: module.Read, Serve: k.serveRevision},
 		},
@@ -694,6 +695,28 @@ func (w writer) claim(ctx context.Context, label string, self, target, was int64
 		return fmt.Errorf("%s: %s replaces %s, directly or through what it replaces, so %[3]s cannot replace it: %w", label, ref,
 			module.NewRef(name, self), store.ErrInvalid)
 	}
+
+	return nil
+}
+
+// remove deletes the caller's decision with the id, with its revisions. The
+// one it replaced then stands, and the one that replaced it replaces nothing,
+// with no revision written for that.
+func (k knowledge) remove(ctx context.Context, id int64) error {
+	c, _ := module.CallerFrom(ctx)
+
+	var area int64
+
+	err := k.Store.QueryRowContext(ctx, `DELETE FROM decisions WHERE user_id = ? AND id = ? RETURNING area_id`, c.UserID, id).Scan(&area)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("decision %s: %w", module.NewRef(name, id), store.ErrNotFound)
+	}
+
+	if err != nil {
+		return fmt.Errorf("knowledge: delete: %w", err)
+	}
+
+	k.Changed(ctx, module.Change{Module: name, Kind: "decision", ID: id, Area: area})
 
 	return nil
 }

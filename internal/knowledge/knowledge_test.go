@@ -593,6 +593,50 @@ func TestTheRevisionsOfADecisionReadAsItWasThen(t *testing.T) {
 	}
 }
 
+func TestDeletingADecisionLeavesTheOthersStandingOrReplacingNothing(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	web := f.signIn(t, "ada")
+
+	clay := f.add(t, "garden", `{"decision":"Beds are raised","why":"The soil is clay.","decided":"2026-10-01"}`, web)
+	sand := f.add(t, "garden", fmt.Sprintf(`{"decision":"Beds are flat","why":"Sand.","replaces":%q}`, clay["ref"]), web)
+	loam := f.add(t, "garden", fmt.Sprintf(`{"decision":"Beds are of loam","why":"Compost.","replaces":%q}`, sand["ref"]), web)
+	f.mend(t, "garden", sand, `{"why":"Sand was brought in."}`, web)
+
+	code, got := f.do(t, http.MethodDelete, path(sand), "", web)
+	require.Equal(t, http.StatusNoContent, code, got)
+
+	clay = f.read(t, clay, f.phone)
+	assert.Equal(t, "stands", clay["state"], "the decision it replaced stands again")
+	assert.Nil(t, clay["replaced_by"])
+
+	kept := f.read(t, loam, f.phone)
+	assert.Nil(t, kept["replaces"], "and the one that replaced it replaces nothing")
+
+	loam["replaces"] = nil
+	assert.Equal(t, loam, kept, "with no revision written for that")
+	assert.Equal(t, []object{kept, clay}, f.list(t, "garden"))
+	assert.Equal(t, 2, f.count(t, "decision_revisions"), "its revisions go with it")
+
+	for _, target := range []string{path(sand), path(sand) + "/revisions", path(sand) + "/revisions/1"} {
+		code, got := f.do(t, http.MethodGet, target, "", f.phone)
+		refused(t, http.StatusNotFound, code, got)
+	}
+
+	code, got = f.do(t, http.MethodDelete, path(sand), "", web)
+	refused(t, http.StatusNotFound, code, got)
+
+	code, got = f.do(t, http.MethodDelete, "/api/knowledge/x", "", web)
+	refused(t, http.StatusNotFound, code, got)
+
+	last := f.add(t, "garden", `{"decision":"Beds are of clay","why":"Back to clay."}`, web)
+	code, got = f.do(t, http.MethodDelete, path(last), "", web)
+	require.Equal(t, http.StatusNoContent, code, got)
+	assert.NotEqual(t, last["id"], f.add(t, "garden", `{"decision":"Beds are of clay","why":"Clay."}`, web)["id"],
+		"the newest decision's id, deleted, is never given again")
+}
+
 func TestDecisionsAreAProjectsAnArchivedOneToo(t *testing.T) {
 	t.Parallel()
 
@@ -634,6 +678,9 @@ func TestATokenReadsEveryDecisionAndChangesNone(t *testing.T) {
 			code, got := f.do(t, http.MethodPost, "/api/knowledge", body, token)
 			refused(t, http.StatusForbidden, code, got)
 		}
+
+		code, got := f.do(t, http.MethodDelete, path(clay), "", token)
+		refused(t, http.StatusForbidden, code, got)
 	}
 
 	assert.Equal(t, 1, f.count(t, "decisions"))
@@ -662,6 +709,7 @@ func TestAModuleSwitchedOffKeepsItsDecisions(t *testing.T) {
 			{http.MethodGet, "/api/knowledge?area=garden", ""},
 			{http.MethodPost, "/api/knowledge", `{"area":"garden","add":[{"decision":"Lost","why":"Off."}]}`},
 			{http.MethodGet, path(clay), ""},
+			{http.MethodDelete, path(clay), ""},
 			{http.MethodGet, path(clay) + "/revisions", ""},
 			{http.MethodGet, path(clay) + "/revisions/1", ""},
 		} {
@@ -701,6 +749,9 @@ func TestADecisionOfOneUserIsFoundByNoRouteOfAnother(t *testing.T) {
 		code, got := f.do(t, http.MethodPost, "/api/knowledge", body, grace)
 		refused(t, http.StatusNotFound, code, got)
 	}
+
+	code, got = f.do(t, http.MethodDelete, path(clay), "", grace)
+	refused(t, http.StatusNotFound, code, got)
 
 	assert.Equal(t, 1, f.count(t, "decisions"))
 	assert.Equal(t, clay, f.read(t, clay, f.phone))
@@ -775,6 +826,16 @@ func TestEachWriteReachesAnOpenStream(t *testing.T) {
 	refused(t, http.StatusBadRequest, code, got)
 
 	f.mend(t, "garden", made[0], `{"why":"Clay."}`, web)
-	expect(f.mend(t, "garden", made[1], `{"why":"The sun."}`, web), "garden") // and not the refused package, nor the mend that changed nothing
+	sun := f.mend(t, "garden", made[1], `{"why":"The sun."}`, web)
+	expect(sun, "garden") // and not the refused package, nor the mend that changed nothing
 	expect(f.add(t, "attic", `{"decision":"Keep the boxes","why":"Room."}`, web), "attic")
+	expect(f.mend(t, "garden", sun, fmt.Sprintf(`{"replaces":%q}`, made[0]["ref"]), web), "garden")
+
+	code, got = f.do(t, http.MethodDelete, path(made[0]), "", web)
+	require.Equal(t, http.StatusNoContent, code, got)
+	expect(made[0], "garden") // and not the decision that replaced it, which now replaces nothing
+
+	code, got = f.do(t, http.MethodDelete, path(made[0]), "", web)
+	refused(t, http.StatusNotFound, code, got)
+	expect(f.add(t, "garden", `{"decision":"Mulch","why":"Soil."}`, web), "garden") // and not the delete of none
 }

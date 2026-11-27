@@ -77,6 +77,8 @@ session renames a project or archives one.
   first, reads one with its revisions, and saves a change as one package of
   decisions added and mended, all or none, which only a signed-in session
   sends; a mend made from an earlier wording is refused.
+  Only a signed-in session deletes a decision, with its wordings: the one it
+  replaced then stands again.
 - Push sends a module's notifications as Web Push to every browser of the
   owner's in which they are turned on, encrypted for each browser, and a
   browser is turned on or off in Settings, under Notifications, with the

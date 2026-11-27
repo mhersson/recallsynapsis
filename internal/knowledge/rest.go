@@ -54,6 +54,21 @@ func (k knowledge) serveGet(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (k knowledge) serveDelete(w http.ResponseWriter, r *http.Request) error {
+	id, err := decisionID(r)
+	if err != nil {
+		return err
+	}
+
+	if err := k.remove(r.Context(), id); err != nil {
+		return err
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+
+	return nil
+}
+
 func (k knowledge) serveHistory(w http.ResponseWriter, r *http.Request) error {
 	id, err := decisionID(r)
 	if err != nil {
