@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -194,8 +195,8 @@ func TestMCPToolsActForTheTokensUser(t *testing.T) {
 
 	assert.Equal(t, map[string]any{"areas": []any{
 		map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": ""},
-		map[string]any{"slug": "garden", "name": "Garden", "kind": "project", "brief": "Beds and seeds.\n\nAnd the greenhouse."},
-	}}, call(t, cs, "list_areas", nil), "the areas not archived, each brief whole, with no id and no archived mark")
+		map[string]any{"slug": "garden", "name": "Garden", "kind": "project", "brief": "Beds and seeds."},
+	}}, call(t, cs, "list_areas", nil), "the areas not archived, each with its brief's first paragraph, with no id and no archived mark")
 
 	beds := call(t, cs, "add_item", map[string]any{"title": "Raised beds", "area": "GARDEN"})
 	assert.Equal(t, []any{map[string]any{"module": "fake", "hits": []any{map[string]any{
@@ -217,6 +218,50 @@ func TestMCPToolsActForTheTokensUser(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, code)
 	assert.Equal(t, got["error"], refused(t, cs, "search", map[string]any{"query": "beds", "area": "nowhere"}), "the line REST answers")
 	refused(t, cs, "add_item", map[string]any{"title": "Lost", "area": "nowhere"})
+}
+
+func TestListAreasGivesAnAreaItIsGivenWhole(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t, "https://recall.example.org")
+	cookie := f.signIn(t)
+	brief := "Raised beds,\nand the paths.\n \t\nThe greenhouse.\n\nThe seeds."
+
+	code, garden := f.json(t, http.MethodPost, "/api/areas", `{"name":"Garden","brief":`+strconv.Quote(brief)+`}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	code, shed := f.json(t, http.MethodPost, "/api/areas", `{"name":"Tool Shed","brief":"Tools."}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	code, _ = f.json(t, http.MethodPost, "/api/areas", `{"name":"Orchard","brief":"Apples and pears."}`, cookie, csrf)
+	require.Equal(t, http.StatusCreated, code)
+
+	code, shed = f.json(t, http.MethodPatch, areaPath(t, shed), `{"archived":true}`, cookie, csrf)
+	require.Equal(t, http.StatusOK, code)
+
+	cs := f.client(t, f.token(t, "phone", "read"))
+
+	assert.Equal(t, []any{
+		map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": ""},
+		map[string]any{"slug": "garden", "name": "Garden", "kind": "project", "brief": "Raised beds,\nand the paths."},
+		map[string]any{"slug": "orchard", "name": "Orchard", "kind": "project", "brief": "Apples and pears."},
+	}, call(t, cs, "list_areas", nil)["areas"], "the text before the first blank line, a line of spaces and tabs too, and a brief of one paragraph whole")
+
+	whole := func(a map[string]any) []any {
+		return []any{map[string]any{
+			"slug": a["slug"], "name": a["name"], "kind": a["kind"], "brief": a["brief"],
+			"brief_revision": a["brief_revision"], "brief_changed_at": a["brief_changed_at"], "brief_changed_by": a["brief_changed_by"],
+		}}
+	}
+
+	assert.Equal(t, whole(garden), call(t, cs, "list_areas", map[string]any{"area": "GARDEN"})["areas"], "by its slug in any case")
+	assert.Equal(t, whole(shed), call(t, cs, "list_areas", map[string]any{"area": "tool shed"})["areas"], "an archived project, by its name")
+	assert.Equal(t, []any{map[string]any{"slug": "personal", "name": "Personal", "kind": "personal", "brief": "", "brief_revision": float64(0)}},
+		call(t, cs, "list_areas", map[string]any{"area": "personal"})["areas"], "the revision of a brief never written")
+
+	code, got := f.json(t, http.MethodGet, "/api/search?q=beds&area=nowhere", "", cookie)
+	require.Equal(t, http.StatusNotFound, code)
+	assert.Equal(t, got["error"], refused(t, cs, "list_areas", map[string]any{"area": "nowhere"}), "the line REST answers")
 }
 
 func TestMCPAReadTokenCannotCallAWriteTool(t *testing.T) {
@@ -266,6 +311,9 @@ func TestMCPASecondUsersAreasAndHitsNeverReachTheFirst(t *testing.T) {
 	require.Len(t, hits, 1)
 	assert.Equal(t, ref, hits[0].(map[string]any)["ref"])
 
+	assert.Equal(t, refused(t, mine, "list_areas", map[string]any{"area": "nowhere"}),
+		strings.Replace(refused(t, mine, "list_areas", map[string]any{"area": "orchard"}), "orchard", "nowhere", 1),
+		"their area is not found, as one that does not exist")
 	refused(t, mine, "search", map[string]any{"query": "beds", "area": "orchard"})
 	refused(t, mine, "add_item", map[string]any{"title": "Into theirs", "area": "orchard"})
 }

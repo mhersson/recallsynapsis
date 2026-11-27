@@ -78,7 +78,9 @@ session changes a brief, renames a project or archives one.
   `search`, asks every module switched on. Notes finds the notes that hold
   every word given, in their title, body or tags, and Tasks the tasks, done or
   open, that hold them in their title or notes; part of a word is enough. The
-  MCP tool `list_areas` lists the areas, each with its brief.
+  MCP tool `list_areas` lists the areas, each with the first paragraph of its
+  brief, and gives one area it is given, an archived project too, with its
+  brief whole.
 - It backs itself up every night, into a directory you name.
 
 ## What it needs

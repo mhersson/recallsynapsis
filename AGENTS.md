@@ -155,13 +155,16 @@ Every package states its one responsibility in its package comment, and
   behind, rather than hold up a writer, when the server stops, and after an
   hour, so its access is checked again when it is opened again. At `/mcp` it
   serves MCP over streamable HTTP, stateless, with JSON responses and tools
-  only: the core's `list_areas`, which gives each area's brief whole, and
-  `search`, each calling what its REST route calls, and the tools of the
-  modules switched on; two tools of one name stop the start. The SDK's
-  bearer check admits an API token alone, so a session cookie is no authority
-  there, and one guard refuses a call the token's access does not cover
-  before the tool runs, puts the token's `module.Caller` in the tool's
-  context, and gives an error as the line REST would answer.
+  only: the core's `list_areas`, which lists the areas that are not archived,
+  each with the text of its brief before the first blank line, or gives one
+  area it is given, by its slug or its name, with its brief whole, its
+  revision and its change, and `search`, which calls what its REST route
+  calls, and the tools of the modules switched on; two tools of one name stop
+  the start. The SDK's bearer check admits an API token alone, so a session
+  cookie is no authority there, and one guard refuses a call the token's
+  access does not cover before the tool runs, puts the token's
+  `module.Caller` in the tool's context, and gives an error as the line REST
+  would answer.
 - `internal/auth`: signs a user in with a name and an argon2id password,
   slows wrong ones by the name's digest and the address, and keeps the
   sessions and API tokens, both stored only as hashes. It owns the tables
