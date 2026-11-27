@@ -7,7 +7,7 @@ import { FakeEventSource, fakeServer, json, narrow, type Call } from '../../test
 afterEach(() => vi.unstubAllGlobals())
 
 const session: Session = { user: { name: 'ada' }, modules: [], version: '1.2.3', timezone: 'UTC', last_backup: null }
-const area = (id: number, kind: Area['kind'], name: string, archived = false): Area => ({ id, kind, name, slug: name, description: '', archived })
+const area = (id: number, kind: Area['kind'], name: string, archived = false): Area => ({ id, kind, name, slug: name, brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '', archived })
 
 // A server that keeps the areas it is given; answer, when given, answers first.
 function server(areas: Area[], answer: (c: Call) => Response | undefined = () => undefined) {
@@ -62,13 +62,13 @@ test('on desktop a project is made in a dialog over the list, which then holds i
   await userEvent.click(newProject())
   const dialog = within(screen.getByRole('dialog'))
   expect(where()).toBe('/areas/new')
-  const [name, description] = dialog.getAllByRole('textbox')
+  const [name, brief] = dialog.getAllByRole('textbox')
   await userEvent.type(name, ' garden ')
-  await userEvent.type(description, 'Beds and the greenhouse.')
+  await userEvent.type(brief, 'Beds and the greenhouse.')
   await userEvent.click(dialog.getAllByRole('button')[1])
 
   const post = calls.find((c) => c.method === 'POST')!
-  expect([post.path, post.body]).toEqual(['/api/areas', { name: 'garden', description: 'Beds and the greenhouse.' }])
+  expect([post.path, post.body]).toEqual(['/api/areas', { name: 'garden', brief: 'Beds and the greenhouse.' }])
   await waitFor(() => expect(where()).toBe('/projects'))
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(main().getAllByRole('link').map((a) => a.getAttribute('href'))).toContain('/areas/2')
@@ -81,7 +81,7 @@ test('a name that is taken keeps the form open and says so', async () => {
   const dialog = within(screen.getByRole('dialog'))
   await userEvent.type(dialog.getAllByRole('textbox')[0], 'Cavu')
   await userEvent.click(dialog.getAllByRole('button')[1])
-  expect(dialog.getByRole('alert')).toBeInTheDocument()
+  expect(dialog.getByRole('alert')).not.toHaveTextContent('taken')
   expect(where()).toBe('/areas/new')
 })
 

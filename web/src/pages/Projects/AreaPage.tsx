@@ -103,7 +103,7 @@ function View({ id }: { id: number }) {
         />
       ) : (
         <>
-          <p className="sub">{area.description}</p>
+          <p className="sub">{area.brief}</p>
           {refused && (
             <p role="alert" className="err">
               {refused}

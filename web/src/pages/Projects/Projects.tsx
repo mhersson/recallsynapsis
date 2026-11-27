@@ -64,7 +64,7 @@ export default function Projects({ making = false }: { making?: boolean }) {
       <ProjectsIcon />
       <Link to={`/areas/${a.id}`}>
         <span className={a.kind === 'project' ? 't1 mono' : 't1'}>{a.name}</span>
-        {a.description && <span className="t3">{a.description}</span>}
+        {a.brief && <span className="t3">{a.brief}</span>}
       </Link>
       {a.archived && (
         <button className="btn sm" onClick={() => void restore(a)}>

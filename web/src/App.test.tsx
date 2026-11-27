@@ -149,8 +149,8 @@ test('a network failure shows no notice and opens no sign-in', async () => {
 })
 
 const areas = [
-  { id: 1, kind: 'personal', name: 'Personal', slug: 'personal', description: '', archived: false },
-  { id: 2, kind: 'project', name: 'garden', slug: 'garden', description: '', archived: false },
+  { id: 1, kind: 'personal', name: 'Personal', slug: 'personal', brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '', archived: false },
+  { id: 2, kind: 'project', name: 'garden', slug: 'garden', brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '', archived: false },
 ]
 const isAreas = (c: { path: string }) => c.path === '/api/areas'
 // The links of the side bar, or of the tabs on a phone.
@@ -287,7 +287,7 @@ test('a change to an area reads the areas again, and a change to anything else d
     await act(() => vi.advanceTimersByTimeAsync(2000))
     expect(calls.filter(isAreas)).toHaveLength(1)
 
-    areas.push({ id: 3, kind: 'project', name: 'shed', slug: 'shed', description: '', archived: false })
+    areas.push({ id: 3, kind: 'project', name: 'shed', slug: 'shed', brief: '', brief_revision: 0, brief_changed_at: null, brief_changed_by: '', archived: false })
     act(() => es.send({ module: 'core', kind: 'area', id: 3, area: 3 }))
     await act(() => vi.advanceTimersByTimeAsync(2000))
     expect(calls.filter(isAreas)).toHaveLength(2)
