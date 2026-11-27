@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { useAreas } from '../../api/areas.ts'
+import type { Area } from '../../api/types.ts'
 import { day } from '../../components/dates.ts'
 import { from } from '../../components/history.ts'
 import { LinkRow } from '../../components/Links.tsx'
@@ -42,6 +43,23 @@ function Leads({ line, state }: { line: Line; state: string }) {
   )
 }
 
+// The server's line, on a page of its own, for what could not be read.
+export const Failed = ({ line }: { line: string }) =>
+  line && (
+    <div className="page narrow">
+      <p role="alert" className="err">
+        {line}
+      </p>
+    </div>
+  )
+
+// The way back to the project's page, on Decisions.
+export const Crumb = ({ project }: { project: Area }) => (
+  <div className="crumb">
+    <Link to={`/areas/${project.id}`}>{project.name}</Link> / <Link to={`/areas/${project.id}?tab=decisions`}>Decisions</Link> /
+  </div>
+)
+
 const Part = ({ label, children }: { label: string; children: ReactNode }) => (
   <div className="kpart">
     <span className="label">{label}</span>
@@ -56,25 +74,12 @@ function View({ id }: { id: number }) {
   const project = useAreas(true).find((a) => a.slug === d?.area)
   useAreaShown(project?.id)
   const { got } = useDecisions(d?.replaced_by ? d.area : '')
-  if (!d)
-    return (
-      failed && (
-        <div className="page narrow">
-          <p role="alert" className="err">
-            {failed}
-          </p>
-        </div>
-      )
-    )
+  if (!d) return <Failed line={failed} />
 
   const newer = d.replaced_by && got?.decisions.find((x) => x.ref === d.replaced_by!.ref)
   return (
     <div className="page narrow decision">
-      {project && (
-        <div className="crumb">
-          <Link to={`/areas/${project.id}`}>{project.name}</Link> / <Link to={`/areas/${project.id}?tab=decisions`}>Decisions</Link> /
-        </div>
-      )}
+      {project && <Crumb project={project} />}
       <div className="page-head">
         <h1>
           <MarkdownInline text={d.decision} />

@@ -10,6 +10,7 @@ import { useLook } from '../theme/theme.ts'
 import type { Look } from '../theme/theme.ts'
 import type { Area, Token } from '../api/types.ts'
 import type { Wording } from '../pages/Projects/Brief.tsx'
+import type { Decision, Fields, Line } from '../modules/knowledge/api.ts'
 import type { Note, Version } from '../modules/notes/api.ts'
 import { AREAS, DECIDED_TODAY, DECISIONS, DONE, HEALTH, KINDS, NOTES, NOW, OLDER, OLDER_DONE, SECRET, SESSION, TASKS, TOKENS, TRASHED, answerTasks, decisionOf, full, history, listNotes, listed, note, onToday, refs, searchDecisions, searchNotes, searchTasks, tagsOf, version, wordings } from './fixtures.ts'
 
@@ -148,7 +149,7 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   if (path.startsWith('/api/areas/')) return answerArea(method, path, body)
   if (path.startsWith('/api/notes')) return answerNotes(method, url, body, file)
   if (path.startsWith('/api/push')) return answerPush(method, url)
-  if (path.startsWith('/api/knowledge') && session.modules.includes('knowledge')) return answerKnowledge(method, url)
+  if (path.startsWith('/api/knowledge') && session.modules.includes('knowledge')) return answerKnowledge(method, url, body)
   if (path === '/api/tasks/notify') return answerNotify(method, body)
   if (path.startsWith('/api/tasks')) {
     const [status, answered] = answerTasks(
@@ -181,16 +182,62 @@ function answer(method: string, url: URL, body: Record<string, unknown>, file?: 
   return json({ error: 'not found' }, 404)
 }
 
-// The knowledge routes that read, as the server answers them: a project's decisions, and one in full.
-function answerKnowledge(method: string, url: URL): Response {
+// The knowledge routes, as the server answers them: a project's decisions, one in full, and a package that adds to a
+// project, refused whole on a text the server refuses, telling the stream of each decision written.
+function answerKnowledge(method: string, url: URL, body: Record<string, unknown>): Response {
   const d = decisions.find((x) => url.pathname === `/api/knowledge/${x.id}`)
   if (method === 'GET' && d) return json(decisionOf(d, notes, tasks))
+  const named = (method === 'GET' ? url.searchParams.get('area') : String(body.area))?.toLowerCase() ?? ''
+  const area = areas.find((a) => [a.slug, a.name.toLowerCase()].includes(named))
   if (method === 'GET' && url.pathname === '/api/knowledge') {
-    const area = areas.find((a) => [a.slug, a.name.toLowerCase()].includes(url.searchParams.get('area')?.toLowerCase() ?? ''))
     if (!area) return json({ error: 'not found' }, 404)
     return json({ decisions: decisions.filter((x) => x.area === area.slug), today: DECIDED_TODAY })
   }
-  return json({ error: 'not found' }, 404)
+  if (method !== 'POST' || url.pathname !== '/api/knowledge') return json({ error: 'not found' }, 404)
+  if (!area) return json({ error: `area ${named}: not found` }, 404)
+  const add = (body.add ?? []) as Fields[]
+  const wrong = add.map(refusal).findIndex(Boolean)
+  if (wrong >= 0) return json({ error: `entry ${wrong + 1} of add: ${refusal(add[wrong])}: invalid` }, 400)
+  const at = new Date().toISOString()
+  const added = add.map((f): Decision => {
+    const id = nextDecision++
+    const replaces = decisions.find((x) => x.ref === f.replaces) ?? null
+    return { id, ref: `knowledge:${id}`, area: area.slug, ...texts(f), decided: f.decided || DECIDED_TODAY, state: 'stands', replaces, replaced_by: null, revision: 1, created_at: at, changed_at: at, changed_by: 'web' }
+  })
+  decisions.push(...added)
+  relink()
+  added.forEach((x) => tell({ module: 'knowledge', kind: 'decision', id: x.id, area: area.id }))
+  return json({ decisions: added })
+}
+
+// A decision's id is never used again, so a link to a deleted one leads to no other.
+let nextDecision = Math.max(0, ...DECISIONS.map((d) => d.id)) + 1
+
+// A decision's texts as the server keeps them, without the space around them.
+const texts = (f: Fields) => ({ decision: f.decision.trim(), why: f.why.trim(), source: (f.source ?? '').trim() })
+
+// What the server refuses of a decision's texts, as its line says it, or ''.
+function refusal(f: Fields): string {
+  const { decision, why, source } = texts(f)
+  const n = (s: string) => [...s].length
+  if (!decision || n(decision) > 200 || /\p{Cc}/u.test(decision)) return 'a decision is one line of 1 to 200 characters'
+  if (!why || n(why) > 2000 || /[^\P{Cc}\n\t]/u.test(why)) return 'a why is 1 to 2000 characters, with no control characters but newlines and tabs'
+  if (n(source) > 500 || /\p{Cc}/u.test(source)) return 'a source is one line of at most 500 characters'
+  if (f.decided && !/^\d{4}-\d{2}-\d{2}$/.test(f.decided)) return `decided "${f.decided}" is not a date, YYYY-MM-DD`
+  return ''
+}
+
+// Gives each decision the line of the one it replaces and of the one that replaced it, which it then stands or is
+// replaced by, and lists them as the server does: the newest day first, then the most recently made.
+function relink() {
+  const line = (x: Decision): Line => ({ ref: x.ref, decision: x.decision, decided: x.decided })
+  for (const x of decisions) Object.assign(x, { state: 'stands', replaced_by: null })
+  for (const x of decisions) {
+    const older = x.replaces && decisions.find((y) => y.ref === x.replaces!.ref)
+    x.replaces = older ? line(older) : null
+    if (older) Object.assign(older, { state: 'replaced', replaced_by: line(x) })
+  }
+  decisions.sort((a, b) => b.decided.localeCompare(a.decided) || Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)
 }
 
 // Each area's wordings of its brief, oldest first, from when the page first asks of the area, and the areas whose brief

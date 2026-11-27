@@ -1,4 +1,4 @@
-import { blocks, inlines, type Align, type Block, type Inline } from './markdown.ts'
+import { blocks, inlines, plain, type Align, type Block, type Inline } from './markdown.ts'
 
 const t = (text: string): Inline => ({ kind: 'text', text })
 const table = (head: string[], rows: string[][], align: Align[] = head.map(() => undefined)): Block => ({ kind: 'table', align, head, rows })
@@ -146,4 +146,8 @@ test('a table ends a paragraph and a list, and a blank line, a list item or a fe
 test('text with a pipe stays text, and so does a table in a fence', () => {
   for (const s of ['a | b', '| a | b |\n| c | d |', 'a | b | c\n--- | ---', 'a\n---']) expect(blocks(s), s).toEqual([p(s)])
   expect(blocks('```\n| a | b |\n|---|---|\n```')).toEqual([{ kind: 'code', text: '| a | b |\n|---|---|' }])
+})
+
+test('a line as plain words keeps the words of code, bold, italic and a link, and none of their markup', () => {
+  expect(plain('A tool is `create_note`, **not** *capture*: https://example.test/a')).toBe('A tool is create_note, not capture: https://example.test/a')
 })

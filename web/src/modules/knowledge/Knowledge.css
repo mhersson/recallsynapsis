@@ -66,7 +66,43 @@
   }
 }
 
+/* A decision's form: its line and its source each take one line that grows to show them whole, and its why is typed as a
+   note's text is. */
+.kform textarea.one {
+  display: block;
+  min-height: 0;
+  field-sizing: content;
+  resize: none;
+}
+
+.kform .ta {
+  display: block;
+  min-height: 96px;
+  field-sizing: content;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+.kform input[type='date'] {
+  width: auto;
+}
+
+.kform > .err {
+  margin: -4px 0 12px;
+}
+
 /* The tab Decisions: a table over the tab's width on desktop, a block each on a phone, the replaced folded beneath. */
+.btn.kadd {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
 .knone {
   max-width: 372px;
   margin-top: 0;

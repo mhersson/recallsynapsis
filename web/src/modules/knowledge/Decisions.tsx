@@ -2,6 +2,7 @@ import type { MouseEvent, ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import type { Area } from '../../api/types.ts'
 import { day } from '../../components/dates.ts'
+import { AddIcon } from '../../components/icons.tsx'
 import { Markdown, MarkdownInline } from '../../components/Markdown.tsx'
 import { back } from '../../components/useClose.ts'
 import { useNarrow } from '../../components/useNarrow.ts'
@@ -37,10 +38,21 @@ export default function Decisions({ area }: { area: Area }) {
         </p>
       )
     )
+  // An archived project takes no decision here, as it takes no task.
+  const add = !area.archived && (
+    <Link className="btn kadd" to={'/decisions/new?' + new URLSearchParams({ area: area.slug })} state={back}>
+      <AddIcon />
+      Add a decision
+    </Link>
+  )
   if (got.decisions.length === 0)
     return (
-      <div className="empty knone">
-        <b>No decisions yet.</b>
+      <div className="decisions">
+        {add}
+        <div className="empty knone">
+          <b>No decisions yet.</b>
+          {add && 'Add one here, or ask an AI client to record what a plan decided, a few at a time.'}
+        </div>
       </div>
     )
 
@@ -134,6 +146,7 @@ export default function Decisions({ area }: { area: Area }) {
   )
   return (
     <div className="decisions">
+      {add}
       {standing}
       {replaced.length > 0 && (
         <details className="kfold">

@@ -33,6 +33,9 @@ export type Full = Decision & { linked_from: Linked[] }
 // Every decision of a project, the newest day first, and the server's today.
 export type List = { decisions: Decision[]; today: string }
 
+// What a decision's form holds: replaces is a reference, or '' for none.
+export type Fields = Pick<Decision, 'decision' | 'why' | 'source' | 'decided'> & { replaces: string }
+
 // The page of the decision a reference names.
 export const pathOf = (ref: string) => `/decisions/${ref.slice('knowledge:'.length)}`
 
