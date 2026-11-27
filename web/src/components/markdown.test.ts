@@ -112,7 +112,7 @@ test('raw HTML is shown as typed', () => {
 })
 
 test('an image and a block quote are shown as typed', () => {
-  expect(blocks('| a | b |\n|---|---|\n| 1 | 2 |\n\n> quoted\n> on')).toEqual([table(['a', 'b'], [['1', '2']]), { kind: 'typed', text: '> quoted\n> on' }])
+  expect(blocks('> quoted\n> on')).toEqual([{ kind: 'typed', text: '> quoted\n> on' }])
   expect(inlines('![a](https://example.test/a.png)')).toEqual([t('![a](https://example.test/a.png)')])
 })
 
@@ -132,7 +132,8 @@ test('an escaped pipe stays in its cell, and a row is cut or filled to the colum
   ])
 })
 
-test('a table ends a paragraph and a list, and a list item or a fence ends a table', () => {
+test('a table ends a paragraph and a list, and a blank line, a list item or a fence ends a table', () => {
+  expect(blocks('| a | b |\n|---|---|\n| 1 | 2 |\n\nafter')).toEqual([table(['a', 'b'], [['1', '2']]), p('after')])
   expect(blocks('Shopping:\n| a | b |\n|---|---|\n| 1 | 2 |\n- after\n| c | d |\n|-|-|\n```\ncode\n```')).toEqual([
     p('Shopping:'),
     table(['a', 'b'], [['1', '2']]),
