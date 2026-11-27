@@ -74,6 +74,8 @@ func TestEveryVerbAppliesTheMigrationsOfAModuleThatIsOff(t *testing.T) {
 			assert.True(t, hasTable(t, dir, "fake_items"))
 			assert.True(t, hasTable(t, dir, "notes"), "the binary's own modules are built too")
 			assert.True(t, hasTable(t, dir, "tasks"))
+			assert.True(t, hasTable(t, dir, "decisions"))
+			assert.True(t, hasTable(t, dir, "decision_revisions"))
 			assert.True(t, hasTable(t, dir, "push_subscriptions"))
 			assert.True(t, hasTable(t, dir, "push_key"))
 		})
@@ -88,6 +90,7 @@ func TestAModuleTableTheBinaryCannotUseStopsTheStart(t *testing.T) {
 		{"an unknown key", fakeOn + "colour = \"red\"\n", "modules.fake.colour"},
 		{"an unknown key of notes", "[modules.notes]\ncolour = \"red\"\n", "modules.notes.colour"},
 		{"a first day of the week that is none", "[modules.tasks]\nweek_start = \"someday\"\n", "modules.tasks.week_start"},
+		{"a key of knowledge but enabled", "[modules.knowledge]\nenabled = true\ncapture_max_chars = 4000\n", "modules.knowledge.capture_max_chars"},
 	}
 	for _, tt := range tests {
 		for _, verb := range []string{"serve", "password"} {
@@ -145,7 +148,7 @@ func TestEveryToolOfTheBinaryAsClaudeCodeReadsIt(t *testing.T) {
 	t.Parallel()
 
 	config := writeConfig(t, t.TempDir(), validConfig+fakeOn+"[modules.notes]\nenabled = true\n[modules.tasks]\nenabled = true\n"+
-		"[modules.push]\nenabled = true\n")
+		"[modules.knowledge]\nenabled = true\n[modules.push]\nenabled = true\n")
 
 	d, err := openData(t.Context(), filepath.Join(t.TempDir(), "data"), config, nil)
 	require.NoError(t, err)

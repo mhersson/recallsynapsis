@@ -90,6 +90,18 @@ the trash.
 | `week_start` | `monday` | the first day of the week, which tasks give beside today's date: a weekday's name in lower case, such as `sunday`; checked whether tasks is on or not |
 | `capture_max_chars` | `4000` | the longest text an MCP tool of tasks keeps, in characters, at least 1: the `notes` of each task and `said` of `create_tasks`, and `notes` of `update_task`, each on its own; a title has its own cap of 200 characters everywhere; REST, and so the web app, has no such cap; checked whether tasks is on or not |
 
+`[modules.knowledge]` is the knowledge module: the decisions that shape each
+project, each with its why, its source, the day it was decided and the
+decision it replaces, and every wording of it. It has no key but `enabled`.
+Its caps are fixed and are no keys: a decision is one line of at most 200
+characters, its why at most 2,000 and its source one line of at most 500, and
+one change adds and mends at most 20 decisions. A text over its cap is refused
+wherever it comes from, the web app included.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | whether knowledge is on |
+
 `[modules.push]` is the push module: notifications sent to each browser of
 the owner's in which they are turned on, as Web Push
 ([running.md](running.md#notifications)). It has no key but `enabled`, and no
@@ -124,6 +136,9 @@ file_max_mib      = 15
 enabled           = true
 week_start        = "monday"
 capture_max_chars = 4000
+
+[modules.knowledge]
+enabled = true
 
 [modules.push]
 enabled = true
